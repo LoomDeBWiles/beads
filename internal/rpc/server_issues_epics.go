@@ -527,12 +527,74 @@ func (s *Server) handleClose(req *Request) Response {
 	// Emit mutation event for event-driven daemon
 	s.emitMutation(MutationUpdate, closeArgs.ID)
 
+	// Auto-close eligible parent epics (recursive cascade)
+	autoClosedEpics, _ := s.autoCloseEligibleParentEpics(ctx, store, closeArgs.ID, s.reqActor(req))
+
 	closedIssue, _ := store.GetIssue(ctx, closeArgs.ID)
-	data, _ := json.Marshal(closedIssue)
+
+	// Return both the closed issue and any auto-closed epics
+	result := map[string]interface{}{
+		"issue":              closedIssue,
+		"auto_closed_epics": autoClosedEpics,
+	}
+	data, _ := json.Marshal(result)
 	return Response{
 		Success: true,
 		Data:    data,
 	}
+}
+
+// autoCloseEligibleParentEpics recursively closes parent epics if all their children are closed.
+// Returns a list of auto-closed epic IDs.
+func (s *Server) autoCloseEligibleParentEpics(ctx context.Context, store interface {
+	GetParentEpics(ctx context.Context, issueID string) ([]*types.Issue, error)
+	IsEpicEligibleForClosure(ctx context.Context, epicID string) (bool, error)
+	CloseIssue(ctx context.Context, id string, reason string, actor string) error
+}, closedIssueID, actor string) ([]string, error) {
+	var autoClosedEpics []string
+	toCheck := []string{closedIssueID}
+	checked := make(map[string]bool)
+
+	for len(toCheck) > 0 {
+		currentID := toCheck[0]
+		toCheck = toCheck[1:]
+
+		if checked[currentID] {
+			continue
+		}
+		checked[currentID] = true
+
+		parents, err := store.GetParentEpics(ctx, currentID)
+		if err != nil {
+			continue // Don't fail the close if we can't check parents
+		}
+
+		for _, parent := range parents {
+			if parent.Status == types.StatusClosed {
+				continue // Already closed
+			}
+
+			eligible, err := store.IsEpicEligibleForClosure(ctx, parent.ID)
+			if err != nil {
+				continue // Don't fail if we can't check eligibility
+			}
+
+			if eligible {
+				reason := fmt.Sprintf("auto-closed: all children completed (triggered by %s)", closedIssueID)
+				if err := store.CloseIssue(ctx, parent.ID, reason, actor); err != nil {
+					continue // Log but don't fail
+				}
+
+				autoClosedEpics = append(autoClosedEpics, parent.ID)
+				s.emitMutation(MutationUpdate, parent.ID)
+
+				// Check grandparents
+				toCheck = append(toCheck, parent.ID)
+			}
+		}
+	}
+
+	return autoClosedEpics, nil
 }
 
 func (s *Server) handleDelete(req *Request) Response {

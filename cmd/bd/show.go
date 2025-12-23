@@ -1047,17 +1047,27 @@ var closeCmd = &cobra.Command{
 					continue
 				}
 
-				var issue types.Issue
-				if err := json.Unmarshal(resp.Data, &issue); err == nil {
+				// Parse new response format with issue and auto-closed epics
+				var closeResult struct {
+					Issue           *types.Issue `json:"issue"`
+					AutoClosedEpics []string     `json:"auto_closed_epics"`
+				}
+				if err := json.Unmarshal(resp.Data, &closeResult); err == nil && closeResult.Issue != nil {
 					// Run close hook (bd-kwro.8)
 					if hookRunner != nil {
-						hookRunner.Run(hooks.EventClose, &issue)
+						hookRunner.Run(hooks.EventClose, closeResult.Issue)
 					}
 					if jsonOutput {
-						closedIssues = append(closedIssues, &issue)
+						closedIssues = append(closedIssues, closeResult.Issue)
 					}
-				}
-				if !jsonOutput {
+					if !jsonOutput {
+						fmt.Printf("%s Closed %s: %s\n", ui.RenderPass("✓"), id, reason)
+						// Display auto-closed parent epics
+						for _, epicID := range closeResult.AutoClosedEpics {
+							fmt.Printf("  %s Auto-closed parent epic: %s\n", ui.RenderPass("↳"), epicID)
+						}
+					}
+				} else if !jsonOutput {
 					fmt.Printf("%s Closed %s: %s\n", ui.RenderPass("✓"), id, reason)
 				}
 			}
@@ -1103,6 +1113,9 @@ var closeCmd = &cobra.Command{
 
 			closedCount++
 
+			// Auto-close eligible parent epics
+			autoClosedEpics := autoCloseEligibleParentEpics(ctx, store, id, actor)
+
 			// Run close hook (bd-kwro.8)
 			closedIssue, _ := store.GetIssue(ctx, id)
 			if closedIssue != nil && hookRunner != nil {
@@ -1115,6 +1128,10 @@ var closeCmd = &cobra.Command{
 				}
 			} else {
 				fmt.Printf("%s Closed %s: %s\n", ui.RenderPass("✓"), id, reason)
+				// Display auto-closed parent epics
+				for _, epicID := range autoClosedEpics {
+					fmt.Printf("  %s Auto-closed parent epic: %s\n", ui.RenderPass("↳"), epicID)
+				}
 			}
 		}
 
@@ -1146,6 +1163,52 @@ var closeCmd = &cobra.Command{
 			outputJSON(closedIssues)
 		}
 	},
+}
+
+// autoCloseEligibleParentEpics recursively closes parent epics if all their children are closed.
+// Returns a list of auto-closed epic IDs. Used in direct mode (no daemon).
+func autoCloseEligibleParentEpics(ctx context.Context, store storage.Storage, closedIssueID, actor string) []string {
+	var autoClosedEpics []string
+	toCheck := []string{closedIssueID}
+	checked := make(map[string]bool)
+
+	for len(toCheck) > 0 {
+		currentID := toCheck[0]
+		toCheck = toCheck[1:]
+
+		if checked[currentID] {
+			continue
+		}
+		checked[currentID] = true
+
+		parents, err := store.GetParentEpics(ctx, currentID)
+		if err != nil {
+			continue
+		}
+
+		for _, parent := range parents {
+			if parent.Status == types.StatusClosed {
+				continue
+			}
+
+			eligible, err := store.IsEpicEligibleForClosure(ctx, parent.ID)
+			if err != nil {
+				continue
+			}
+
+			if eligible {
+				reason := fmt.Sprintf("auto-closed: all children completed (triggered by %s)", closedIssueID)
+				if err := store.CloseIssue(ctx, parent.ID, reason, actor); err != nil {
+					continue
+				}
+
+				autoClosedEpics = append(autoClosedEpics, parent.ID)
+				toCheck = append(toCheck, parent.ID)
+			}
+		}
+	}
+
+	return autoClosedEpics
 }
 
 // showMessageThread displays a full conversation thread for a message

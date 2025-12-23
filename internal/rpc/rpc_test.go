@@ -283,14 +283,24 @@ func TestCloseIssue(t *testing.T) {
 		t.Fatalf("Expected success, got error: %s", closeResp.Error)
 	}
 
-	var closedIssue types.Issue
-	json.Unmarshal(closeResp.Data, &closedIssue)
-
-	if closedIssue.Status != "closed" {
-		t.Errorf("Expected status 'closed', got %s", closedIssue.Status)
+	// Parse new response format with issue and auto_closed_epics
+	var closeResult struct {
+		Issue           *types.Issue `json:"issue"`
+		AutoClosedEpics []string     `json:"auto_closed_epics"`
+	}
+	if err := json.Unmarshal(closeResp.Data, &closeResult); err != nil {
+		t.Fatalf("Failed to unmarshal close response: %v", err)
 	}
 
-	if closedIssue.ClosedAt == nil {
+	if closeResult.Issue == nil {
+		t.Fatal("Expected issue in response, got nil")
+	}
+
+	if closeResult.Issue.Status != "closed" {
+		t.Errorf("Expected status 'closed', got %s", closeResult.Issue.Status)
+	}
+
+	if closeResult.Issue.ClosedAt == nil {
 		t.Error("Expected ClosedAt to be set, got nil")
 	}
 }

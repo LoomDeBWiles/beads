@@ -1139,6 +1139,41 @@ func (m *MemoryStorage) GetEpicsEligibleForClosure(ctx context.Context) ([]*type
 	return nil, nil
 }
 
+func (m *MemoryStorage) GetParentEpics(ctx context.Context, issueID string) ([]*types.Issue, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	var parents []*types.Issue
+	for _, deps := range m.dependencies {
+		for _, dep := range deps {
+			if dep.IssueID == issueID && dep.Type == types.DepParentChild {
+				if parent, ok := m.issues[dep.DependsOnID]; ok && parent.IssueType == types.TypeEpic {
+					parents = append(parents, parent)
+				}
+			}
+		}
+	}
+	return parents, nil
+}
+
+func (m *MemoryStorage) IsEpicEligibleForClosure(ctx context.Context, epicID string) (bool, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	var totalChildren, closedChildren int
+	for _, deps := range m.dependencies {
+		for _, dep := range deps {
+			if dep.DependsOnID == epicID && dep.Type == types.DepParentChild {
+				totalChildren++
+				if child, ok := m.issues[dep.IssueID]; ok && child.Status == types.StatusClosed {
+					closedChildren++
+				}
+			}
+		}
+	}
+	return totalChildren > 0 && closedChildren == totalChildren, nil
+}
+
 func (m *MemoryStorage) GetStaleIssues(ctx context.Context, filter types.StaleFilter) ([]*types.Issue, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
