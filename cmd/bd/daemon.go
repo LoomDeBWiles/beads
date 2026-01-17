@@ -719,10 +719,8 @@ func loadDaemonAutoSettings(cmd *cobra.Command, autoCommit, autoPush, autoPull b
 			autoPull = configVal == "true"
 		} else if configVal, _ := store.GetConfig(ctx, "daemon.auto_pull"); configVal != "" {
 			autoPull = configVal == "true"
-		} else if hasSyncBranch {
-			// Default auto-pull to true when sync-branch configured
-			autoPull = true
 		}
+		// No fallback - auto-pull defaults to false unless explicitly configured
 	}
 
 	// Fallback removed: auto-pull defaults to false
