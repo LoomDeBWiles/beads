@@ -64,7 +64,7 @@ func shouldAutoStartDaemon() bool {
 
 	// Use viper to read from config file or BEADS_AUTO_START_DAEMON env var
 	// Viper handles BEADS_AUTO_START_DAEMON automatically via BindEnv
-	return config.GetBool("auto-start-daemon") // Defaults to true
+	return config.GetBool("auto-start-daemon") // Defaults to false
 }
 
 // restartDaemonForVersionMismatch stops the old daemon and starts a new one

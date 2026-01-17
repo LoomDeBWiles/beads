@@ -95,7 +95,7 @@ func Initialize() error {
 
 	// Set defaults for additional settings
 	v.SetDefault("flush-debounce", "30s")
-	v.SetDefault("auto-start-daemon", true)
+	v.SetDefault("auto-start-daemon", false)
 	v.SetDefault("identity", "")
 	v.SetDefault("remote-sync-interval", "30s")
 

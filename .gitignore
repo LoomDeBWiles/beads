@@ -126,3 +126,6 @@ state.json
 .agents/
 output
 bd_test
+
+# bv (beads viewer) local config and caches
+.bv/
