@@ -593,6 +593,17 @@ func performAutoImport(ctx context.Context, store storage.Storage, skipGit bool,
 		}
 		log.log("JSONL content changed, proceeding with %s...", mode)
 
+		// Check if there are pending local changes that need to be exported first.
+		// This prevents the race condition where import overwrites unexported local mutations.
+		dirtyIDs, err := store.GetDirtyIssues(importCtx)
+		if err != nil {
+			log.log("Warning: failed to check dirty issues: %v", err)
+			// Continue with import on error - better to risk import than block completely
+		} else if len(dirtyIDs) > 0 {
+			log.log("Skipping %s: %d issues pending export", mode, len(dirtyIDs))
+			return
+		}
+
 		// Pull from git if not in git-free mode
 		if !skipGit {
 			// SAFETY CHECK: Warn if there are uncommitted local changes
