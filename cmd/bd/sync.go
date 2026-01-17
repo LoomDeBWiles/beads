@@ -313,6 +313,15 @@ func doPullFirstSync(ctx context.Context, jsonlPath string, renameOnImport, noGi
 	// Derive sync-branch config from parameters (detected at caller)
 	hasSyncBranchConfig := syncBranch != ""
 
+	// GH#519: Guard against sync.branch == current branch
+	// When they match, the worktree's index becomes stale after commits in the main workdir,
+	// causing bd sync to create commits that revert source code changes.
+	// Fall back to direct commits which don't have this index staleness problem.
+	if hasSyncBranchConfig && syncbranch.IsSyncBranchSameAsCurrent(ctx, syncBranch) {
+		fmt.Println("→ sync.branch matches current branch, using direct commits")
+		hasSyncBranchConfig = false
+	}
+
 	localIssues, err := store.SearchIssues(ctx, "", beads.IssueFilter{IncludeTombstones: true})
 	if err != nil {
 		return fmt.Errorf("loading local issues: %w", err)
