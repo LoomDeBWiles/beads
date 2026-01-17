@@ -45,7 +45,7 @@ Tool-level settings you can configure:
 | `db` | `--db` | `BD_DB` | (auto-discover) | Database path |
 | `actor` | `--actor` | `BD_ACTOR` | `git config user.name` | Actor name for audit trail (see below) |
 | `flush-debounce` | - | `BEADS_FLUSH_DEBOUNCE` | `5s` | Debounce time for auto-flush |
-| `auto-start-daemon` | - | `BEADS_AUTO_START_DAEMON` | `false` | Auto-start daemon if not running |
+| `auto-start-daemon` | - | `BEADS_AUTO_START_DAEMON` | `true` | Auto-start daemon if not running |
 | `daemon-log-max-size` | - | `BEADS_DAEMON_LOG_MAX_SIZE` | `50` | Max daemon log size in MB before rotation |
 | `daemon-log-max-backups` | - | `BEADS_DAEMON_LOG_MAX_BACKUPS` | `7` | Max number of old log files to keep |
 | `daemon-log-max-age` | - | `BEADS_DAEMON_LOG_MAX_AGE` | `30` | Max days to keep old log files |

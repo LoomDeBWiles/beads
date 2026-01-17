@@ -725,11 +725,8 @@ func loadDaemonAutoSettings(cmd *cobra.Command, autoCommit, autoPush, autoPull b
 		}
 	}
 
-	// Fallback: if sync-branch configured, only enable auto-pull (read-only)
-	// User must explicitly opt-in to auto-commit/push to avoid accidental commits
-	if hasSyncBranch && !cmd.Flags().Changed("auto-pull") {
-		autoPull = true
-	}
+	// Fallback removed: auto-pull defaults to false
+	// User must explicitly opt-in to any auto-sync behavior
 
 	return autoCommit, autoPush, autoPull
 }

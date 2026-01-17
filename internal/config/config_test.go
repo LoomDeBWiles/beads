@@ -71,7 +71,7 @@ func TestDefaults(t *testing.T) {
 		{"db", "", func(k string) interface{} { return GetString(k) }},
 		{"actor", "", func(k string) interface{} { return GetString(k) }},
 		{"flush-debounce", 30 * time.Second, func(k string) interface{} { return GetDuration(k) }},
-		{"auto-start-daemon", false, func(k string) interface{} { return GetBool(k) }},
+		{"auto-start-daemon", true, func(k string) interface{} { return GetBool(k) }},
 	}
 	
 	for _, tt := range tests {
