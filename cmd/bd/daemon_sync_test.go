@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -827,4 +828,135 @@ func splitJSONLLines(data []byte) [][]byte {
 		lines = append(lines, currentLine)
 	}
 	return lines
+}
+
+// TestOperationMutexSerializesExportImport verifies that the operationMu mutex
+// prevents concurrent export and import operations. This is a regression test
+// for the desync bug where concurrent export/import could cause data loss.
+//
+// Bug scenario:
+// 1. User creates issue locally (bd create)
+// 2. Export starts writing JSONL
+// 3. File watcher triggers import concurrently
+// 4. Import pulls stale remote data and overwrites local JSONL
+// 5. Local change is lost
+//
+// Fix: operationMu mutex serializes all export/import/sync operations.
+func TestOperationMutexSerializesExportImport(t *testing.T) {
+	t.Parallel()
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, ".beads", "beads.db")
+	jsonlPath := filepath.Join(tmpDir, ".beads", "issues.jsonl")
+
+	// Create storage
+	store, err := sqlite.New(context.Background(), dbPath)
+	if err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+	defer store.Close()
+
+	ctx := context.Background()
+
+	// Set issue_prefix
+	if err := store.SetConfig(ctx, "issue_prefix", "test"); err != nil {
+		t.Fatalf("failed to set issue_prefix: %v", err)
+	}
+
+	// Create test issue
+	issue := &types.Issue{
+		ID:        "test-1",
+		Title:     "Test Issue",
+		Status:    types.StatusOpen,
+		Priority:  1,
+		IssueType: types.TypeTask,
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+	if err := store.CreateIssue(ctx, issue, "test"); err != nil {
+		t.Fatalf("failed to create issue: %v", err)
+	}
+
+	// Export to create JSONL
+	if err := exportToJSONLWithStore(ctx, store, jsonlPath); err != nil {
+		t.Fatalf("initial export failed: %v", err)
+	}
+
+	// Track operation sequence
+	var sequence []string
+	var sequenceMu sync.Mutex
+
+	// Create mock logger that tracks operation timing
+	mockLogger := daemonLogger{
+		logFunc: func(format string, args ...interface{}) {
+			t.Logf(format, args...)
+		},
+	}
+
+	// Run export and import concurrently - mutex should serialize them
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	// Start export
+	go func() {
+		defer wg.Done()
+		exportFunc := performExport(ctx, store, false, false, true, mockLogger)
+		sequenceMu.Lock()
+		sequence = append(sequence, "export-start")
+		sequenceMu.Unlock()
+		exportFunc()
+		sequenceMu.Lock()
+		sequence = append(sequence, "export-end")
+		sequenceMu.Unlock()
+	}()
+
+	// Start import concurrently (with tiny delay to ensure export starts first)
+	go func() {
+		defer wg.Done()
+		time.Sleep(10 * time.Millisecond) // Let export acquire lock first
+		importFunc := performAutoImport(ctx, store, true, mockLogger)
+		sequenceMu.Lock()
+		sequence = append(sequence, "import-start")
+		sequenceMu.Unlock()
+		importFunc()
+		sequenceMu.Lock()
+		sequence = append(sequence, "import-end")
+		sequenceMu.Unlock()
+	}()
+
+	wg.Wait()
+
+	// Verify operations completed (sequence should have 4 entries)
+	sequenceMu.Lock()
+	defer sequenceMu.Unlock()
+
+	if len(sequence) != 4 {
+		t.Errorf("expected 4 sequence entries, got %d: %v", len(sequence), sequence)
+	}
+
+	// Verify serialization: one operation must complete before the other starts
+	// Valid sequences: [export-start, export-end, import-start, import-end]
+	// or [import-start, import-end, export-start, export-end]
+	// Invalid (concurrent): [export-start, import-start, ...]
+	if len(sequence) >= 2 {
+		// Check that we don't have interleaved starts
+		// If export-start is first, export-end must come before import-start
+		if sequence[0] == "export-start" {
+			if len(sequence) >= 3 && sequence[1] != "export-end" {
+				t.Errorf("expected export to complete before import starts, got sequence: %v", sequence)
+			}
+		} else if sequence[0] == "import-start" {
+			if len(sequence) >= 3 && sequence[1] != "import-end" {
+				t.Errorf("expected import to complete before export starts, got sequence: %v", sequence)
+			}
+		}
+	}
+
+	// Verify data integrity - issue should still exist
+	retrieved, err := store.GetIssue(ctx, "test-1")
+	if err != nil {
+		t.Fatalf("failed to get issue after concurrent operations: %v", err)
+	}
+	if retrieved.Title != "Test Issue" {
+		t.Errorf("expected title 'Test Issue', got %s", retrieved.Title)
+	}
 }

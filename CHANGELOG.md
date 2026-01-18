@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Daemon desync race conditions** - Three fixes to prevent data loss during sync
+  - Added `operationMu` mutex to serialize export/import/sync operations
+  - Reordered `performAutoImport`: git pull now happens BEFORE hash check
+  - Changed `syncBranchPull` to use atomic temp+rename (was non-atomic WriteFile)
+
 ## [0.35.0] - 2025-12-23
 
 ### Added
