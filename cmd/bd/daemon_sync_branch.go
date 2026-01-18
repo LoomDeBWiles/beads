@@ -302,14 +302,37 @@ func syncBranchPull(ctx context.Context, store storage.Storage, log daemonLogger
 		return true, nil
 	}
 	
-	// Copy JSONL from worktree to main repo
+	// Copy JSONL from worktree to main repo using atomic write pattern (desync-fix)
+	// This prevents partial reads by file watcher during write operation
 	data, err := os.ReadFile(worktreeJSONLPath) // #nosec G304 - path is derived from trusted git worktree
 	if err != nil {
 		return false, fmt.Errorf("failed to read worktree JSONL: %w", err)
 	}
 
-	if err := os.WriteFile(mainJSONLPath, data, 0644); err != nil { // #nosec G306 - JSONL needs to be readable
-		return false, fmt.Errorf("failed to write main JSONL: %w", err)
+	// Use temp file + rename for atomic write (matches exportToJSONLWithStore pattern)
+	dir := filepath.Dir(mainJSONLPath)
+	base := filepath.Base(mainJSONLPath)
+	tempFile, err := os.CreateTemp(dir, base+".tmp.*")
+	if err != nil {
+		return false, fmt.Errorf("failed to create temp file for atomic write: %w", err)
+	}
+	tempPath := tempFile.Name()
+
+	// Write data to temp file
+	if _, err := tempFile.Write(data); err != nil {
+		tempFile.Close()
+		os.Remove(tempPath)
+		return false, fmt.Errorf("failed to write temp JSONL: %w", err)
+	}
+	if err := tempFile.Close(); err != nil {
+		os.Remove(tempPath)
+		return false, fmt.Errorf("failed to close temp file: %w", err)
+	}
+
+	// Atomic rename
+	if err := os.Rename(tempPath, mainJSONLPath); err != nil {
+		os.Remove(tempPath)
+		return false, fmt.Errorf("failed to atomically replace main JSONL: %w", err)
 	}
 	
 	log.log("Synced JSONL from sync branch to main repo")

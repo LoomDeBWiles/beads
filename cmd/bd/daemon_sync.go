@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/steveyegge/beads/internal/beads"
@@ -18,6 +19,11 @@ import (
 	"github.com/steveyegge/beads/internal/storage/sqlite"
 	"github.com/steveyegge/beads/internal/types"
 )
+
+// operationMu prevents concurrent export and import operations in the daemon.
+// This is critical to prevent race conditions where import can overwrite local
+// changes before they're exported, or export can write while import is reading.
+var operationMu sync.Mutex
 
 // exportToJSONLWithStore exports issues to JSONL using the provided store.
 // If multi-repo mode is configured, routes issues to their respective JSONL files.
@@ -394,6 +400,10 @@ func createLocalExportFunc(ctx context.Context, store storage.Storage, log daemo
 // skipGit: if true, skips all git operations (commits, pushes).
 func performExport(ctx context.Context, store storage.Storage, autoCommit, autoPush, skipGit bool, log daemonLogger) func() {
 	return func() {
+		// Acquire operation lock to prevent concurrent import operations
+		operationMu.Lock()
+		defer operationMu.Unlock()
+
 		exportCtx, exportCancel := context.WithTimeout(ctx, 30*time.Second)
 		defer exportCancel()
 
@@ -522,6 +532,10 @@ func createLocalAutoImportFunc(ctx context.Context, store storage.Storage, log d
 // skipGit: if true, skips git pull operations.
 func performAutoImport(ctx context.Context, store storage.Storage, skipGit bool, log daemonLogger) func() {
 	return func() {
+		// Acquire operation lock to prevent concurrent export operations
+		operationMu.Lock()
+		defer operationMu.Unlock()
+
 		importCtx, importCancel := context.WithTimeout(ctx, 1*time.Minute)
 		defer importCancel()
 
@@ -552,28 +566,16 @@ func performAutoImport(ctx context.Context, store storage.Storage, skipGit bool,
 			log.log("Removed stale lock (%s), proceeding", holder)
 		}
 
-		// Check JSONL content hash to avoid redundant imports
-		// Use content-based check (not mtime) to avoid git resurrection bug (bd-khnb)
-		// Use getRepoKeyForPath for multi-repo support (bd-ar2.10, bd-ar2.11)
-		repoKey := getRepoKeyForPath(jsonlPath)
-		if !hasJSONLChanged(importCtx, store, jsonlPath, repoKey) {
-			log.log("Skipping %s: JSONL content unchanged", mode)
-			return
-		}
-		log.log("JSONL content changed, proceeding with %s...", mode)
-
-		// Pull from git if not in git-free mode
+		// Pull from git FIRST if not in git-free mode (desync-fix: pull before check)
+		// This ensures we compare the pulled content with database state, not stale local content
 		if !skipGit {
 			// SAFETY CHECK (bd-k92d): Warn if there are uncommitted local changes
 			// This helps detect race conditions where local work hasn't been pushed yet
-			jsonlPath := findJSONLPath()
-			if jsonlPath != "" {
-				if hasLocalChanges, err := gitHasChanges(importCtx, jsonlPath); err == nil && hasLocalChanges {
-					log.log("⚠️  WARNING: Uncommitted local changes detected in %s", jsonlPath)
-					log.log("   Pulling from remote may overwrite local unpushed changes.")
-					log.log("   Consider running 'bd sync' to commit and push your changes first.")
-					// Continue anyway, but user has been warned
-				}
+			if hasLocalChanges, err := gitHasChanges(importCtx, jsonlPath); err == nil && hasLocalChanges {
+				log.log("⚠️  WARNING: Uncommitted local changes detected in %s", jsonlPath)
+				log.log("   Pulling from remote may overwrite local unpushed changes.")
+				log.log("   Consider running 'bd sync' to commit and push your changes first.")
+				// Continue anyway, but user has been warned
 			}
 
 			// Try sync branch first
@@ -592,6 +594,16 @@ func performAutoImport(ctx context.Context, store storage.Storage, skipGit bool,
 				log.log("Pulled from remote")
 			}
 		}
+
+		// Check JSONL content hash AFTER pull to avoid redundant imports (desync-fix: check after pull)
+		// Use content-based check (not mtime) to avoid git resurrection bug (bd-khnb)
+		// Use getRepoKeyForPath for multi-repo support (bd-ar2.10, bd-ar2.11)
+		repoKey := getRepoKeyForPath(jsonlPath)
+		if !hasJSONLChanged(importCtx, store, jsonlPath, repoKey) {
+			log.log("Skipping %s: JSONL content unchanged after pull", mode)
+			return
+		}
+		log.log("JSONL content changed, proceeding with %s...", mode)
 
 		// Count issues before import
 		beforeCount, err := countDBIssues(importCtx, store)
@@ -643,6 +655,10 @@ func createLocalSyncFunc(ctx context.Context, store storage.Storage, log daemonL
 // Local-only mode only performs validation and export since there's no remote to sync with.
 func performSync(ctx context.Context, store storage.Storage, autoCommit, autoPush, skipGit bool, log daemonLogger) func() {
 	return func() {
+		// Acquire operation lock to prevent concurrent export/import operations
+		operationMu.Lock()
+		defer operationMu.Unlock()
+
 		syncCtx, syncCancel := context.WithTimeout(ctx, 2*time.Minute)
 		defer syncCancel()
 
