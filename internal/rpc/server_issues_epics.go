@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"strings"
 	"time"
@@ -566,6 +567,7 @@ func (s *Server) autoCloseEligibleParentEpics(ctx context.Context, store interfa
 
 		parents, err := store.GetParentEpics(ctx, currentID)
 		if err != nil {
+			log.Printf("autoCloseEligibleParentEpics: GetParentEpics(%s) failed: %v", currentID, err)
 			continue // Don't fail the close if we can't check parents
 		}
 
@@ -576,12 +578,14 @@ func (s *Server) autoCloseEligibleParentEpics(ctx context.Context, store interfa
 
 			eligible, err := store.IsEpicEligibleForClosure(ctx, parent.ID)
 			if err != nil {
+				log.Printf("autoCloseEligibleParentEpics: IsEpicEligibleForClosure(%s) failed: %v", parent.ID, err)
 				continue // Don't fail if we can't check eligibility
 			}
 
 			if eligible {
 				reason := fmt.Sprintf("auto-closed: all children completed (triggered by %s)", closedIssueID)
 				if err := store.CloseIssue(ctx, parent.ID, reason, actor); err != nil {
+					log.Printf("autoCloseEligibleParentEpics: CloseIssue(%s) failed: %v", parent.ID, err)
 					continue // Log but don't fail
 				}
 
