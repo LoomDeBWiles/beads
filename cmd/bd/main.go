@@ -553,6 +553,14 @@ var rootCmd = &cobra.Command{
 		// Best-effort tracking - failures are silent
 		trackBdVersion()
 
+		// Initialize hook runner early (bd-kwro.8)
+		// Must happen before daemon connection to ensure hooks run in daemon mode
+		// dbPath is .beads/something.db, so workspace root is parent of .beads
+		if dbPath != "" {
+			beadsDir := filepath.Dir(dbPath)
+			hookRunner = hooks.NewRunner(filepath.Join(beadsDir, "hooks"))
+		}
+
 		// Initialize daemon status
 		socketPath := getSocketPath()
 		daemonStatus = DaemonStatus{
@@ -763,13 +771,6 @@ var rootCmd = &cobra.Command{
 		// PostRun can safely shutdown whichever manager is active.
 		if !sandboxMode {
 			flushManager = NewFlushManager(autoFlushEnabled, getDebounceDuration())
-		}
-
-		// Initialize hook runner (bd-kwro.8)
-		// dbPath is .beads/something.db, so workspace root is parent of .beads
-		if dbPath != "" {
-			beadsDir := filepath.Dir(dbPath)
-			hookRunner = hooks.NewRunner(filepath.Join(beadsDir, "hooks"))
 		}
 
 		// Warn if multiple databases detected in directory hierarchy
