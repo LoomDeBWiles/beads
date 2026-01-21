@@ -15,6 +15,7 @@ import (
 	"github.com/steveyegge/beads/cmd/bd/doctor"
 	"github.com/steveyegge/beads/internal/beads"
 	"github.com/steveyegge/beads/internal/daemon"
+	"github.com/steveyegge/beads/internal/hooks"
 	"github.com/steveyegge/beads/internal/rpc"
 	"github.com/steveyegge/beads/internal/storage/sqlite"
 )
@@ -486,6 +487,9 @@ func runDaemonLoop(interval time.Duration, autoCommit, autoPush, autoPull, local
 	// Get actual workspace root (parent of .beads)
 	workspacePath := filepath.Dir(beadsDir)
 	socketPath := filepath.Join(beadsDir, "bd.sock")
+
+	// Initialize hook runner for daemon mode (bd-kwro.8)
+	daemonHookRunner := hooks.NewRunner(filepath.Join(beadsDir, "hooks"))
 	serverCtx, serverCancel := context.WithCancel(ctx)
 	defer serverCancel()
 
@@ -564,7 +568,7 @@ func runDaemonLoop(interval time.Duration, autoCommit, autoPush, autoPull, local
 				doExport = createExportFunc(ctx, store, autoCommit, autoPush, log)
 				doAutoImport = createAutoImportFunc(ctx, store, log)
 			}
-			runEventDrivenLoop(ctx, cancel, server, serverErrChan, store, jsonlPath, doExport, doAutoImport, autoPull, parentPID, log)
+			runEventDrivenLoop(ctx, cancel, server, serverErrChan, store, jsonlPath, doExport, doAutoImport, autoPull, parentPID, daemonHookRunner, log)
 		}
 	case "poll":
 		log.log("Using polling mode (interval: %v)", interval)

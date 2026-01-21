@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/steveyegge/beads/internal/config"
+	"github.com/steveyegge/beads/internal/hooks"
 	"github.com/steveyegge/beads/internal/rpc"
 	"github.com/steveyegge/beads/internal/storage"
 )
@@ -38,6 +39,7 @@ func runEventDrivenLoop(
 	doAutoImport func(),
 	autoPull bool,
 	parentPID int,
+	hookRunner *hooks.Runner,
 	log daemonLogger,
 ) {
 	sigChan := make(chan os.Signal, 1)
@@ -86,6 +88,25 @@ func runEventDrivenLoop(
 				}
 				log.log("Mutation detected: %s %s", event.Type, event.IssueID)
 				exportDebouncer.Trigger()
+
+				// Execute hooks for mutations
+				if hookRunner != nil {
+					var hookEvent string
+					switch event.Type {
+					case rpc.MutationCreate:
+						hookEvent = hooks.EventCreate
+					case rpc.MutationUpdate:
+						hookEvent = hooks.EventUpdate
+					case rpc.MutationDelete:
+						hookEvent = hooks.EventClose
+					}
+					if hookEvent != "" {
+						// Fetch issue to pass to hook (best-effort, skip if not found)
+						if issue, err := store.GetIssue(ctx, event.IssueID); err == nil && issue != nil {
+							hookRunner.Run(hookEvent, issue)
+						}
+					}
+				}
 
 			case <-ctx.Done():
 				return
