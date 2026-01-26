@@ -379,6 +379,12 @@ With --stealth: configures global git settings for invisible beads usage:
 				fmt.Fprintf(os.Stderr, "Warning: failed to create README.md: %v\n", err)
 				// Non-fatal - continue anyway
 			}
+
+			// Create hooks for auto-render (spec render -o output)
+			if err := createHooks(beadsDir); err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: failed to create hooks: %v\n", err)
+				// Non-fatal - continue anyway
+			}
 		}
 
 		// Check if git has existing issues to import (fresh clone scenario)
@@ -1289,6 +1295,44 @@ bd create "Try out Beads"
 	// #nosec G306 - README needs to be readable
 	if err := os.WriteFile(readmePath, []byte(readmeTemplate), 0644); err != nil {
 		return fmt.Errorf("failed to write README.md: %w", err)
+	}
+
+	return nil
+}
+
+// createHooks creates the hooks directory with auto-render scripts
+func createHooks(beadsDir string) error {
+	hooksDir := filepath.Join(beadsDir, "hooks")
+
+	// Create hooks directory if it doesn't exist
+	if err := os.MkdirAll(hooksDir, 0750); err != nil {
+		return fmt.Errorf("failed to create hooks directory: %w", err)
+	}
+
+	// Hook script that runs spec render (if available)
+	hookScript := `#!/bin/bash
+# Auto-render HTML dashboard when beads change
+# Runs: spec render -o output (if spec command is available)
+
+if command -v spec &> /dev/null; then
+    spec render -o output 2>/dev/null || true
+fi
+`
+
+	// Create each hook file
+	for _, hookName := range []string{"on_create", "on_update", "on_close"} {
+		hookPath := filepath.Join(hooksDir, hookName)
+
+		// Skip if already exists
+		if _, err := os.Stat(hookPath); err == nil {
+			continue
+		}
+
+		// Write hook script (0750 for executable)
+		// #nosec G306 - hooks need to be executable
+		if err := os.WriteFile(hookPath, []byte(hookScript), 0750); err != nil {
+			return fmt.Errorf("failed to write %s hook: %w", hookName, err)
+		}
 	}
 
 	return nil
