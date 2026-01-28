@@ -26,7 +26,7 @@ Daemon modes:
 
 `daemon_event_loop.go`: Stale daemons can accumulate. `bd daemon --stop` only kills daemon for current workspace. Use `bd daemon --stop-all` to kill all system-wide, then `bd daemon --start` fresh. Symptoms: code changes don't take effect, hooks don't fire.
 
-`daemon.go:runDaemonLoop()`: hookRunner must be initialized before `runEventDrivenLoop()` call and passed as parameter, otherwise daemon mutations won't trigger hooks.
+`init.go:createHooks()`: After creating hooks, `bd init` now auto-restarts the daemon so hooks are picked up immediately. Previously required manual `bd daemon --stop && bd daemon --start`.
 
 `hooks/hooks.go`: Hooks are fire-and-forget (async). Check hook exists and is executable before running. Symlinks work - `os.Stat` follows them.
 

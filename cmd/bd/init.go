@@ -385,6 +385,22 @@ With --stealth: configures global git settings for invisible beads usage:
 				fmt.Fprintf(os.Stderr, "Warning: failed to create hooks: %v\n", err)
 				// Non-fatal - continue anyway
 			}
+
+			// Restart daemon if running so it picks up the new hooks
+			pidFile := filepath.Join(beadsDir, "daemon.pid")
+			if isRunning, _ := isDaemonRunning(pidFile); isRunning {
+				if !quiet {
+					fmt.Fprintf(os.Stderr, "Restarting daemon to pick up hooks...\n")
+				}
+				stopDaemon(pidFile)
+				time.Sleep(300 * time.Millisecond)
+				// Start daemon with default settings
+				logFile := filepath.Join(beadsDir, "daemon.log")
+				startDaemon(5*time.Second, false, false, false, false, false, logFile, pidFile)
+				if !quiet {
+					fmt.Fprintf(os.Stderr, "✓ Daemon restarted\n")
+				}
+			}
 		}
 
 		// Check if git has existing issues to import (fresh clone scenario)
