@@ -566,6 +566,23 @@ func performAutoImport(ctx context.Context, store storage.Storage, skipGit bool,
 			log.log("Removed stale lock (%s), proceeding", holder)
 		}
 
+		// Flush dirty local mutations before pulling, so import doesn't overwrite
+		// pending changes with stale JSONL content (dep-removal persistence fix)
+		repoKey := getRepoKeyForPath(jsonlPath)
+		if sqlStore, ok := store.(*sqlite.SQLiteStorage); ok {
+			dirtyCount, err := sqlStore.GetDirtyIssueCount(importCtx)
+			if err != nil {
+				log.log("Warning: failed to check dirty issue count: %v", err)
+			} else if dirtyCount > 0 {
+				log.log("Flushing %d dirty issues before import...", dirtyCount)
+				if err := exportToJSONLWithStore(importCtx, store, jsonlPath); err != nil {
+					log.log("Pre-import export failed: %v", err)
+					return
+				}
+				updateExportMetadata(importCtx, store, jsonlPath, log, repoKey)
+			}
+		}
+
 		// Pull from git FIRST if not in git-free mode (desync-fix: pull before check)
 		// This ensures we compare the pulled content with database state, not stale local content
 		if !skipGit {
@@ -598,7 +615,7 @@ func performAutoImport(ctx context.Context, store storage.Storage, skipGit bool,
 		// Check JSONL content hash AFTER pull to avoid redundant imports (desync-fix: check after pull)
 		// Use content-based check (not mtime) to avoid git resurrection bug (bd-khnb)
 		// Use getRepoKeyForPath for multi-repo support (bd-ar2.10, bd-ar2.11)
-		repoKey := getRepoKeyForPath(jsonlPath)
+		// repoKey already computed above (before dirty flush)
 		if !hasJSONLChanged(importCtx, store, jsonlPath, repoKey) {
 			log.log("Skipping %s: JSONL content unchanged after pull", mode)
 			return

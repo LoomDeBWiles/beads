@@ -1564,3 +1564,207 @@ func TestMultiRepoPrefixValidation(t *testing.T) {
 		}
 	})
 }
+
+func TestImportIssues_DependencyRemoval(t *testing.T) {
+	ctx := context.Background()
+
+	tmpDB := t.TempDir() + "/test.db"
+	store, err := sqlite.New(context.Background(), tmpDB)
+	if err != nil {
+		t.Fatalf("Failed to create store: %v", err)
+	}
+	defer store.Close()
+
+	if err := store.SetConfig(ctx, "issue_prefix", "test"); err != nil {
+		t.Fatalf("Failed to set prefix: %v", err)
+	}
+
+	// First import: create 2 issues with a dependency A→B
+	issues := []*types.Issue{
+		{
+			ID:        "test-aaa111",
+			Title:     "Issue A",
+			Status:    types.StatusOpen,
+			Priority:  1,
+			IssueType: types.TypeTask,
+			Dependencies: []*types.Dependency{
+				{IssueID: "test-aaa111", DependsOnID: "test-bbb222", Type: types.DepBlocks},
+			},
+		},
+		{
+			ID:        "test-bbb222",
+			Title:     "Issue B",
+			Status:    types.StatusOpen,
+			Priority:  1,
+			IssueType: types.TypeTask,
+		},
+	}
+
+	_, err = ImportIssues(ctx, tmpDB, store, issues, Options{})
+	if err != nil {
+		t.Fatalf("First import failed: %v", err)
+	}
+
+	// Verify dependency exists
+	deps, err := store.GetDependencies(ctx, "test-aaa111")
+	if err != nil {
+		t.Fatalf("Failed to get dependencies: %v", err)
+	}
+	if len(deps) != 1 {
+		t.Fatalf("Expected 1 dependency after first import, got %d", len(deps))
+	}
+
+	// Second import: same issues but A has empty Dependencies
+	issues[0].Dependencies = nil
+	issues[0].UpdatedAt = time.Now().Add(1 * time.Hour) // Ensure newer timestamp
+	issues[1].UpdatedAt = time.Now().Add(1 * time.Hour)
+
+	_, err = ImportIssues(ctx, tmpDB, store, issues, Options{})
+	if err != nil {
+		t.Fatalf("Second import failed: %v", err)
+	}
+
+	// Verify dependency was removed
+	deps, err = store.GetDependencies(ctx, "test-aaa111")
+	if err != nil {
+		t.Fatalf("Failed to get dependencies after second import: %v", err)
+	}
+	if len(deps) != 0 {
+		t.Errorf("Expected 0 dependencies after removing dep, got %d", len(deps))
+	}
+}
+
+func TestImportIssues_DependencyBidirectional(t *testing.T) {
+	ctx := context.Background()
+
+	tmpDB := t.TempDir() + "/test.db"
+	store, err := sqlite.New(context.Background(), tmpDB)
+	if err != nil {
+		t.Fatalf("Failed to create store: %v", err)
+	}
+	defer store.Close()
+
+	if err := store.SetConfig(ctx, "issue_prefix", "test"); err != nil {
+		t.Fatalf("Failed to set prefix: %v", err)
+	}
+
+	// First import: create A, B, C with dep A→B
+	issues := []*types.Issue{
+		{
+			ID:        "test-aaa111",
+			Title:     "Issue A",
+			Status:    types.StatusOpen,
+			Priority:  1,
+			IssueType: types.TypeTask,
+			Dependencies: []*types.Dependency{
+				{IssueID: "test-aaa111", DependsOnID: "test-bbb222", Type: types.DepBlocks},
+			},
+		},
+		{
+			ID:        "test-bbb222",
+			Title:     "Issue B",
+			Status:    types.StatusOpen,
+			Priority:  1,
+			IssueType: types.TypeTask,
+		},
+		{
+			ID:        "test-ccc333",
+			Title:     "Issue C",
+			Status:    types.StatusOpen,
+			Priority:  1,
+			IssueType: types.TypeTask,
+		},
+	}
+
+	_, err = ImportIssues(ctx, tmpDB, store, issues, Options{})
+	if err != nil {
+		t.Fatalf("First import failed: %v", err)
+	}
+
+	// Second import: A now depends on C only (not B)
+	issues[0].Dependencies = []*types.Dependency{
+		{IssueID: "test-aaa111", DependsOnID: "test-ccc333", Type: types.DepBlocks},
+	}
+	issues[0].UpdatedAt = time.Now().Add(1 * time.Hour)
+	issues[1].UpdatedAt = time.Now().Add(1 * time.Hour)
+	issues[2].UpdatedAt = time.Now().Add(1 * time.Hour)
+
+	_, err = ImportIssues(ctx, tmpDB, store, issues, Options{})
+	if err != nil {
+		t.Fatalf("Second import failed: %v", err)
+	}
+
+	// Verify: A has dep on C, not B
+	depRecords, err := store.GetDependencyRecords(ctx, "test-aaa111")
+	if err != nil {
+		t.Fatalf("Failed to get dependencies: %v", err)
+	}
+	if len(depRecords) != 1 {
+		t.Fatalf("Expected 1 dependency, got %d", len(depRecords))
+	}
+	if depRecords[0].DependsOnID != "test-ccc333" {
+		t.Errorf("Expected dependency on test-ccc333, got %s", depRecords[0].DependsOnID)
+	}
+}
+
+func TestImportIssues_LabelRemoval(t *testing.T) {
+	ctx := context.Background()
+
+	tmpDB := t.TempDir() + "/test.db"
+	store, err := sqlite.New(context.Background(), tmpDB)
+	if err != nil {
+		t.Fatalf("Failed to create store: %v", err)
+	}
+	defer store.Close()
+
+	if err := store.SetConfig(ctx, "issue_prefix", "test"); err != nil {
+		t.Fatalf("Failed to set prefix: %v", err)
+	}
+
+	// First import: create issue with labels ["bug", "critical"]
+	issues := []*types.Issue{
+		{
+			ID:        "test-aaa111",
+			Title:     "Test Issue",
+			Status:    types.StatusOpen,
+			Priority:  1,
+			IssueType: types.TypeTask,
+			Labels:    []string{"bug", "critical"},
+		},
+	}
+
+	_, err = ImportIssues(ctx, tmpDB, store, issues, Options{})
+	if err != nil {
+		t.Fatalf("First import failed: %v", err)
+	}
+
+	// Verify both labels exist
+	labels, err := store.GetLabels(ctx, "test-aaa111")
+	if err != nil {
+		t.Fatalf("Failed to get labels: %v", err)
+	}
+	if len(labels) != 2 {
+		t.Fatalf("Expected 2 labels after first import, got %d", len(labels))
+	}
+
+	// Second import: only "bug" label
+	issues[0].Labels = []string{"bug"}
+	issues[0].UpdatedAt = time.Now().Add(1 * time.Hour)
+
+	_, err = ImportIssues(ctx, tmpDB, store, issues, Options{})
+	if err != nil {
+		t.Fatalf("Second import failed: %v", err)
+	}
+
+	// Verify only "bug" remains
+	labels, err = store.GetLabels(ctx, "test-aaa111")
+	if err != nil {
+		t.Fatalf("Failed to get labels after second import: %v", err)
+	}
+	if len(labels) != 1 {
+		t.Errorf("Expected 1 label after removal, got %d: %v", len(labels), labels)
+	}
+	if len(labels) == 1 && labels[0] != "bug" {
+		t.Errorf("Expected label 'bug', got %q", labels[0])
+	}
+}

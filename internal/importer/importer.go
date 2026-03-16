@@ -774,10 +774,6 @@ func upsertIssues(ctx context.Context, sqliteStore *sqlite.SQLiteStorage, issues
 // importDependencies imports dependency relationships
 func importDependencies(ctx context.Context, sqliteStore *sqlite.SQLiteStorage, issues []*types.Issue, opts Options, result *Result) error {
 	for _, issue := range issues {
-		if len(issue.Dependencies) == 0 {
-			continue
-		}
-
 		// Fetch existing dependencies once per issue
 		existingDeps, err := sqliteStore.GetDependencyRecords(ctx, issue.ID)
 		if err != nil {
@@ -791,18 +787,15 @@ func importDependencies(ctx context.Context, sqliteStore *sqlite.SQLiteStorage, 
 			existingSet[key] = true
 		}
 
+		// Add missing dependencies from JSONL
 		for _, dep := range issue.Dependencies {
-			// Check for duplicate using set
 			key := fmt.Sprintf("%s|%s", dep.DependsOnID, dep.Type)
 			if existingSet[key] {
 				continue
 			}
 
-			// Add dependency
 			if err := sqliteStore.AddDependency(ctx, dep, "import"); err != nil {
-				// Check for FOREIGN KEY constraint violation
 				if sqlite.IsForeignKeyConstraintError(err) {
-					// Log warning and track skipped dependency
 					depDesc := fmt.Sprintf("%s → %s (%s)", dep.IssueID, dep.DependsOnID, dep.Type)
 					fmt.Fprintf(os.Stderr, "Warning: Skipping dependency due to missing reference: %s\n", depDesc)
 					if result != nil {
@@ -811,11 +804,27 @@ func importDependencies(ctx context.Context, sqliteStore *sqlite.SQLiteStorage, 
 					continue
 				}
 
-				// For non-FK errors, respect strict mode
 				if opts.Strict {
 					return fmt.Errorf("error adding dependency %s → %s: %w", dep.IssueID, dep.DependsOnID, err)
 				}
 				continue
+			}
+		}
+
+		// Remove deps in SQLite not present in JSONL
+		jsonlDepSet := make(map[string]bool)
+		for _, dep := range issue.Dependencies {
+			key := fmt.Sprintf("%s|%s", dep.DependsOnID, dep.Type)
+			jsonlDepSet[key] = true
+		}
+		for _, existing := range existingDeps {
+			key := fmt.Sprintf("%s|%s", existing.DependsOnID, existing.Type)
+			if !jsonlDepSet[key] {
+				if err := sqliteStore.RemoveDependency(ctx, issue.ID, existing.DependsOnID, "import"); err != nil {
+					if opts.Strict {
+						return fmt.Errorf("error removing stale dependency %s → %s: %w", issue.ID, existing.DependsOnID, err)
+					}
+				}
 			}
 		}
 	}
@@ -826,10 +835,6 @@ func importDependencies(ctx context.Context, sqliteStore *sqlite.SQLiteStorage, 
 // importLabels imports labels for issues
 func importLabels(ctx context.Context, sqliteStore *sqlite.SQLiteStorage, issues []*types.Issue, opts Options) error {
 	for _, issue := range issues {
-		if len(issue.Labels) == 0 {
-			continue
-		}
-
 		// Get current labels
 		currentLabels, err := sqliteStore.GetLabels(ctx, issue.ID)
 		if err != nil {
@@ -841,7 +846,13 @@ func importLabels(ctx context.Context, sqliteStore *sqlite.SQLiteStorage, issues
 			currentLabelSet[label] = true
 		}
 
-		// Add missing labels
+		// Build set of JSONL labels for removal pass
+		importLabelSet := make(map[string]bool)
+		for _, label := range issue.Labels {
+			importLabelSet[label] = true
+		}
+
+		// Add missing labels from JSONL
 		for _, label := range issue.Labels {
 			if !currentLabelSet[label] {
 				if err := sqliteStore.AddLabel(ctx, issue.ID, label, "import"); err != nil {
@@ -849,6 +860,17 @@ func importLabels(ctx context.Context, sqliteStore *sqlite.SQLiteStorage, issues
 						return fmt.Errorf("error adding label %s to %s: %w", label, issue.ID, err)
 					}
 					continue
+				}
+			}
+		}
+
+		// Remove labels in SQLite not present in JSONL
+		for _, label := range currentLabels {
+			if !importLabelSet[label] {
+				if err := sqliteStore.RemoveLabel(ctx, issue.ID, label, "import"); err != nil {
+					if opts.Strict {
+						return fmt.Errorf("error removing stale label %s from %s: %w", label, issue.ID, err)
+					}
 				}
 			}
 		}

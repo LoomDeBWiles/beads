@@ -1,11 +1,14 @@
 package rpc
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
 	"testing"
 	"time"
 
 	"github.com/steveyegge/beads/internal/storage/memory"
+	"github.com/steveyegge/beads/internal/types"
 )
 
 func TestEmitMutation(t *testing.T) {
@@ -424,4 +427,115 @@ func TestHandleDelete_BatchEmitsMutations(t *testing.T) {
 			t.Errorf("no delete mutation found for issue %s", id)
 		}
 	}
+}
+
+// TestDepRemove_MutationEventHasCorrectIssueID verifies that dep_remove emits a
+// mutation event with the correct FromID, not an empty string. Before the fix,
+// handleSimpleStoreOp captured issueID before json.Unmarshal ran, so it was always "".
+func TestDepRemove_MutationEventHasCorrectIssueID(t *testing.T) {
+	store := memory.New("/tmp/test.jsonl")
+	server := NewServer("/tmp/test.sock", store, "/tmp", "/tmp/test.db")
+
+	// Create two issues directly via the store
+	ctx := context.Background()
+	i1 := createTestIssue(t, ctx, store, "Issue 1")
+	i2 := createTestIssue(t, ctx, store, "Issue 2")
+
+	// Add a dependency i1 → i2
+	addArgs := DepAddArgs{FromID: i1, ToID: i2, DepType: "blocks"}
+	addJSON, _ := json.Marshal(addArgs)
+	addReq := &Request{Operation: OpDepAdd, Args: addJSON, Actor: "test-user"}
+	addResp := server.handleDepAdd(addReq)
+	if !addResp.Success {
+		t.Fatalf("dep add failed: %s", addResp.Error)
+	}
+
+	// Clear buffer to isolate the remove event
+	checkpoint := time.Now().UnixMilli()
+	time.Sleep(2 * time.Millisecond)
+
+	// Remove the dependency via RPC
+	removeArgs := DepRemoveArgs{FromID: i1, ToID: i2}
+	removeJSON, _ := json.Marshal(removeArgs)
+	removeReq := &Request{Operation: OpDepRemove, Args: removeJSON, Actor: "test-user"}
+	removeResp := server.handleRequest(removeReq)
+	if !removeResp.Success {
+		t.Fatalf("dep remove failed: %s", removeResp.Error)
+	}
+
+	// Read mutation from channel
+	select {
+	case event := <-server.MutationChan():
+		// Drain earlier events until we find the remove one
+		for event.Timestamp.UnixMilli() <= checkpoint {
+			event = <-server.MutationChan()
+		}
+		if event.IssueID != i1 {
+			t.Errorf("expected mutation IssueID=%s, got %q", i1, event.IssueID)
+		}
+		if event.Type != MutationUpdate {
+			t.Errorf("expected mutation type=%s, got %s", MutationUpdate, event.Type)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for mutation event")
+	}
+}
+
+// TestLabelAdd_MutationEventHasCorrectIssueID verifies that label_add emits a
+// mutation event with the correct issue ID (same fix as dep_remove).
+func TestLabelAdd_MutationEventHasCorrectIssueID(t *testing.T) {
+	store := memory.New("/tmp/test.jsonl")
+	server := NewServer("/tmp/test.sock", store, "/tmp", "/tmp/test.db")
+
+	ctx := context.Background()
+	issueID := createTestIssue(t, ctx, store, "Label Test Issue")
+
+	// Clear buffer
+	checkpoint := time.Now().UnixMilli()
+	time.Sleep(2 * time.Millisecond)
+
+	// Add label via RPC
+	labelArgs := LabelAddArgs{ID: issueID, Label: "urgent"}
+	labelJSON, _ := json.Marshal(labelArgs)
+	labelReq := &Request{Operation: OpLabelAdd, Args: labelJSON, Actor: "test-user"}
+	labelResp := server.handleRequest(labelReq)
+	if !labelResp.Success {
+		t.Fatalf("label add failed: %s", labelResp.Error)
+	}
+
+	// Read mutation from channel
+	select {
+	case event := <-server.MutationChan():
+		for event.Timestamp.UnixMilli() <= checkpoint {
+			event = <-server.MutationChan()
+		}
+		if event.IssueID != issueID {
+			t.Errorf("expected mutation IssueID=%s, got %q", issueID, event.IssueID)
+		}
+		if event.Type != MutationUpdate {
+			t.Errorf("expected mutation type=%s, got %s", MutationUpdate, event.Type)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for mutation event")
+	}
+}
+
+// testIssueCounter is a package-level counter to generate unique issue IDs in tests.
+var testIssueCounter int
+
+// createTestIssue creates a minimal issue in the store and returns its ID.
+func createTestIssue(t *testing.T, ctx context.Context, store *memory.MemoryStorage, title string) string {
+	t.Helper()
+	testIssueCounter++
+	issue := &types.Issue{
+		ID:        fmt.Sprintf("bd-%d", testIssueCounter),
+		Title:     title,
+		Status:    types.StatusOpen,
+		Priority:  1,
+		IssueType: types.TypeTask,
+	}
+	if err := store.CreateIssue(ctx, issue, "test"); err != nil {
+		t.Fatalf("failed to create test issue: %v", err)
+	}
+	return issue.ID
 }
