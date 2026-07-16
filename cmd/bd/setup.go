@@ -16,7 +16,7 @@ var setupCmd = &cobra.Command{
 	Use:     "setup",
 	GroupID: "setup",
 	Short:   "Setup integration with AI editors",
-	Long:  `Setup integration files for AI editors like Claude Code, Cursor, Aider, and Factory.ai Droid.`,
+	Long:    `Setup integration files for AI editors like Claude Code, Cursor, Aider, and Factory.ai Droid.`,
 }
 
 var setupCursorCmd = &cobra.Command{
@@ -72,7 +72,8 @@ var setupFactoryCmd = &cobra.Command{
 	Short: "Setup Factory.ai (Droid) integration",
 	Long: `Install Beads workflow configuration for Factory.ai Droid.
 
-Creates or updates AGENTS.md with bd workflow instructions.
+Prints the bd workflow block and instructions for applying it manually.
+This command never creates, modifies, or removes AGENTS.md.
 Factory Droids automatically read AGENTS.md on session start.
 
 AGENTS.md is the standard format used across AI coding assistants
@@ -119,7 +120,7 @@ agents from forgetting bd workflow after context compaction.`,
 
 func init() {
 	setupFactoryCmd.Flags().BoolVar(&setupCheck, "check", false, "Check if Factory.ai integration is installed")
-	setupFactoryCmd.Flags().BoolVar(&setupRemove, "remove", false, "Remove bd section from AGENTS.md")
+	setupFactoryCmd.Flags().BoolVar(&setupRemove, "remove", false, "Print instructions to manually remove the bd section from AGENTS.md")
 
 	setupClaudeCmd.Flags().BoolVar(&setupProject, "project", false, "Install for this project only (not globally)")
 	setupClaudeCmd.Flags().BoolVar(&setupCheck, "check", false, "Check if Claude integration is installed")

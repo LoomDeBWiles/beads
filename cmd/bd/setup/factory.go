@@ -100,55 +100,14 @@ For more details, see README.md and docs/QUICKSTART.md.
 <!-- END BEADS INTEGRATION -->
 `
 
-// InstallFactory installs Factory.ai/Droid integration
+// InstallFactory prints Factory.ai/Droid integration instructions.
 func InstallFactory() {
-	agentsPath := "AGENTS.md"
-
-	fmt.Println("Installing Factory.ai (Droid) integration...")
-
-	// Check if AGENTS.md exists
-	var currentContent string
-	data, err := os.ReadFile(agentsPath)
-	if err == nil {
-		currentContent = string(data)
-	} else if !os.IsNotExist(err) {
-		fmt.Fprintf(os.Stderr, "Error: failed to read AGENTS.md: %v\n", err)
-		os.Exit(1)
-	}
-
-	// If file exists, check if we already have beads section
-	if currentContent != "" {
-		if strings.Contains(currentContent, factoryBeginMarker) {
-			// Update existing section
-			newContent := updateBeadsSection(currentContent)
-			if err := atomicWriteFile(agentsPath, []byte(newContent)); err != nil {
-				fmt.Fprintf(os.Stderr, "Error: write AGENTS.md: %v\n", err)
-				os.Exit(1)
-			}
-			fmt.Println("✓ Updated existing beads section in AGENTS.md")
-		} else {
-			// Append to existing file
-			newContent := currentContent + "\n\n" + factoryBeadsSection
-			if err := atomicWriteFile(agentsPath, []byte(newContent)); err != nil {
-				fmt.Fprintf(os.Stderr, "Error: write AGENTS.md: %v\n", err)
-				os.Exit(1)
-			}
-			fmt.Println("✓ Added beads section to existing AGENTS.md")
-		}
-	} else {
-		// Create new AGENTS.md with template
-		newContent := createNewAgentsFile()
-		if err := atomicWriteFile(agentsPath, []byte(newContent)); err != nil {
-			fmt.Fprintf(os.Stderr, "Error: write AGENTS.md: %v\n", err)
-			os.Exit(1)
-		}
-		fmt.Println("✓ Created new AGENTS.md with beads integration")
-	}
-
-	fmt.Printf("\n✓ Factory.ai (Droid) integration installed\n")
-	fmt.Printf("  File: %s\n", agentsPath)
-	fmt.Println("\nFactory Droid will automatically read AGENTS.md on session start.")
-	fmt.Println("No additional configuration needed!")
+	fmt.Println("Factory.ai (Droid) integration instructions")
+	fmt.Println("bd never writes AGENTS.md. Apply this block manually:")
+	fmt.Println()
+	fmt.Print(factoryBeadsSection)
+	fmt.Println("Add this block to AGENTS.md yourself. If AGENTS.md already contains the")
+	fmt.Printf("%s and %s markers, replace only the marked section. Otherwise append the block.\n", factoryBeginMarker, factoryEndMarker)
 }
 
 // CheckFactory checks if Factory.ai integration is installed
@@ -178,121 +137,9 @@ func CheckFactory() {
 	}
 }
 
-// RemoveFactory removes Factory.ai integration
+// RemoveFactory prints Factory.ai integration removal instructions.
 func RemoveFactory() {
-	agentsPath := "AGENTS.md"
-
-	fmt.Println("Removing Factory.ai (Droid) integration...")
-
-	// Read current content
-	data, err := os.ReadFile(agentsPath)
-	if os.IsNotExist(err) {
-		fmt.Println("No AGENTS.md file found")
-		return
-	} else if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: failed to read AGENTS.md: %v\n", err)
-		os.Exit(1)
-	}
-
-	content := string(data)
-
-	// Check if beads section exists
-	if !strings.Contains(content, factoryBeginMarker) {
-		fmt.Println("No beads section found in AGENTS.md")
-		return
-	}
-
-	// Remove beads section
-	newContent := removeBeadsSection(content)
-
-	// If file would be empty after removal, delete it
-	trimmed := strings.TrimSpace(newContent)
-	if trimmed == "" {
-		if err := os.Remove(agentsPath); err != nil {
-			fmt.Fprintf(os.Stderr, "Error: failed to remove AGENTS.md: %v\n", err)
-			os.Exit(1)
-		}
-		fmt.Println("✓ Removed AGENTS.md (file was empty after removing beads section)")
-	} else {
-		// Write back modified content
-		if err := atomicWriteFile(agentsPath, []byte(newContent)); err != nil {
-			fmt.Fprintf(os.Stderr, "Error: write AGENTS.md: %v\n", err)
-			os.Exit(1)
-		}
-		fmt.Println("✓ Removed beads section from AGENTS.md")
-	}
-}
-
-// updateBeadsSection replaces the beads section in existing content
-func updateBeadsSection(content string) string {
-	start := strings.Index(content, factoryBeginMarker)
-	end := strings.Index(content, factoryEndMarker)
-
-	if start == -1 || end == -1 || start > end {
-		// Markers not found or invalid, append instead
-		return content + "\n\n" + factoryBeadsSection
-	}
-
-	// Replace section between markers (including end marker line)
-	endOfEndMarker := end + len(factoryEndMarker)
-	// Find the next newline after end marker
-	nextNewline := strings.Index(content[endOfEndMarker:], "\n")
-	if nextNewline != -1 {
-		endOfEndMarker += nextNewline + 1
-	}
-
-	return content[:start] + factoryBeadsSection + content[endOfEndMarker:]
-}
-
-// removeBeadsSection removes the beads section from content
-func removeBeadsSection(content string) string {
-	start := strings.Index(content, factoryBeginMarker)
-	end := strings.Index(content, factoryEndMarker)
-
-	if start == -1 || end == -1 || start > end {
-		return content
-	}
-
-	// Find the next newline after end marker
-	endOfEndMarker := end + len(factoryEndMarker)
-	nextNewline := strings.Index(content[endOfEndMarker:], "\n")
-	if nextNewline != -1 {
-		endOfEndMarker += nextNewline + 1
-	}
-
-	// Also remove leading blank lines before the section
-	trimStart := start
-	for trimStart > 0 && (content[trimStart-1] == '\n' || content[trimStart-1] == '\r') {
-		trimStart--
-	}
-
-	return content[:trimStart] + content[endOfEndMarker:]
-}
-
-// createNewAgentsFile creates a new AGENTS.md with a basic template
-func createNewAgentsFile() string {
-	return `# Project Instructions for AI Agents
-
-This file provides instructions and context for AI coding agents working on this project.
-
-` + factoryBeadsSection + `
-
-## Build & Test
-
-_Add your build and test commands here_
-
-` + "```bash" + `
-# Example:
-# npm install
-# npm test
-` + "```" + `
-
-## Architecture Overview
-
-_Add a brief overview of your project architecture_
-
-## Conventions & Patterns
-
-_Add your project-specific conventions here_
-`
+	fmt.Println("Factory.ai (Droid) integration removal instructions")
+	fmt.Println("bd never writes AGENTS.md. Edit AGENTS.md yourself and delete every line")
+	fmt.Printf("from %s through %s, inclusive.\n", factoryBeginMarker, factoryEndMarker)
 }

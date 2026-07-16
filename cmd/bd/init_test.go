@@ -49,7 +49,7 @@ func TestInitCommand(t *testing.T) {
 			origDBPath := dbPath
 			defer func() { dbPath = origDBPath }()
 			dbPath = ""
-			
+
 			// Reset Cobra command state
 			rootCmd.SetArgs([]string{})
 			initCmd.Flags().Set("prefix", "")
@@ -141,19 +141,19 @@ func TestInitCommand(t *testing.T) {
 			// Verify database was created (always beads.db now)
 			dbPath := filepath.Join(beadsDir, "beads.db")
 			if _, err := os.Stat(dbPath); os.IsNotExist(err) {
-			t.Errorf("Database file was not created at %s", dbPath)
+				t.Errorf("Database file was not created at %s", dbPath)
 			}
 
 			// Verify database has correct prefix
 			// Note: This database was already created by init command, just open it
-		store, err := openExistingTestDB(t, dbPath)
+			store, err := openExistingTestDB(t, dbPath)
 			if err != nil {
-			 t.Fatalf("Failed to open database: %v", err)
-		}
-		defer store.Close()
+				t.Fatalf("Failed to open database: %v", err)
+			}
+			defer store.Close()
 
-		ctx := context.Background()
-		prefix, err := store.GetConfig(ctx, "issue_prefix")
+			ctx := context.Background()
+			prefix, err := store.GetConfig(ctx, "issue_prefix")
 			if err != nil {
 				t.Fatalf("Failed to get issue prefix from database: %v", err)
 			}
@@ -176,6 +176,93 @@ func TestInitCommand(t *testing.T) {
 			}
 			if version == "" {
 				t.Error("bd_version metadata was not set")
+			}
+		})
+	}
+}
+
+func TestInitDoesNotTouchAgentsFile(t *testing.T) {
+	tests := []struct {
+		name          string
+		quiet         bool
+		agentsContent []byte
+		wantAbsent    bool
+	}{
+		{
+			name:       "no AGENTS.md/default output",
+			wantAbsent: true,
+		},
+		{
+			name:          "sentinel AGENTS.md/default output",
+			agentsContent: []byte("# Sentinel Instructions\nDo not modify this file.\n"),
+		},
+		{
+			name:       "no AGENTS.md/quiet output",
+			quiet:      true,
+			wantAbsent: true,
+		},
+		{
+			name:          "sentinel AGENTS.md/quiet output",
+			quiet:         true,
+			agentsContent: []byte("# Sentinel Instructions\nDo not modify this file.\n"),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			origDBPath := dbPath
+			origNoDB := noDb
+			defer func() {
+				dbPath = origDBPath
+				noDb = origNoDB
+			}()
+			dbPath = ""
+			noDb = false
+
+			rootCmd.SetArgs([]string{})
+			initCmd.Flags().Set("prefix", "")
+			initCmd.Flags().Set("quiet", "false")
+			initCmd.Flags().Set("branch", "")
+			initCmd.Flags().Set("contributor", "false")
+			initCmd.Flags().Set("team", "false")
+			initCmd.Flags().Set("stealth", "false")
+			initCmd.Flags().Set("skip-hooks", "false")
+			initCmd.Flags().Set("skip-merge-driver", "false")
+			initCmd.Flags().Set("force", "false")
+
+			tmpDir := t.TempDir()
+			t.Chdir(tmpDir)
+			agentsPath := filepath.Join(tmpDir, "AGENTS.md")
+			if !tt.wantAbsent {
+				if err := os.WriteFile(agentsPath, tt.agentsContent, 0644); err != nil {
+					t.Fatalf("write AGENTS.md: %v", err)
+				}
+			}
+
+			args := []string{"init"}
+			if tt.quiet {
+				args = append(args, "--quiet")
+			}
+			rootCmd.SetArgs(args)
+			if err := rootCmd.Execute(); err != nil {
+				t.Fatalf("init command failed: %v", err)
+			}
+
+			content, err := os.ReadFile(agentsPath)
+			if tt.wantAbsent {
+				if err == nil {
+					t.Fatalf("AGENTS.md was created: %q", content)
+				}
+				if !os.IsNotExist(err) {
+					t.Fatalf("read AGENTS.md: %v", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("read AGENTS.md: %v", err)
+			}
+			if !bytes.Equal(content, tt.agentsContent) {
+				t.Errorf("AGENTS.md changed:\nwant %q\n got %q", tt.agentsContent, content)
 			}
 		})
 	}
@@ -346,14 +433,14 @@ func TestInitWithCustomDBPath(t *testing.T) {
 		}
 	})
 
-	// Test with multiple BEADS_DB variations  
+	// Test with multiple BEADS_DB variations
 	t.Run("BEADS_DB with subdirectories", func(t *testing.T) {
 		dbPath = "" // Reset global
 		envPath := filepath.Join(tmpDir, "env", "subdirs", "test.db")
-		
+
 		os.Setenv("BEADS_DB", envPath)
 		defer os.Unsetenv("BEADS_DB")
-		
+
 		rootCmd.SetArgs([]string{"init", "--prefix", "envtest2", "--quiet"})
 
 		if err := rootCmd.Execute(); err != nil {
@@ -364,7 +451,7 @@ func TestInitWithCustomDBPath(t *testing.T) {
 		if _, err := os.Stat(envPath); os.IsNotExist(err) {
 			t.Errorf("Database was not created at BEADS_DB path %s", envPath)
 		}
-		
+
 		// Verify .beads/ directory was NOT created in work directory
 		if _, err := os.Stat(filepath.Join(workDir, ".beads")); err == nil {
 			t.Error(".beads/ directory should not be created in CWD when BEADS_DB is set")
@@ -376,13 +463,13 @@ func TestInitNoDbMode(t *testing.T) {
 	// Reset global state
 	origDBPath := dbPath
 	origNoDb := noDb
-	defer func() { 
+	defer func() {
 		dbPath = origDBPath
 		noDb = origNoDb
 	}()
 	dbPath = ""
 	noDb = false
-	
+
 	tmpDir := t.TempDir()
 	t.Chdir(tmpDir)
 
