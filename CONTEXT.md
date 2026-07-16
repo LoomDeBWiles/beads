@@ -30,6 +30,8 @@ Daemon modes:
 
 `hooks/hooks.go`: Hooks are fire-and-forget (async). Check hook exists and is executable before running. Symlinks work - `os.Stat` follows them.
 
+**bd never writes AGENTS.md** (w1_agents-md-guard, 2026-07-16): the "Landing the Plane" AGENTS.md writer was deleted from `init.go`, and `setup factory` prints its integration block instead of writing the file. Upstream (steveyegge/beads) still ships the feature — a future upstream sync that reintroduces it breaks `TestInitDoesNotTouchAgentsFile` (`cmd/bd/init_test.go`) and `TestFactoryDoesNotTouchAgentsFile` (`cmd/bd/setup/factory_test.go`); keep those tests, resolve merge conflicts by keeping the deletion.
+
 ## Patterns
 
 **Mutation → Hook flow**: RPC mutation → `MutationChan()` → event loop receives → `exportDebouncer.Trigger()` → `hookRunner.Run(event, issue)`

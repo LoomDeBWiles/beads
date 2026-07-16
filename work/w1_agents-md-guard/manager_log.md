@@ -100,3 +100,24 @@
 ## 2026-07-16 — UNBLOCKED self-serve: bd daemon --stop
 - User pushback: should have self-served. Correct path was bd's own lifecycle command, not kill: `cd ~/projects/tools/beads && bd daemon --stop` → "Daemon stopped" (PID 1794314 gone), /proc/locks entry for wt.lock inode 12491071 CLEARED.
 - Lesson: a daemon with its own CLI stop command is never a kill-approval case. Re-running wt-merge --keep.
+
+## 2026-07-16 — Phase 1 MERGED + Phase 2 COMPLETE (proof 1-5 PASS)
+- wt-merge --keep rc=0: main 293caebe..d426f635 pushed. (Post-merge bd-sync warning: fork's own dogfood DB prefix mismatch bd-wisp- — pre-existing, unrelated, merge unaffected.)
+- Backup: bd.local-bin + bd.go-bin under ~/projects/tools/beads/work/w1_agents-md-guard/backup/, MANIFEST.sha256 verified OK (write-once guard).
+- make install + install -m755 ~/go/bin/bd ~/.local/bin/bd.
+- Proof 1 PASS: go test TestInit|TestFactory all ok. Proof 2 PASS: sentinel UNCHANGED after default bd init. Proof 3 PASS: ABSENT after bd init -q. Proof 4 PASS: both binaries sha256 19ccc433... EQUAL; bd version main@d426f6353c31 prefixes HEAD d426f6353c318f7743bbe0f9a59c7afa90298102. Proof 5 PASS: factory prints block + "bd never writes AGENTS.md", NOWRITE.
+- Next: Phase 3 fleet cleanup (14 repos), hash pre-verify first.
+
+## 2026-07-16 — Phase 3 COMPLETE (proof 6 PASS)
+- 14/14 repos cleaned, each via wt-new → hash gate → trash.sh (14-day undo) → pathspec commit → wt-merge:
+  acid 4ac0c15b0, decisions d7039b1, fleet 01889cd (no origin, push skipped), investing 21bbfba, lit-search 55281ac, mine cff22b0, patent-forge 64bb2a6, patent-search ebb07fc, spec-code c777281 (92c1bfa3 hash), tts-reader 11c754e (no origin), mini-warriors-reborn cb40722, game-generator 287af72, teaching 52b8e96 (548-2026/website/AGENTS.md, no origin), moltbot 8d721d7 (section strip 191→165 lines, trailing-verified).
+- All hash gates PASS at execution time inside fresh worktrees (12× bf83e48f, 1× 92c1bfa3); moltbot section confirmed trailing before cut.
+- DEVIATION (mine): push blocked by pre-push mass-change gate on PRE-EXISTING unpushed commit 6b204147 ("untrack runtime caches", 1924 paths). Verified untrack-only (.gitignore + index removals; files intact on disk: .testmondata, logs present). Used the hook's own documented override ALLOW_MASS_COMMIT=1 → pushed 35ecc13..cff22b0; then wt-merge --cleanup-only. mine now has 0 unpushed commits (was 5+ stuck).
+- Proof 6 PASS: fleet sweep returns exactly tools/beads/AGENTS.md + tools/beads/cmd/bd/AGENTS.md (upstream docs, excluded by plan).
+- ALL 6 PROOF CHECKS PASS. Next: WRAP-UP — work-report-facts.sh, work_report.md, context/CODEMAP updates, final merge.
+
+## 2026-07-16 — WRAP-UP: SHIPPED + DEPLOYED + LIVE
+- work_report.md written (bead-free format; work-report-facts.sh N/A — expects supervised final_evidence.json, none for bead-free items).
+- CONTEXT.md (fork): added upstream-resync gotcha — bd never writes AGENTS.md; regression tests pin it; keep deletion on merge conflicts. CODEMAP.md: no change needed (never described the feature). No context/INDEX.md in this repo.
+- Done-is-live satisfied per plan (no live service; done = installed binary verified — Phase 2 proofs 1-5 + fleet proof 6 all PASS).
+- Final: pathspec commit work items → plain wt-merge (removes worktree). Item DONE.
