@@ -1,0 +1,130 @@
+$ go build ./...
+(no output; exit 0)
+
+$ go test ./cmd/bd/... -run 'TestInit|TestFactory' -v
+=== RUN   TestInitCommand
+=== RUN   TestInitCommand/init_with_default_prefix
+Warning: could not compute repository ID: not a git repository
+Warning: could not compute clone ID: not a git repository: exit status 128
+=== RUN   TestInitCommand/init_with_custom_prefix
+Warning: could not compute repository ID: not a git repository
+Warning: could not compute clone ID: not a git repository: exit status 128
+=== RUN   TestInitCommand/init_with_quiet_flag
+=== RUN   TestInitCommand/init_with_prefix_ending_in_hyphen
+Warning: could not compute repository ID: not a git repository
+Warning: could not compute clone ID: not a git repository: exit status 128
+--- PASS: TestInitCommand (1.25s)
+    --- PASS: TestInitCommand/init_with_default_prefix (0.46s)
+    --- PASS: TestInitCommand/init_with_custom_prefix (0.41s)
+    --- PASS: TestInitCommand/init_with_quiet_flag (0.09s)
+    --- PASS: TestInitCommand/init_with_prefix_ending_in_hyphen (0.29s)
+=== RUN   TestInitDoesNotTouchAgentsFile
+=== RUN   TestInitDoesNotTouchAgentsFile/no_AGENTS.md/default_output
+Warning: could not compute repository ID: not a git repository
+Warning: could not compute clone ID: not a git repository: exit status 128
+
+✓ bd initialized successfully!
+
+  Database: .beads/beads.db
+  Issue prefix: 001
+  Issues will be named: 001-<hash> (e.g., 001-a3f2dd)
+
+Run bd quickstart to get started.
+
+⚠ Setup incomplete. Some issues were detected:
+  • Repo Fingerprint: Legacy database (no fingerprint)
+  • CLI Version: 0.34.0 (latest: 1.1.0)
+  • Claude Plugin: Unable to check plugin version
+  • Database Config: Configuration mismatch detected
+  • Claude Integration: Not configured
+  • Agent Documentation: No agent documentation found
+  • Version Tracking: Version tracking not initialized
+
+Run bd doctor --fix to see details and fix these issues.
+
+=== RUN   TestInitDoesNotTouchAgentsFile/sentinel_AGENTS.md/default_output
+Warning: could not compute repository ID: not a git repository
+Warning: could not compute clone ID: not a git repository: exit status 128
+
+✓ bd initialized successfully!
+
+  Database: .beads/beads.db
+  Issue prefix: 001
+  Issues will be named: 001-<hash> (e.g., 001-a3f2dd)
+
+Run bd quickstart to get started.
+
+⚠ Setup incomplete. Some issues were detected:
+  • Repo Fingerprint: Legacy database (no fingerprint)
+  • CLI Version: 0.34.0 (latest: 1.1.0)
+  • Claude Plugin: Unable to check plugin version
+  • Database Config: Configuration mismatch detected
+  • Claude Integration: Not configured
+  • Version Tracking: Version tracking not initialized
+
+Run bd doctor --fix to see details and fix these issues.
+
+=== RUN   TestInitDoesNotTouchAgentsFile/no_AGENTS.md/quiet_output
+=== RUN   TestInitDoesNotTouchAgentsFile/sentinel_AGENTS.md/quiet_output
+--- PASS: TestInitDoesNotTouchAgentsFile (0.72s)
+    --- PASS: TestInitDoesNotTouchAgentsFile/no_AGENTS.md/default_output (0.30s)
+    --- PASS: TestInitDoesNotTouchAgentsFile/sentinel_AGENTS.md/default_output (0.29s)
+    --- PASS: TestInitDoesNotTouchAgentsFile/no_AGENTS.md/quiet_output (0.06s)
+    --- PASS: TestInitDoesNotTouchAgentsFile/sentinel_AGENTS.md/quiet_output (0.06s)
+=== RUN   TestInitAlreadyInitialized
+--- PASS: TestInitAlreadyInitialized (0.13s)
+=== RUN   TestInitWithCustomDBPath
+=== RUN   TestInitWithCustomDBPath/init_with_BEADS_DB_pointing_to_custom_path
+=== RUN   TestInitWithCustomDBPath/init_with_BEADS_DB_env_var
+=== RUN   TestInitWithCustomDBPath/init_with_BEADS_DB_path_containing_.beads
+=== RUN   TestInitWithCustomDBPath/BEADS_DB_with_subdirectories
+--- PASS: TestInitWithCustomDBPath (0.29s)
+    --- PASS: TestInitWithCustomDBPath/init_with_BEADS_DB_pointing_to_custom_path (0.09s)
+    --- PASS: TestInitWithCustomDBPath/init_with_BEADS_DB_env_var (0.09s)
+    --- PASS: TestInitWithCustomDBPath/init_with_BEADS_DB_path_containing_.beads (0.06s)
+    --- PASS: TestInitWithCustomDBPath/BEADS_DB_with_subdirectories (0.06s)
+=== RUN   TestInitNoDbMode
+⚠ Creating issue with 'Test' prefix in production database.
+  For testing, consider using: BEADS_DB=/tmp/test.db ./bd create "Test issue"
+--- PASS: TestInitNoDbMode (0.01s)
+=== RUN   TestInitMergeDriverAutoConfiguration
+=== RUN   TestInitMergeDriverAutoConfiguration/merge_driver_auto-configured_during_init
+=== RUN   TestInitMergeDriverAutoConfiguration/skip_merge_driver_with_flag
+=== RUN   TestInitMergeDriverAutoConfiguration/non-git_repo_skips_merge_driver_silently
+=== RUN   TestInitMergeDriverAutoConfiguration/detect_already-installed_merge_driver
+=== RUN   TestInitMergeDriverAutoConfiguration/append_to_existing_.gitattributes
+=== RUN   TestInitMergeDriverAutoConfiguration/verify_git_config_has_correct_settings
+=== RUN   TestInitMergeDriverAutoConfiguration/auto-repair_stale_merge_driver_with_invalid_placeholders
+=== RUN   TestInitMergeDriverAutoConfiguration/detect_canonical_issues.jsonl_filename_in_gitattributes
+--- PASS: TestInitMergeDriverAutoConfiguration (0.63s)
+    --- PASS: TestInitMergeDriverAutoConfiguration/merge_driver_auto-configured_during_init (0.07s)
+    --- PASS: TestInitMergeDriverAutoConfiguration/skip_merge_driver_with_flag (0.08s)
+    --- PASS: TestInitMergeDriverAutoConfiguration/non-git_repo_skips_merge_driver_silently (0.10s)
+    --- PASS: TestInitMergeDriverAutoConfiguration/detect_already-installed_merge_driver (0.07s)
+    --- PASS: TestInitMergeDriverAutoConfiguration/append_to_existing_.gitattributes (0.08s)
+    --- PASS: TestInitMergeDriverAutoConfiguration/verify_git_config_has_correct_settings (0.08s)
+    --- PASS: TestInitMergeDriverAutoConfiguration/auto-repair_stale_merge_driver_with_invalid_placeholders (0.08s)
+    --- PASS: TestInitMergeDriverAutoConfiguration/detect_canonical_issues.jsonl_filename_in_gitattributes (0.07s)
+PASS
+ok  	github.com/steveyegge/beads/cmd/bd	3.032s
+testing: warning: no tests to run
+PASS
+ok  	github.com/steveyegge/beads/cmd/bd/doctor	0.004s [no tests to run]
+testing: warning: no tests to run
+PASS
+ok  	github.com/steveyegge/beads/cmd/bd/doctor/fix	0.006s [no tests to run]
+=== RUN   TestFactoryDoesNotTouchAgentsFile
+=== RUN   TestFactoryDoesNotTouchAgentsFile/bd_setup_factory/no_AGENTS.md
+=== RUN   TestFactoryDoesNotTouchAgentsFile/bd_setup_factory/plain_AGENTS.md
+=== RUN   TestFactoryDoesNotTouchAgentsFile/bd_setup_factory/marked_AGENTS.md
+=== RUN   TestFactoryDoesNotTouchAgentsFile/bd_setup_factory_--remove/marked-only_AGENTS.md
+=== RUN   TestFactoryDoesNotTouchAgentsFile/bd_setup_factory_--remove/curated_marked_AGENTS.md
+--- PASS: TestFactoryDoesNotTouchAgentsFile (0.00s)
+    --- PASS: TestFactoryDoesNotTouchAgentsFile/bd_setup_factory/no_AGENTS.md (0.00s)
+    --- PASS: TestFactoryDoesNotTouchAgentsFile/bd_setup_factory/plain_AGENTS.md (0.00s)
+    --- PASS: TestFactoryDoesNotTouchAgentsFile/bd_setup_factory/marked_AGENTS.md (0.00s)
+    --- PASS: TestFactoryDoesNotTouchAgentsFile/bd_setup_factory_--remove/marked-only_AGENTS.md (0.00s)
+    --- PASS: TestFactoryDoesNotTouchAgentsFile/bd_setup_factory_--remove/curated_marked_AGENTS.md (0.00s)
+PASS
+ok  	github.com/steveyegge/beads/cmd/bd/setup	0.003s
+

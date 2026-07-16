@@ -1,0 +1,14 @@
+Materialize a hash-bound plan revision.
+
+<instructions>
+1. Read work/w1_agents-md-guard/plan_v2.md and work/w1_agents-md-guard/plan_delta_v3.md in full.
+2. Write work/w1_agents-md-guard/plan_v3.md: apply ONLY the delta table's instructions to their bound sections; preserve every untargeted section byte-for-byte (identical bytes, including whitespace and trailing newlines).
+3. The existing `## What Changed from v1` section must survive byte-identical. Insert exactly one new section `## What Changed from v2` immediately after it, containing a Markdown table with columns Finding | Disposition | Change — one row per finding ID (F1, F1b, F2, F3, F3b, F4, F5), each ACCEPT with a one-line description.
+4. In delta instructions, `\|` denotes a literal pipe character in the produced text.
+5. Do not rename the H1 title. Gate-clause changes to the Phase 1 and Phase 2 headings are authorized by the delta rows binding the Changes section.
+6. The result must be self-contained — no "same as v2" references.
+</instructions>
+
+<output>
+Write review to: work/w1_agents-md-guard/plan_v3.md
+</output>

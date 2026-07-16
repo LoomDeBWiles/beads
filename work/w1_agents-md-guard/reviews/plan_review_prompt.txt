@@ -1,0 +1,16 @@
+You are a code reviewer. Review commit 23c265b5 in the worktree /home/ben/worktrees/beads/w1_agents-md-guard against Phase 1 of the plan at work/w1_agents-md-guard/plan_v3.md. This is a Go project (bd, a fork of steveyegge/beads).
+
+Read the plan's Design section and Phase 1 file table first. The intent: bd must NEVER create or modify AGENTS.md under any trigger. Phase 1 deletes the "Landing the Plane" feature from cmd/bd/init.go, converts cmd/bd/setup/factory.go (InstallFactory/RemoveFactory) to print-to-stdout instead of writing AGENTS.md, updates cmd/bd/setup.go help text, and adds two Go regression tests.
+
+Inspect the change: `git show 23c265b5`. Focus review on CORRECTNESS against the intent:
+1. Does init.go still write/append/create AGENTS.md by ANY path after the change? (grep for os.WriteFile/os.Create/ioutil around init.go; confirm the call site + 3 helpers are gone and nothing else re-implements them.)
+2. Does factory.go (InstallFactory + RemoveFactory) still touch the filesystem for AGENTS.md anywhere? It must only print. CheckFactory stays read-only.
+3. Do the two new tests actually assert the no-write contract (absent stays absent; existing bytes byte-identical), not tautologies? Do they cover default AND --quiet for init, and all 3 install + 2 remove paths for factory?
+4. Is setup.go help text now truthful (says PRINTS instructions, never writes AGENTS.md)?
+5. Any build/compile risk, dead code, unused imports, or leftover references to deleted symbols?
+6. Did the change touch anything OUT of scope (setupClaudeSettings, --stealth machinery, cursor.go, aider.go)? It must not.
+
+Run the gate yourself to confirm: `cd /home/ben/worktrees/beads/w1_agents-md-guard && go build ./... && go test ./cmd/bd/... -run 'TestInit|TestFactory' -v` (tail the result).
+
+Write your review to: /home/ben/worktrees/beads/w1_agents-md-guard/work/w1_agents-md-guard/reviews/plan_review_codex.md
+Format: VERDICT: CLEAN or FIX on the first line. Then a numbered list of findings, each with severity (HIGH/MED/LOW), file:line, the defect, and the fix. Only real correctness/scope defects — no style nitpicks, no speculative scope. If CLEAN, say so and state what you verified.

@@ -1,0 +1,90 @@
+Review the plan at work/w1_agents-md-guard/plan_v2.md — identify gaps that would let `bd init` keep mutating AGENTS.md files, break the bd build, or corrupt the 14-repo cleanup.
+
+<instructions>
+1. Read the plan, then read every referenced file to verify its claims (line numbers, function names, counts, flags).
+2. For each checklist item, evaluate against the actual files.
+3. For each plan step, imagine failure scenarios: crash mid-write, wrong file edited, stale reference, gate blind spots, concurrent execution, scale.
+4. Only report issues that need fixing — skip observations, style, and low-probability concerns.
+5. Do not suggest scope expansion — evaluate the plan as written.
+</instructions>
+
+<files>
+- work/w1_agents-md-guard/plan_v2.md — the artifact under review (revision of plan_v1 after round-1 findings F1-F10, all ACCEPTED and applied; see its What Changed from v1 table)
+- work/w1_agents-md-guard/manager_log.md — investigation facts and pre-plan decisions
+- cmd/bd/init.go — feature to be deleted: call site ~464-468, landingThePlaneSection const ~1633, addLandingThePlaneInstructions ~1663, updateAgentFile ~1677
+- cmd/bd/init_test.go — existing test harness the new regression test must follow
+- Makefile — `install` target the plan relies on (installs to $(go env GOPATH)/bin)
+- CODEMAP.md — repo map; plan says update only if init.go AGENTS.md behavior is described there
+- Command (external inventory check, run if your sandbox allows): grep -rl "Landing the Plane" /home/ben/projects --include=AGENTS.md
+</files>
+
+<checklist>
+USER INTENT
+- Plan states what the user asked for (bd must never create/modify AGENTS.md; existing boilerplate removed)?
+- Every proposed change traces to that intent (flag gold-plating)?
+- If the plan succeeds perfectly, does the user get what they wanted?
+
+EVIDENCE
+- Design decisions grounded in code (file:line citations correct — verify the four deletion targets exist at the cited locations in cmd/bd/init.go)?
+- Quantities measured (14 repos, 13 template files at 39-40 lines, moltbot section at line 167 of 191)?
+
+MECHANISMS EXIST
+- Verify: is addLandingThePlaneInstructions/updateAgentFile/landingThePlaneSection referenced ONLY in init.go (plan claims grep-verified)?
+- Verify: Makefile `install` target installs to GOPATH/bin, and the plan's two-binary-copy claim (~/.local/bin/bd on PATH vs ~/go/bin/bd) is handled by the install steps?
+- Verify: `bd init` has a `-q/--quiet` flag as used in proof checks 2-3?
+
+PROOF-TEST
+- Any unverified hypothesis about upstream behavior? If yes, is a sandboxed proof-test included?
+
+SCOPE
+- "Not in Scope" explicit? "Files NOT Affected" verified (setupClaudeSettings untouched, tools/beads own AGENTS.md docs excluded)?
+
+VERIFICATION
+- Every proof check has exact command + expected output a builder can run without interpretation?
+- E2E exercises the INSTALLED binary (not just the tree) — is the ordering (merge before install) coherent with the worktree lifecycle?
+
+KEY INSIGHT
+- Present, non-obvious, states what breaks if forgotten (two stale binary copies; wrapper guards insufficient)?
+
+PHASE GATES
+- Each phase has a quantitative gate, ordered? Phase-3 fleet-wide sweep gate sound (re-sweep, not cached list)?
+
+RISKS & ROLLBACK
+- Binary rollback path complete? Per-repo revert path complete? moltbot trailing-section risk handled?
+
+OPERATIONAL
+- Every shell command syntactically correct and runnable (install -m755, wt-merge --no-push flag exists, git rm in worktrees)?
+- Cleanup failure mid-fleet: partial results preserved / resumable?
+- Missing step between Phase 1 (code) and Phase 2 (install)? Between install and cleanup?
+
+SCENARIO TRACE (read the source, not just the plan)
+- Trace: agent runs `bd init` in a repo with a curated AGENTS.md after the fix — walk the post-deletion init.go path; anything else that writes AGENTS.md (e.g. other commands: onboard, quickstart, doctor)?
+- Trace: the new regression test cases A and B against the existing init_test.go harness — will they actually catch a reintroduced call (globals reset, t.Chdir, daemon side effects)?
+- Flag silent misses: a repo whose AGENTS.md contains the section under a different heading or altered text that the grep sweep would miss.
+</checklist>
+
+<output>
+Write review to: work/w1_agents-md-guard/review_codex_v2.md
+</output>
+
+<output-format>
+consumer: plan — output ONLY these two lines and finding rows, no prose:
+VERDICT: CLEAN|FIX findings=N
+| ID | sev | file:line | defect (one sentence) | fix (one sentence) |
+|---|---|---|---|---|
+CLEAN requires findings=0. file:line is a source pointer only.
+</output-format>
+
+<constraints>
+- Read every file listed above before evaluating — do not guess.
+- Load Skill(coding) and Skill(testing) before evaluating (checklist lenses for the code deletion and the new regression test).
+- Only report issues that cause rework, wrong behavior, degraded result, or miss user intent.
+- Do not create or modify the artifact under review — only write your review file.
+</constraints>
+
+<round-2-note>
+This is round 2 (final). All round-1 findings were accepted and materialized into plan_v2.md.
+Verify the fixes landed coherently; report only defects that would cause rework or miss user intent.
+Known cosmetic residuals you may confirm or ignore: Phase 2 gate says "proof checks 1-4" while Verification now lists 6 checks; the Phase 3 executor rationale still mentions "git rm" although the mechanism is now trash.sh + git add -u.
+Additional file to read: cmd/bd/setup/factory.go — verify the plan's SetupFactory/RemoveFactory change description matches the actual code structure.
+</round-2-note>
