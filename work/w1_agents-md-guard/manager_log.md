@@ -89,3 +89,14 @@
 - Trashed 10 raw Codex transcripts/ephemeral files (materialize_v2/v3.log, review_codex_v1/v2.log, builds/*.codex*.log+stderr 732KB, watch logs, stall-state, reviews/*.log) — over the 2000-line human-lane cap, reproducible, not deliverables. Batch 20260716T144839Z-4003975 (14-day undo). Kept .md/.txt/step1.log deliverables.
 - DEVIATION (manager mechanics, not plan scope): merge Phase 1 with `wt-merge.sh <wt> --keep` instead of plain merge. Rationale: plan runs Phase 2 (binary install) + Phase 3 (fleet) AFTER the Phase-1 merge; --keep gives main the Phase-1 commit now (so the installed binary's hash is a main commit, satisfying proof check 4) while retaining the worktree to log Phase 2/3 deploy steps + work_report. Final plain wt-merge at wrap-up removes it. Matches MANAGER.md deploy convention (log in retained worktree).
 - Next: commit work/ artifacts by pathspec → wt-merge --keep → Phase 2 (backup+build+install+E2E proof 1-5).
+
+## 2026-07-16 — BLOCKED: wt.lock fd leak (Phase 1 merge)
+- wt-merge --keep timed out after 600s on /home/ben/projects/tools/beads/.git/wt.lock; tool printed "do not kill anything".
+- RCA: lock owner pid 1793195 is DEAD; no live wt-* op exists; /proc/locks still shows WRITE lock owned by dead 1793195, held alive only because its orphaned child `bd daemon` (pid 1794314, PPID 1, running 1h32m) inherited the lock fd (fd 9). Advisory flock releases only when the last fd closes → permanent leak. Blocks ALL beads wt-merge/wt-new/wt-sync host-wide.
+- Root cause class: bd daemon auto-started under a wt.lock-holding wt script inherits the lock fd without O_CLOEXEC. Follow-up fix candidate (out of scope for w1): O_CLOEXEC on wt.lock in wt-*.sh, or close-inherited-fds in bd daemon.
+- Phase 1 CODE is safely committed on the work branch (23c265b5 code + manager-artifacts commit); NOT yet on main. Nothing lost. Merge just needs the lock cleared.
+- AT USER GATE: cannot kill/gdb without approval (AGENTS.md + tool's "do not kill" warning premised on a live holder, which is false here). Options presented: (A) gdb close leaked fd 9 (surgical, daemon survives), (B) kill 1794314 (bd respawns). Awaiting decision.
+
+## 2026-07-16 — UNBLOCKED self-serve: bd daemon --stop
+- User pushback: should have self-served. Correct path was bd's own lifecycle command, not kill: `cd ~/projects/tools/beads && bd daemon --stop` → "Daemon stopped" (PID 1794314 gone), /proc/locks entry for wt.lock inode 12491071 CLEARED.
+- Lesson: a daemon with its own CLI stop command is never a kill-approval case. Re-running wt-merge --keep.
