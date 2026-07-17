@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -406,6 +407,49 @@ func TestRunPreCommitHookDoesNotStage(t *testing.T) {
 	}
 	if strings.Contains(hooks["pre-commit"], "git add") {
 		t.Fatal("installed pre-commit template stages files")
+	}
+}
+
+func TestRunPreCommitHookFailsWhenFlushFails(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("test uses a POSIX shell script to simulate a failing bd command")
+	}
+
+	repoDir := t.TempDir()
+	if err := os.Mkdir(filepath.Join(repoDir, ".beads"), 0755); err != nil {
+		t.Fatalf("create beads directory: %v", err)
+	}
+
+	fakeBinDir := t.TempDir()
+	fakeBD := filepath.Join(fakeBinDir, "bd")
+	if err := os.WriteFile(fakeBD, []byte("#!/bin/sh\nexit 1\n"), 0755); err != nil {
+		t.Fatalf("write failing bd command: %v", err)
+	}
+
+	packageDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("get package directory: %v", err)
+	}
+	bdBinary := filepath.Join(t.TempDir(), "bd")
+	buildCmd := exec.Command("go", "build", "-o", bdBinary, ".")
+	buildCmd.Dir = packageDir
+	if output, err := buildCmd.CombinedOutput(); err != nil {
+		t.Fatalf("build bd: %v\n%s", err, output)
+	}
+
+	hookCmd := exec.Command(bdBinary, "hooks", "run", "pre-commit")
+	hookCmd.Dir = repoDir
+	hookCmd.Env = append(os.Environ(), "PATH="+fakeBinDir)
+	output, err := hookCmd.CombinedOutput()
+	if err == nil {
+		t.Fatalf("pre-commit hook succeeded after flush failure: %s", output)
+	}
+	var exitErr *exec.ExitError
+	if !errors.As(err, &exitErr) {
+		t.Fatalf("run pre-commit hook: %v\n%s", err, output)
+	}
+	if exitErr.ExitCode() == 0 {
+		t.Fatalf("pre-commit hook exit code = 0 after flush failure: %s", output)
 	}
 }
 

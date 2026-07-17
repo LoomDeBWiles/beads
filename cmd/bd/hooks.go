@@ -407,9 +407,7 @@ func uninstallHooks() error {
 // =============================================================================
 
 // runPreCommitHook flushes pending changes to JSONL before commit.
-// Returns 0 on success (or if not applicable), non-zero on error.
-//
-//nolint:unparam // Always returns 0 by design - warnings don't block commits
+// Returns 0 on success (or if not applicable), non-zero on flush failure.
 func runPreCommitHook() int {
 	// Check if we're in a bd workspace
 	if _, err := os.Stat(".beads"); os.IsNotExist(err) {
@@ -427,7 +425,7 @@ func runPreCommitHook() int {
 	if err := cmd.Run(); err != nil {
 		fmt.Fprintln(os.Stderr, "Warning: Failed to flush bd changes to JSONL")
 		fmt.Fprintln(os.Stderr, "Run 'bd sync --flush-only' manually to diagnose")
-		// Don't block the commit - user may have removed beads or have other issues
+		return 1
 	}
 
 	return 0
