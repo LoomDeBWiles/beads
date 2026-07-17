@@ -271,6 +271,58 @@ func TestInitDoesNotTouchAgentsFile(t *testing.T) {
 // Note: Error case testing is omitted because the init command calls os.Exit()
 // on errors, which makes it difficult to test in a unit test context.
 
+// TestInitDoesNotCreateHooks locks in the w731 removal of the auto-render hook
+// initializer: bd init must never plant a .beads/hooks/ directory (the daemon
+// still runs whatever hooks exist there, but init no longer creates any).
+func TestInitDoesNotCreateHooks(t *testing.T) {
+	for _, quiet := range []bool{false, true} {
+		name := "default output"
+		if quiet {
+			name = "quiet output"
+		}
+		t.Run(name, func(t *testing.T) {
+			origDBPath := dbPath
+			origNoDB := noDb
+			defer func() {
+				dbPath = origDBPath
+				noDb = origNoDB
+			}()
+			dbPath = ""
+			noDb = false
+
+			rootCmd.SetArgs([]string{})
+			initCmd.Flags().Set("prefix", "")
+			initCmd.Flags().Set("quiet", "false")
+
+			tmpDir := t.TempDir()
+			t.Chdir(tmpDir)
+
+			args := []string{"init"}
+			if quiet {
+				args = append(args, "--quiet")
+			}
+			rootCmd.SetArgs(args)
+			if err := rootCmd.Execute(); err != nil {
+				t.Fatalf("init command failed: %v", err)
+			}
+
+			hooksDir := filepath.Join(tmpDir, ".beads", "hooks")
+			if _, err := os.Stat(hooksDir); err == nil {
+				t.Errorf(".beads/hooks/ was created by bd init (auto-render hooks must not be planted)")
+			} else if !os.IsNotExist(err) {
+				t.Fatalf("stat .beads/hooks: %v", err)
+			}
+
+			outputDir := filepath.Join(tmpDir, ".beads", "output")
+			if _, err := os.Stat(outputDir); err == nil {
+				t.Errorf(".beads/output/ was created by bd init (no auto-render output expected)")
+			} else if !os.IsNotExist(err) {
+				t.Fatalf("stat .beads/output: %v", err)
+			}
+		})
+	}
+}
+
 func TestInitAlreadyInitialized(t *testing.T) {
 	// Reset global state
 	origDBPath := dbPath
