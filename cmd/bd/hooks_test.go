@@ -382,9 +382,12 @@ func TestRunPreCommitHookDoesNotStage(t *testing.T) {
 		t.Fatalf("update selected file: %v", err)
 	}
 	hookTestGit(t, repoDir, "add", "selected.txt")
+	if err := os.WriteFile(filepath.Join(repoDir, "selected.txt"), []byte("unstaged change\n"), 0644); err != nil {
+		t.Fatalf("write unstaged selected file change: %v", err)
+	}
 
 	runBD("--no-daemon", "hooks", "install", "--force")
-	indexBefore := gitIndexPaths(t, repoDir)
+	indexBefore := gitIndexState(t, repoDir)
 
 	hookCmd := exec.Command(filepath.Join(repoDir, ".git", "hooks", "pre-commit"))
 	hookCmd.Dir = repoDir
@@ -393,12 +396,9 @@ func TestRunPreCommitHookDoesNotStage(t *testing.T) {
 		t.Fatalf("installed pre-commit hook: %v\n%s", err, output)
 	}
 
-	indexAfter := gitIndexPaths(t, repoDir)
+	indexAfter := gitIndexState(t, repoDir)
 	if indexAfter != indexBefore {
-		t.Fatalf("pre-commit hook changed staged paths: before %q, after %q", indexBefore, indexAfter)
-	}
-	if indexAfter != "selected.txt" {
-		t.Fatalf("staged paths = %q, want %q", indexAfter, "selected.txt")
+		t.Fatalf("pre-commit hook changed Git index: before %q, after %q", indexBefore, indexAfter)
 	}
 
 	hooks, err := getEmbeddedHooks()
@@ -453,13 +453,13 @@ func TestRunPreCommitHookFailsWhenFlushFails(t *testing.T) {
 	}
 }
 
-func gitIndexPaths(t *testing.T, repoDir string) string {
+func gitIndexState(t *testing.T, repoDir string) string {
 	t.Helper()
-	cmd := exec.Command("git", "diff", "--cached", "--name-only")
+	cmd := exec.Command("git", "ls-files", "-s")
 	cmd.Dir = repoDir
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		t.Fatalf("list staged paths: %v\n%s", err, output)
+		t.Fatalf("read Git index: %v\n%s", err, output)
 	}
 	return strings.TrimSpace(string(output))
 }
