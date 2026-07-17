@@ -421,22 +421,13 @@ func runPreCommitHook() int {
 		return 0 // Skip - changes synced to separate branch
 	}
 
-	// Flush pending changes to JSONL
-	// Use --flush-only to skip git operations (we're already in a git hook)
+	// Flush pending changes to JSONL without changing the caller's index.
+	// Use --flush-only to skip git operations (we're already in a git hook).
 	cmd := exec.Command("bd", "sync", "--flush-only")
 	if err := cmd.Run(); err != nil {
 		fmt.Fprintln(os.Stderr, "Warning: Failed to flush bd changes to JSONL")
 		fmt.Fprintln(os.Stderr, "Run 'bd sync --flush-only' manually to diagnose")
 		// Don't block the commit - user may have removed beads or have other issues
-	}
-
-	// Stage all tracked JSONL files
-	for _, f := range []string{".beads/beads.jsonl", ".beads/issues.jsonl", ".beads/deletions.jsonl", ".beads/interactions.jsonl"} {
-		if _, err := os.Stat(f); err == nil {
-			// #nosec G204 - f is from hardcoded list above, not user input
-			gitAdd := exec.Command("git", "add", f)
-			_ = gitAdd.Run() // Ignore errors - file may not exist
-		}
 	}
 
 	return 0

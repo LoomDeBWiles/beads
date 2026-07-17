@@ -5,6 +5,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/steveyegge/beads/internal/git"
@@ -336,5 +337,94 @@ func TestInstallHooksShared(t *testing.T) {
 		if _, err := os.Stat(hookPath); !os.IsNotExist(err) {
 			t.Errorf("Hook %s should not be in .git/hooks/ when using --shared", hookName)
 		}
+	}
+}
+
+func TestRunPreCommitHookDoesNotStage(t *testing.T) {
+	repoDir := t.TempDir()
+	hookTestGit(t, repoDir, "init")
+	hookTestGit(t, repoDir, "config", "user.email", "test@example.com")
+	hookTestGit(t, repoDir, "config", "user.name", "Test User")
+
+	packageDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("get package directory: %v", err)
+	}
+	bdBinary := filepath.Join(t.TempDir(), "bd")
+	buildCmd := exec.Command("go", "build", "-o", bdBinary, ".")
+	buildCmd.Dir = packageDir
+	if output, err := buildCmd.CombinedOutput(); err != nil {
+		t.Fatalf("build bd: %v\n%s", err, output)
+	}
+
+	runBD := func(args ...string) {
+		t.Helper()
+		cmd := exec.Command(bdBinary, args...)
+		cmd.Dir = repoDir
+		cmd.Env = append(os.Environ(), "BEADS_NO_DAEMON=1", "PATH="+filepath.Dir(bdBinary)+string(os.PathListSeparator)+os.Getenv("PATH"))
+		if output, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("bd %v: %v\n%s", args, err, output)
+		}
+	}
+
+	runBD("init", "--quiet", "--skip-hooks", "--prefix", "test")
+	runBD("--no-daemon", "create", "Committed issue")
+	runBD("--no-daemon", "sync", "--flush-only")
+	if err := os.WriteFile(filepath.Join(repoDir, "selected.txt"), []byte("base\n"), 0644); err != nil {
+		t.Fatalf("write selected file: %v", err)
+	}
+	hookTestGit(t, repoDir, "add", "selected.txt", ".beads/issues.jsonl")
+	hookTestGit(t, repoDir, "commit", "-m", "initial state")
+
+	runBD("--no-daemon", "create", "Pending export")
+	if err := os.WriteFile(filepath.Join(repoDir, "selected.txt"), []byte("staged change\n"), 0644); err != nil {
+		t.Fatalf("update selected file: %v", err)
+	}
+	hookTestGit(t, repoDir, "add", "selected.txt")
+
+	runBD("--no-daemon", "hooks", "install", "--force")
+	indexBefore := gitIndexPaths(t, repoDir)
+
+	hookCmd := exec.Command(filepath.Join(repoDir, ".git", "hooks", "pre-commit"))
+	hookCmd.Dir = repoDir
+	hookCmd.Env = append(os.Environ(), "BEADS_NO_DAEMON=1", "PATH="+filepath.Dir(bdBinary)+string(os.PathListSeparator)+os.Getenv("PATH"))
+	if output, err := hookCmd.CombinedOutput(); err != nil {
+		t.Fatalf("installed pre-commit hook: %v\n%s", err, output)
+	}
+
+	indexAfter := gitIndexPaths(t, repoDir)
+	if indexAfter != indexBefore {
+		t.Fatalf("pre-commit hook changed staged paths: before %q, after %q", indexBefore, indexAfter)
+	}
+	if indexAfter != "selected.txt" {
+		t.Fatalf("staged paths = %q, want %q", indexAfter, "selected.txt")
+	}
+
+	hooks, err := getEmbeddedHooks()
+	if err != nil {
+		t.Fatalf("get embedded hooks: %v", err)
+	}
+	if strings.Contains(hooks["pre-commit"], "git add") {
+		t.Fatal("installed pre-commit template stages files")
+	}
+}
+
+func gitIndexPaths(t *testing.T, repoDir string) string {
+	t.Helper()
+	cmd := exec.Command("git", "diff", "--cached", "--name-only")
+	cmd.Dir = repoDir
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("list staged paths: %v\n%s", err, output)
+	}
+	return strings.TrimSpace(string(output))
+}
+
+func hookTestGit(t *testing.T, repoDir string, args ...string) {
+	t.Helper()
+	cmd := exec.Command("git", args...)
+	cmd.Dir = repoDir
+	if output, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git %v: %v\n%s", args, err, output)
 	}
 }
