@@ -4,8 +4,40 @@ package main
 
 import (
 	"os"
+	"os/exec"
 	"testing"
+
+	"golang.org/x/sys/unix"
 )
+
+func TestConfigureDaemonProcessMarksDescriptorsCloseOnExec(t *testing.T) {
+	readEnd, writeEnd, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("open pipe: %v", err)
+	}
+	defer func() { _ = readEnd.Close() }()
+	defer func() { _ = writeEnd.Close() }()
+
+	flags, err := unix.FcntlInt(readEnd.Fd(), unix.F_GETFD, 0)
+	if err != nil {
+		t.Fatalf("get pipe descriptor flags: %v", err)
+	}
+	if _, err := unix.FcntlInt(readEnd.Fd(), unix.F_SETFD, flags&^unix.FD_CLOEXEC); err != nil {
+		t.Fatalf("clear pipe close-on-exec flag: %v", err)
+	}
+
+	if err := configureDaemonProcess(&exec.Cmd{}); err != nil {
+		t.Fatalf("configure daemon process: %v", err)
+	}
+
+	flags, err = unix.FcntlInt(readEnd.Fd(), unix.F_GETFD, 0)
+	if err != nil {
+		t.Fatalf("get sanitized pipe descriptor flags: %v", err)
+	}
+	if flags&unix.FD_CLOEXEC == 0 {
+		t.Fatal("expected pipe descriptor to be close-on-exec")
+	}
+}
 
 // TestIsProcessRunning_SelfCheck verifies that we can always detect our own process
 func TestIsProcessRunning_SelfCheck(t *testing.T) {

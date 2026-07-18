@@ -11,8 +11,9 @@ import (
 var daemonSignals = []os.Signal{syscall.SIGTERM, syscall.SIGINT, syscall.SIGHUP}
 
 // configureDaemonProcess sets up platform-specific process attributes for daemon
-func configureDaemonProcess(cmd *exec.Cmd) {
+func configureDaemonProcess(cmd *exec.Cmd) error {
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	return markFDsCloexecFromThree()
 }
 
 func sendStopSignal(process *os.Process) error {

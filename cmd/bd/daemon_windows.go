@@ -15,11 +15,12 @@ const stillActive = 259
 var daemonSignals = []os.Signal{os.Interrupt, syscall.SIGTERM}
 
 // configureDaemonProcess sets up platform-specific process attributes for daemon
-func configureDaemonProcess(cmd *exec.Cmd) {
+func configureDaemonProcess(cmd *exec.Cmd) error {
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		CreationFlags: syscall.CREATE_NEW_PROCESS_GROUP,
 		HideWindow:    true,
 	}
+	return nil
 }
 
 func sendStopSignal(process *os.Process) error {

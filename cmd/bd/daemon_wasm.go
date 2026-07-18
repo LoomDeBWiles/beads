@@ -11,8 +11,9 @@ import (
 // WASM doesn't support signals or process management
 var daemonSignals = []os.Signal{}
 
-func configureDaemonProcess(cmd *exec.Cmd) {
+func configureDaemonProcess(cmd *exec.Cmd) error {
 	// No-op in WASM
+	return nil
 }
 
 func sendStopSignal(process *os.Process) error {

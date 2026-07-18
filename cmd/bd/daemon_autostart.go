@@ -121,7 +121,10 @@ func restartDaemonForVersionMismatch() bool {
 		cmd.Dir = filepath.Dir(dbPath)
 	}
 
-	configureDaemonProcess(cmd)
+	if err := configureDaemonProcess(cmd); err != nil {
+		fmt.Fprintf(os.Stderr, "%s Daemon not started: %v. Continuing in direct mode.\n", ui.RenderWarn("Warning:"), err)
+		return false
+	}
 
 	devNull, err := os.OpenFile(os.DevNull, os.O_RDWR, 0)
 	if err == nil {
@@ -283,7 +286,10 @@ func startDaemonProcess(socketPath string) bool {
 		cmd.Dir = filepath.Dir(dbPath)
 	}
 
-	configureDaemonProcess(cmd)
+	if err := configureDaemonProcess(cmd); err != nil {
+		fmt.Fprintf(os.Stderr, "%s Daemon not started: %v. Continuing in direct mode.\n", ui.RenderWarn("Warning:"), err)
+		return false
+	}
 	if err := cmd.Start(); err != nil {
 		recordDaemonStartFailure()
 		debugLog("failed to start daemon: %v", err)

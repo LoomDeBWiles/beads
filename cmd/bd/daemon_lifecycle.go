@@ -409,7 +409,10 @@ func startDaemon(interval time.Duration, autoCommit, autoPush, autoPull, localMo
 
 	cmd := exec.Command(exe, args...) // #nosec G204 - bd daemon command from trusted binary
 	cmd.Env = append(os.Environ(), "BD_DAEMON_FOREGROUND=1")
-	configureDaemonProcess(cmd)
+	if err := configureDaemonProcess(cmd); err != nil {
+		fmt.Fprintf(os.Stderr, "Error configuring daemon process: %v\n", err)
+		os.Exit(1)
+	}
 
 	devNull, err := os.OpenFile(os.DevNull, os.O_RDWR, 0)
 	if err != nil {
