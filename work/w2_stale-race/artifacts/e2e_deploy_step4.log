@@ -1,0 +1,13 @@
+⚠ Creating issue without description.
+  Issues without descriptions lack context for future work.
+  Consider adding --description="Why this issue exists and what needs to be done"
+Starting bd daemon (interval: 1s, auto-commit: false, auto-push: false, auto-pull: false)
+Daemon started (PID 1572255)
+✓ Updated issue: t-c2y
+dirty_after_update=1
+flushes=1 dirty_after_flush=0
+flushes_after_second_touch=1
+divergence_caught=yes
+Error: Database out of sync with JSONL. Run 'bd sync --import-only' to fix.
+E2E_PASS
+SCRATCH_DIR=/tmp/tmp.h0ko07GRCi (leave for trash.sh)

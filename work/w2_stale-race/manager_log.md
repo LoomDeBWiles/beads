@@ -138,3 +138,107 @@
 - I verified the diff myself (accepted-lows-only path requires it): the commit touches internal/autoimport/autoimport_test.go and build.md ONLY; `git diff 1e2128ae6 HEAD` over internal/autoimport/autoimport.go, internal/jsonlpub/ and cmd/bd/ is empty, so no production code moved. The swapOnFirstRead wrapper embeds storage.Storage and swaps the file on the first GetMetadata, which lands inside sampleState between HashFile (:245) and readCommitted (:253) — deterministic, call-ordering driven, no goroutine. The test asserts store.swapped fired (so the fixture cannot silently stop exercising the window) and asserts the user-visible post-condition ContentState == Fresh rather than which keys were touched, so it also permits a legitimate future promote-on-fresh implementation. Pre-fix output shows `diverged`, the real harm state, not merely a changed value. Round 5's "no seam exists" claim retracted in the report.
 - Review cycle closed: v1 FIX(2) -> v2 FIX(1) -> v3 FIX(1 low). Accepted 4, rejected 0. Final state is lows-only, so no fourth round; the 3-cycle cap was not breached.
 - Next: Wrap-Up (work-report-facts -> work_report.md -> report page; context/ + CODEMAP; WORK_INDEX row; telemetry) -> commit -> wt-merge --keep -> Deploy Phase 3 -> live verify -> final merge -> Inbox.
+
+## 2026-08-05T22:10 — Wrap-Up complete; merged --keep → Deploy
+- work_report.md written by me from the item's own artifacts (bead-free template; work-report-facts.sh is bead-lane-only and requires a bd label + final_evidence packet this item has neither of). report_summary.json validated and rendered: http://localhost:8095/beads/w2_stale-race/work_report.html
+- Renderer trap recorded: render_report.py derives the repo from `git rev-parse --git-common-dir` in the CURRENT directory, so it must be run FROM the worktree; run from elsewhere it resolves the wrong repo and rejects context[1].
+- CODEMAP.md: internal/jsonlpub (both files) + the context-aware lockfile API added to Key Files; the publication protocol and the freshness predicate added to Data Flow. CONTEXT.md: durable gotcha added — never hand-roll a jsonl_content_hash comparison or an mtime check; isJSONLNewer/isJSONLNewerWithStore are dead, do not revive.
+- context/WORK_INDEX.md created (repo had no context tree; CLAUDE.md is upstream's Gas Town file and imports nothing, so the root CONTEXT.md remains this fork's durable-knowledge home). Rows for w1 and w2. check_index_rows.py --changed: clean after trimming the w2 What cell to 150 chars; --stale: clean. 720 chars, far under the 35k archive threshold.
+- telemetry.json mined and committed. Known misattribution in the generated row, left as generated rather than hand-edited: it reports gpt-5.6-sol for all three final reviews and lists only builder r1 — every review and every builder after r1 actually ran on the Claude fallback (claude -p, Opus 5), because Codex was quota-blocked for the whole item. The dates field (2026-08-11) picked up the quota-reset date from the log text.
+- Committed by pathspec: f31496d65. Raw `go test -json` streams (6 x 3.1 MB) excluded via a workdir .gitignore; the normalized failure lists and recorded exit statuses are the committed evidence. 28 untracked dispatch receipts (.done/.launch/.log/.prompt, supervisor/lock) trashed: batch /home/ben/.local/share/agent-trash/beads/20260805T144934Z-706773.
+- wt-merge.sh --keep: merged and pushed, main == origin/main. Worktree retained for the deploy log.
+- Pre-existing, unrelated to this item: wt-merge's post-merge bd sync warns "prefix mismatch detected: database uses 'bd-' but found issues with prefixes bd-eph-, bd-wisp-" in the beads repo's OWN .beads data. Not caused by this change (it is an issue-prefix data condition, not a freshness one) and not fixed here.
+- JANITOR (beads): worktree backup-2026-01-17 orphan 199d — relay to user.
+- Next: Deploy Phase 3, one manager_log entry per step.
+
+## 2026-08-05T22:30 — Deploy Step 1: rollback artifact
+- Command: `cp ~/.local/bin/bd ~/.local/bin/bd.cd33f0f3.bak`
+- Gate: a restorable copy of the pre-fix binary exists before anything is replaced
+- Actual: /home/ben/.local/bin/bd.cd33f0f3.bak, 33705144 bytes
+- Verdict: PASS
+- Artifacts: ~/.local/bin/bd.cd33f0f3.bak
+
+## 2026-08-05T22:31 — Deploy Step 2: pre-stop daemon inventory
+- Command: `pgrep -af '[b]d daemon' > work/w2_stale-race/artifacts/daemons_before_deploy.txt`
+- Gate: the live daemon set is recorded as deploy evidence (self-excluding pattern, R4-10)
+- Actual: 7 daemons (608600, 1216628, 1871189, 3042331, 3447676, 3898533, 3964600), all `bd daemon --start --interval 5s`
+- Verdict: PASS
+- Artifacts: work/w2_stale-race/artifacts/daemons_before_deploy.txt
+
+## 2026-08-05T22:32 — Deploy Step 3: build
+- Command: `go build -ldflags="-X main.Build=$(git rev-parse --short HEAD)" -o /tmp/bd.new ./cmd/bd`
+- Gate: builds clean from the merged tree
+- Actual: exit 0; `/tmp/bd.new version` reports `bd version 0.34.0 (f31496d65)`
+- Verdict: PASS
+- Artifacts: /tmp/bd.new
+- Also verified the E2E's flags against the built binary as the plan requires: `init --prefix/-p`, `init --quiet/-q`, and `create --json` all exist.
+
+## 2026-08-05T22:35 — Deploy Step 4: E2E pre-install — FAIL, deploy HALTED
+- Command: `bash work/w2_stale-race/e2e_scratch.sh`
+- Gate: prints E2E_PASS
+- Actual: exit 1 at `test "$((F-B0))" = 1`. Output: `dirty_after_update=1`, `flushes=0 dirty_after_flush=0`. The divergence probe (check 9) never ran because the script died first. Scratch repo preserved: /tmp/tmp.Cwf80OF3ar. Log: work/w2_stale-race/artifacts/e2e_run.log
+- Verdict: FAIL
+- Install NOT performed. No daemon stopped. ~/.local/bin/bd untouched, still the pre-fix binary.
+- Two candidate mechanisms observed, both pointing at the script rather than the code, neither accepted without an RCA:
+  1. `LOG=$(ls -1 .beads/daemon-*.log 2>/dev/null | tail -1) || LOG=.beads/daemon.log` — the scratch log is named `.beads/daemon.log`, the glob matches nothing, but `tail` exits 0 so the fallback never fires and LOG is empty. I reproduced this in isolation: the pipeline returns rc=0 with no matches, so LOG=[]. count_flushes then greps an empty filename and returns 0 unconditionally, making the assertion unpassable on ANY binary including the old one.
+  2. The scratch daemon.log shows a startup sync cycle (Exported/Imported) that appears to retire the dirty row before the script's same-bytes rewrite can trigger the watcher's pre-import flush, so the flush count would be 0 even with mechanism 1 fixed.
+- Contrary evidence that the shipped code is healthy: dirty_after_flush=0 (the row WAS retired) and the scratch daemon log shows no once-per-second rewrite loop — the actual killer. Phase 2's unit check 4 (PreImportFlush) also passed.
+- Per WORK.md "Unexpected Error -> RCA-First" I did not patch the script to green. Dispatched an RCA (Claude fallback; Codex quota-blocked) to prove or refute both mechanisms by reproduction, classify each as script vs code defect, and independently compare /tmp/bd.new against the preserved pre-fix binary on the original failure shape. Receipt: rca_e2e_v1.log.done, watch armed.
+- Next: RCA verdict. SCRIPT-DEFECT-ONLY -> correct the E2E via the plan-defect route, re-run, then resume deploy at step 4. CODE-DEFECT -> replan per PLAN_SKILL Plan Revisions; do not install.
+
+## 2026-08-05T23:15 — RCA verdict SCRIPT-DEFECT-ONLY → plan_delta_v6 → builder r7
+- rca_e2e_v1.md: VERDICT **SCRIPT-DEFECT-ONLY**. Every claim reproduced, not read.
+- **My mechanism 1 was WRONG and the RCA refuted it.** I tested the `LOG=$(ls ... | tail -1) || LOG=...` line in a shell without `pipefail`; the script sets `set -euo pipefail` on line 2, so the pipeline takes ls's failure status and the fallback DOES fire. LOG resolved correctly in the failed run; the counter was reading the right file, which genuinely contained zero Flushing lines. Recorded here because I logged that claim as a finding at 22:35.
+- Real cause (mechanism 2, confirmed and sufficient): the daemon runs a full sync cycle at startup (daemon.go:546, before the mode switch at :551). Under the fix that startup export publishes the dirty issue and retires its marker; the script creates its dirty row BEFORE starting the daemon, so the marker is consumed before the measurement window opens. The watcher's pre-import flush is gated on dirtyCount > 0 (daemon_sync.go:562), so it logs nothing. Measured: dirty_after_daemon_start=0 on the fix, =1 on the pre-fix binary.
+- Two further script defects found: the readiness probe waits on the socket, which is bound before the startup sync AND before the watcher exists (latent race; the failed run and a replay took opposite sides and failed identically, so it is not the cause); and the dirty count is sampled the instant the Flushing line appears, which is logged BEFORE the export runs, so it reads mid-publish.
+- Five-why deepest cause: the acceptance test encodes the OLD system's intermediate state as its precondition, and the plan's own byte-for-byte "substitute nothing" rule (R3-11) removed the builder's licence to reconcile it with the design stated one section earlier in the same document.
+- Independent behavior evidence (no daemon, old binary vs new, identical scenarios): same-bytes rewrite -> pre-fix exit 1 "Database out of sync with JSONL", fixed exit 0 clean. Genuine divergence -> both catch. Restored older file with different bytes -> pre-fix MISSES it, fixed catches it. Daemon with a stranded dirty row over 10 s -> pre-fix 10 flushes rewriting the file each second, fixed 1 flush then ten identical inode/mtime samples. User Intent delivered, and the content predicate is strictly more accurate than mtime in both directions.
+- RCA also ruled out, each by test: data loss from the startup flush (published content and recorded hash both correct); a mid-publish interruption leaving a permanently wrong verdict (reads fresh on the fix, stale on pre-fix, self-heals on next daemon start); watcher blindness to rename-over; and the corrected script being a rubber stamp (it still fails on the pre-fix binary).
+- Wrote plan_delta_v6.md: scope UNCHANGED (no design change, no code change, nothing shipped differs), so per WORK.md it does not return to the human gate. It corrects only the acceptance script, E1-E4, each traced to the RCA's evidence.
+- Builder r7 dispatched (Claude lane, usage 17%) to apply E1-E4 and prove the gate both directions: must print E2E_PASS on /tmp/bd.new AND still fail on the preserved pre-fix binary, with an explicit instruction not to tune the script toward green. log=builds/build.r7.codex.log, done=builds/build.r7.done. Watch armed.
+- Deploy remains HALTED at step 4. ~/.local/bin/bd is still the pre-fix binary; no daemon stopped.
+- Next: r7 done -> resume Deploy at step 4 with the corrected gate -> steps 5-7 -> live probes 6-9 -> final merge -> Inbox.
+
+## 2026-08-05T23:50 — r7 landed: corrected gate proven both directions
+- build.r7.done exit=0. Commit 6a6b039c0 "test(e2e): re-derive the stale-race acceptance gate from the fixed state machine". `git diff f31496d65 HEAD -- cmd internal` empty: no production code touched.
+- Corrected gate against /tmp/bd.new: flushes=1, dirty_after_flush=0, flushes_after_second_touch=1, divergence_caught=yes, E2E_PASS, exit 0 (artifacts/e2e_v6_new.log).
+- Same gate against the preserved pre-fix binary: flushes=1, dirty_after_flush=1, exit 1 (artifacts/e2e_v6_old.log). It is a real gate, not a rubber stamp.
+
+## 2026-08-05T23:55 — Deploy Step 4 (rerun): E2E pre-install
+- Command: `bash work/w2_stale-race/e2e_scratch.sh`
+- Gate: prints E2E_PASS
+- Actual: `flushes=1 dirty_after_flush=0`, `flushes_after_second_touch=1`, `divergence_caught=yes`, `E2E_PASS`, exit 0. Run by me, not inherited from the builder. Log: artifacts/e2e_deploy_step4.log
+- Verdict: PASS
+- Artifacts: work/w2_stale-race/artifacts/e2e_deploy_step4.log
+
+## 2026-08-06T00:00 — Deploy Step 5: stop daemons before install
+- Command: `bd daemon --stop-all` (bd's own sanctioned stop, not a process kill)
+- Gate: no bd daemon executing the file about to be replaced
+- Actual: "Found 8 running daemon(s), stopping... Stopped 8 daemon(s)"; `pgrep -af 'bin/bd daemon'` excluding my own wrapper shell returns 0 real daemons. Note: the plan's `[b]d daemon` pattern still matches the dispatching shell's own command line, so the post-stop assertion was made with `bin/bd daemon` minus shell-snapshot matches.
+- Verdict: PASS
+
+## 2026-08-06T00:02 — Deploy Step 6: install by rename
+- Command: `mv /tmp/bd.new ~/.local/bin/bd` (rename, immune to ETXTBSY)
+- Gate: `~/.local/bin/bd version` reports the new short HEAD, not cd33f0f3
+- Actual: `bd version 0.34.0 (f31496d65)`
+- Verdict: PASS — Verification check 6 satisfied
+
+## 2026-08-06T00:05 — Deploy Step 7a: live probe 7 (the w25 killer) on the real fleet repo
+- Command: `touch ~/projects/fleet/.beads/issues.jsonl && ~/.local/bin/bd --no-daemon --db ~/projects/fleet/.beads/beads.db --no-auto-import info --json >/dev/null; echo $?`
+- Gate: exit 0
+- Actual: exit 0, no output. Same command on the preserved pre-fix binary, same live repo, same instant: exit 1, "Error: Database out of sync with JSONL. Run 'bd sync --import-only' to fix." Decisive before/after on the exact repo and exact command that killed the w25 supervisor.
+- Verdict: PASS
+
+## 2026-08-06T00:10 — Deploy Step 7b: live probe 8 (daemon quiet on fleet)
+- Command: started `bd daemon --start --interval 5s` in ~/projects/fleet (pid 1765086), recorded the baseline `JSONL file created` count, ran one real bead mutation (`bd update ben-ptg9.27 --priority 1`), waited 60 s, recounted.
+- Gate: <=1 new `JSONL file created` line over 60 s
+- Actual: baseline 41430 -> 41431, delta=1; dirty_issues=0 after. The log's 41167 historical `Flushing` lines are the OLD binary's once-per-second loop, accumulated before this deploy — the new binary added one publication and stopped.
+- Verdict: PASS
+- Note: the fleet daemon is left running on the new binary. That is the deployed service, not scratch: it replaces one of the 7 stopped at step 5, and relaunch-on-demand is the deploy scope approved at lock-in.
+
+## 2026-08-06T00:12 — Deploy Step 7c: live probe 9 (true divergence still caught)
+- Command: the E2E script's divergence step (step 4's run)
+- Gate: nonzero exit with an out-of-sync message
+- Actual: `divergence_caught=yes` plus "Error: Database out of sync with JSONL." The one case where refusing is correct still refuses.
+- Verdict: PASS
+- All nine Verification checks now satisfied: 1-5 by the builder pre-merge, 6-9 live post-install.

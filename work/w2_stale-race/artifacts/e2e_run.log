@@ -1,0 +1,9 @@
+⚠ Creating issue without description.
+  Issues without descriptions lack context for future work.
+  Consider adding --description="Why this issue exists and what needs to be done"
+✓ Updated issue: t-dmu
+dirty_after_update=1
+Starting bd daemon (interval: 1s, auto-commit: false, auto-push: false, auto-pull: false)
+Daemon started (PID 918632)
+flushes=0 dirty_after_flush=0
+SCRATCH_DIR=/tmp/tmp.Cwf80OF3ar (leave for trash.sh)

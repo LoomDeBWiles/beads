@@ -1,0 +1,7 @@
+608600 /home/ben/.local/bin/bd daemon --start --interval 5s
+1216628 /home/ben/.local/bin/bd daemon --start --interval 5s
+1871189 /home/ben/.local/bin/bd daemon --start --interval 5s
+3042331 /home/ben/.local/bin/bd daemon --start --interval 5s
+3447676 /home/ben/.local/bin/bd daemon --start --interval 5s
+3898533 /home/ben/.local/bin/bd daemon --start --interval 5s
+3964600 /home/ben/.local/bin/bd daemon --start --interval 5s
