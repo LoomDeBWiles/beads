@@ -3,12 +3,15 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/steveyegge/beads/internal/jsonlpub"
 	"github.com/steveyegge/beads/internal/storage/sqlite"
 	"github.com/steveyegge/beads/internal/types"
 )
@@ -158,7 +161,7 @@ func TestImportToJSONLWithStore(t *testing.T) {
 	}
 
 	// Import from JSONL
-	if err := importToJSONLWithStore(ctx, store, jsonlPath); err != nil {
+	if _, err := importToJSONLWithStore(ctx, store, jsonlPath); err != nil {
 		t.Fatalf("importToJSONLWithStore failed: %v", err)
 	}
 
@@ -253,7 +256,7 @@ func TestExportImportRoundTrip(t *testing.T) {
 	}
 
 	// Import
-	if err := importToJSONLWithStore(ctx, store2, jsonlPath); err != nil {
+	if _, err := importToJSONLWithStore(ctx, store2, jsonlPath); err != nil {
 		t.Fatalf("import failed: %v", err)
 	}
 
@@ -445,6 +448,16 @@ func TestUpdateExportMetadataMultiRepo(t *testing.T) {
 		},
 	}
 
+	// The two exports above went through the single-repo publisher, which records
+	// the unsuffixed key by design; genuine multi-repo mode never reaches it,
+	// since exportToJSONLWithStore returns early once ExportToMultiRepo yields
+	// results. Remember that value so the check below can prove the suffixed
+	// writes leave it alone.
+	globalHashBefore, err := store.GetMetadata(ctx, "jsonl_content_hash")
+	if err != nil {
+		t.Fatalf("failed to get jsonl_content_hash: %v", err)
+	}
+
 	// Update metadata for each repo with different keys (bd-ar2.2 multi-repo support)
 	updateExportMetadata(ctx, store, jsonlPath1, mockLogger, jsonlPath1)
 	updateExportMetadata(ctx, store, jsonlPath2, mockLogger, jsonlPath2)
@@ -469,13 +482,13 @@ func TestUpdateExportMetadataMultiRepo(t *testing.T) {
 		t.Errorf("expected %s to be set", hash2Key)
 	}
 
-	// Verify that single-repo metadata key is NOT set (we're using per-repo keys)
+	// Verify the per-repo writes left the single-repo key untouched
 	globalHash, err := store.GetMetadata(ctx, "jsonl_content_hash")
 	if err != nil {
 		t.Fatalf("failed to get jsonl_content_hash: %v", err)
 	}
-	if globalHash != "" {
-		t.Error("expected global jsonl_content_hash to not be set when using per-repo keys")
+	if globalHash != globalHashBefore {
+		t.Errorf("per-repo metadata writes changed the global jsonl_content_hash: %q -> %q", globalHashBefore, globalHash)
 	}
 
 	// Note: last_import_mtime removed in bd-v0y fix (git doesn't preserve mtime)
@@ -561,6 +574,16 @@ func TestExportWithMultiRepoConfigUpdatesAllMetadata(t *testing.T) {
 		},
 	}
 
+	// The two exports above went through the single-repo publisher, which records
+	// the unsuffixed key by design; genuine multi-repo mode never reaches it,
+	// since exportToJSONLWithStore returns early once ExportToMultiRepo yields
+	// results. Remember that value so the check below can prove the suffixed
+	// writes leave it alone.
+	globalHashBefore, err := store.GetMetadata(ctx, "jsonl_content_hash")
+	if err != nil {
+		t.Fatalf("failed to get jsonl_content_hash: %v", err)
+	}
+
 	// Simulate multi-repo mode with stable keys
 	multiRepoPaths := []string{primaryJSONL, additionalJSONL}
 	repoKeys := []string{primaryDir, additionalDir}
@@ -617,13 +640,13 @@ func TestExportWithMultiRepoConfigUpdatesAllMetadata(t *testing.T) {
 	// filters by SourceRepo, so hashes would differ. What matters here is that
 	// metadata is set with correct per-repo keys.
 
-	// Verify global metadata keys are NOT set (multi-repo mode uses suffixed keys)
+	// Verify the multi-repo writes left the single-repo key untouched
 	globalHash, err := store.GetMetadata(ctx, "jsonl_content_hash")
 	if err != nil {
 		t.Fatalf("failed to get jsonl_content_hash: %v", err)
 	}
-	if globalHash != "" {
-		t.Error("expected global jsonl_content_hash to not be set in multi-repo mode")
+	if globalHash != globalHashBefore {
+		t.Errorf("multi-repo metadata writes changed the global jsonl_content_hash: %q -> %q", globalHashBefore, globalHash)
 	}
 
 	// Test that subsequent exports don't fail with "content has changed" error
@@ -958,5 +981,272 @@ func TestOperationMutexSerializesExportImport(t *testing.T) {
 	}
 	if retrieved.Title != "Test Issue" {
 		t.Errorf("expected title 'Test Issue', got %s", retrieved.Title)
+	}
+}
+
+// newWatcherTestWorkspace builds a .beads workspace and points the package's
+// dbPath at it, so findJSONLPath (and therefore the daemon's import cycle)
+// resolves to this test's files.
+func newWatcherTestWorkspace(t *testing.T) (*sqlite.SQLiteStorage, string) {
+	t.Helper()
+
+	beadsDir := filepath.Join(t.TempDir(), ".beads")
+	if err := os.MkdirAll(beadsDir, 0o755); err != nil {
+		t.Fatalf("failed to create .beads dir: %v", err)
+	}
+	testDBPath := filepath.Join(beadsDir, "beads.db")
+	jsonlPath := filepath.Join(beadsDir, "issues.jsonl")
+
+	ctx := context.Background()
+	store, err := sqlite.New(ctx, testDBPath)
+	if err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+	t.Cleanup(func() { store.Close() })
+
+	if err := store.SetConfig(ctx, "issue_prefix", "test"); err != nil {
+		t.Fatalf("failed to set issue_prefix: %v", err)
+	}
+
+	oldDBPath := dbPath
+	dbPath = testDBPath
+	t.Cleanup(func() { dbPath = oldDBPath })
+
+	return store, jsonlPath
+}
+
+func createWatcherTestIssue(t *testing.T, store *sqlite.SQLiteStorage, id, title string) {
+	t.Helper()
+	issue := &types.Issue{
+		ID:        id,
+		Title:     title,
+		Status:    types.StatusOpen,
+		Priority:  1,
+		IssueType: types.TypeTask,
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+	if err := store.CreateIssue(context.Background(), issue, "test"); err != nil {
+		t.Fatalf("failed to create issue %s: %v", id, err)
+	}
+}
+
+// recordingLogger returns a daemonLogger that mirrors to the test log and
+// accumulates the formatted lines for assertions.
+func recordingLogger(t *testing.T, lines *[]string) daemonLogger {
+	t.Helper()
+	var mu sync.Mutex
+	return daemonLogger{
+		logFunc: func(format string, args ...interface{}) {
+			t.Logf(format, args...)
+			mu.Lock()
+			defer mu.Unlock()
+			*lines = append(*lines, fmt.Sprintf(format, args...))
+		},
+	}
+}
+
+func countLinesContaining(lines []string, substr string) int {
+	n := 0
+	for _, line := range lines {
+		if strings.Contains(line, substr) {
+			n++
+		}
+	}
+	return n
+}
+
+// TestPreImportFlushRetiresDirtyMarkers pins defect 1: the pre-import flush used
+// to export the dirty issues without retiring their markers, so every watcher
+// pass found the same dirty rows, rewrote the same bytes, and the rewrite woke
+// the watcher again - a once-per-second self-feeding loop. The publisher now
+// clears the markers it flushed, so a repository with no new mutations flushes
+// exactly once and the next pass writes nothing at all.
+func TestPreImportFlushRetiresDirtyMarkers(t *testing.T) {
+	store, jsonlPath := newWatcherTestWorkspace(t)
+	ctx := context.Background()
+
+	createWatcherTestIssue(t, store, "test-1", "Dirty issue")
+
+	dirtyBefore, err := store.GetDirtyIssueCount(ctx)
+	if err != nil {
+		t.Fatalf("failed to count dirty issues: %v", err)
+	}
+	if dirtyBefore == 0 {
+		t.Fatal("expected the new issue to be marked dirty")
+	}
+
+	var logs []string
+	log := recordingLogger(t, &logs)
+
+	performAutoImport(ctx, store, true, log)()
+
+	dirtyAfter, err := store.GetDirtyIssueCount(ctx)
+	if err != nil {
+		t.Fatalf("failed to count dirty issues after flush: %v", err)
+	}
+	if dirtyAfter != 0 {
+		t.Errorf("expected the flushed markers to be retired, %d still dirty", dirtyAfter)
+	}
+
+	firstBytes, err := os.ReadFile(jsonlPath)
+	if err != nil {
+		t.Fatalf("failed to read published JSONL: %v", err)
+	}
+	if !strings.Contains(string(firstBytes), `"test-1"`) {
+		t.Fatalf("published JSONL is missing the dirty issue: %s", firstBytes)
+	}
+	firstInfo, err := os.Stat(jsonlPath)
+	if err != nil {
+		t.Fatalf("failed to stat published JSONL: %v", err)
+	}
+
+	// Second watcher pass: nothing changed, so nothing may be written.
+	performAutoImport(ctx, store, true, log)()
+
+	secondBytes, err := os.ReadFile(jsonlPath)
+	if err != nil {
+		t.Fatalf("failed to re-read JSONL: %v", err)
+	}
+	if string(secondBytes) != string(firstBytes) {
+		t.Errorf("second pass rewrote the JSONL content")
+	}
+	secondInfo, err := os.Stat(jsonlPath)
+	if err != nil {
+		t.Fatalf("failed to re-stat JSONL: %v", err)
+	}
+	if !secondInfo.ModTime().Equal(firstInfo.ModTime()) {
+		t.Errorf("second pass republished the JSONL (mtime %v -> %v)", firstInfo.ModTime(), secondInfo.ModTime())
+	}
+
+	if flushes := countLinesContaining(logs, "Flushing"); flushes != 1 {
+		t.Errorf("expected exactly 1 pre-import flush across two passes, got %d (logs: %v)", flushes, logs)
+	}
+}
+
+// TestPreImportFlushDivergedImportsThenPublishes pins the R4-2 starvation
+// branch: when the JSONL holds content the database never imported, the flush
+// must not publish over it - but it must not give up either, or every watcher
+// retry dies at the same point and the import that heals the divergence never
+// runs. The cycle skips the flush, imports, records what it imported, and then
+// publishes the rows that kept their dirty markers.
+func TestPreImportFlushDivergedImportsThenPublishes(t *testing.T) {
+	store, jsonlPath := newWatcherTestWorkspace(t)
+	ctx := context.Background()
+
+	// A published baseline, so the file's hash is recorded.
+	createWatcherTestIssue(t, store, "test-1", "Published issue")
+	if err := exportToJSONLWithStore(ctx, store, jsonlPath); err != nil {
+		t.Fatalf("baseline export failed: %v", err)
+	}
+
+	// An outside writer (a git pull, say) replaces the file with content this
+	// database never imported.
+	external := &types.Issue{
+		ID:        "test-2",
+		Title:     "Pulled issue",
+		Status:    types.StatusOpen,
+		Priority:  1,
+		IssueType: types.TypeTask,
+		CreatedAt: time.Now().UTC(),
+		UpdatedAt: time.Now().UTC(),
+	}
+	externalLine, err := json.Marshal(external)
+	if err != nil {
+		t.Fatalf("failed to marshal external issue: %v", err)
+	}
+	if err := os.WriteFile(jsonlPath, append(externalLine, '\n'), 0o644); err != nil {
+		t.Fatalf("failed to write external JSONL: %v", err)
+	}
+
+	// Meanwhile the database has a local mutation waiting to be flushed.
+	createWatcherTestIssue(t, store, "test-3", "Local dirty issue")
+
+	var logs []string
+	performAutoImport(ctx, store, true, recordingLogger(t, &logs))()
+
+	// The import ran despite the failed flush.
+	if _, err := store.GetIssue(ctx, "test-2"); err != nil {
+		t.Fatalf("expected the diverged content to be imported: %v", err)
+	}
+	if countLinesContaining(logs, "diverged, importing first") != 1 {
+		t.Errorf("expected the divergence branch to be taken once, logs: %v", logs)
+	}
+
+	// And the dirty rows were published afterwards, once the imported content
+	// was recorded and publishing became legal again.
+	published, err := os.ReadFile(jsonlPath)
+	if err != nil {
+		t.Fatalf("failed to read republished JSONL: %v", err)
+	}
+	for _, id := range []string{`"test-2"`, `"test-3"`} {
+		if !strings.Contains(string(published), id) {
+			t.Errorf("republished JSONL is missing %s: %s", id, published)
+		}
+	}
+
+	dirtyAfter, err := store.GetDirtyIssueCount(ctx)
+	if err != nil {
+		t.Fatalf("failed to count dirty issues: %v", err)
+	}
+	if dirtyAfter != 0 {
+		t.Errorf("expected the post-import flush to retire the markers, %d still dirty", dirtyAfter)
+	}
+}
+
+// TestImportRecordsParsedBytesNotRereadFile pins R4-6 for the daemon importer:
+// the hash it records must describe the bytes it parsed, not whatever the file
+// holds afterwards. If a writer rewrites the file while the import is running,
+// re-reading would bless content the database does not hold and the next reader
+// would call a genuinely diverged repository fresh.
+func TestImportRecordsParsedBytesNotRereadFile(t *testing.T) {
+	store, jsonlPath := newWatcherTestWorkspace(t)
+	ctx := context.Background()
+
+	imported := &types.Issue{
+		ID:        "test-1",
+		Title:     "Imported issue",
+		Status:    types.StatusOpen,
+		Priority:  1,
+		IssueType: types.TypeTask,
+		CreatedAt: time.Now().UTC(),
+		UpdatedAt: time.Now().UTC(),
+	}
+	line, err := json.Marshal(imported)
+	if err != nil {
+		t.Fatalf("failed to marshal issue: %v", err)
+	}
+	parsedContent := append(line, '\n')
+	if err := os.WriteFile(jsonlPath, parsedContent, 0o644); err != nil {
+		t.Fatalf("failed to write JSONL: %v", err)
+	}
+
+	importedHash, err := importToJSONLWithStore(ctx, store, jsonlPath)
+	if err != nil {
+		t.Fatalf("import failed: %v", err)
+	}
+	if want := jsonlpub.HashBytes(parsedContent); importedHash != want {
+		t.Fatalf("import returned hash %q for the parsed bytes, want %q", importedHash, want)
+	}
+
+	// A writer that landed after the import's read.
+	rewritten := append(append([]byte{}, parsedContent...), []byte(`{"id":"test-9","title":"Landed mid-import","status":"open","priority":1,"issue_type":"task","created_at":"2024-01-01T00:00:00Z","updated_at":"2024-01-01T00:00:00Z"}`+"\n")...)
+	if err := os.WriteFile(jsonlPath, rewritten, 0o644); err != nil {
+		t.Fatalf("failed to rewrite JSONL: %v", err)
+	}
+
+	repoKey := getRepoKeyForPath(jsonlPath)
+	var logs []string
+	recordDaemonImport(ctx, store, jsonlPath, importedHash, repoKey, recordingLogger(t, &logs))
+
+	state, err := jsonlpub.ContentState(ctx, store, jsonlPath, repoKey)
+	if err != nil {
+		t.Fatalf("failed to read content state: %v", err)
+	}
+	if state != jsonlpub.StatusDiverged {
+		t.Errorf("expected the mid-import rewrite to read as diverged, got %s", state)
+	}
+	if !hasJSONLChanged(ctx, store, jsonlPath, repoKey) {
+		t.Error("expected the daemon to see remaining import work after a mid-import rewrite")
 	}
 }

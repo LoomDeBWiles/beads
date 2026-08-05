@@ -1,0 +1,4 @@
+ok  	github.com/steveyegge/beads/cmd/bd	24.728s
+ok  	github.com/steveyegge/beads/internal/autoimport	0.005s
+ok  	github.com/steveyegge/beads/internal/rpc	5.509s
+status=0

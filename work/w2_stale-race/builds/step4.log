@@ -1,0 +1,20 @@
+=== RUN   TestPreImportFlushRetiresDirtyMarkers
+    daemon_sync_test.go:1041: Starting local auto-import...
+    daemon_sync_test.go:1041: Flushing 1 dirty issues before import...
+    daemon_sync_test.go:1041: Skipping local auto-import: JSONL content unchanged after pull
+    daemon_sync_test.go:1041: Starting local auto-import...
+    daemon_sync_test.go:1041: Skipping local auto-import: JSONL content unchanged after pull
+--- PASS: TestPreImportFlushRetiresDirtyMarkers (0.11s)
+=== RUN   TestPreImportFlushDivergedImportsThenPublishes
+    daemon_sync_test.go:1041: Starting local auto-import...
+    daemon_sync_test.go:1041: Flushing 1 dirty issues before import...
+    daemon_sync_test.go:1041: Pre-import flush skipped: JSONL diverged, importing first
+    daemon_sync_test.go:1041: JSONL content changed, proceeding with local auto-import...
+    daemon_sync_test.go:1041: Imported from JSONL
+Import complete: 2 → 3 issues (+1)
+    daemon_sync_test.go:1041: Flushed dirty issues after import
+    daemon_sync_test.go:1041: Local auto-import complete
+--- PASS: TestPreImportFlushDivergedImportsThenPublishes (0.07s)
+PASS
+ok  	github.com/steveyegge/beads/cmd/bd	0.179s
+status=0

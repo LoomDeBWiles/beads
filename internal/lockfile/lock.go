@@ -1,7 +1,9 @@
 package lockfile
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -9,6 +11,81 @@ import (
 	"strings"
 	"time"
 )
+
+// Polling bounds for AcquireContext. The non-blocking lock primitive is the only
+// one available on every supported platform, so waiting means retrying; the
+// interval grows from responsive to cheap while contention lasts.
+const (
+	acquireMinInterval = 1 * time.Millisecond
+	acquireMaxInterval = 50 * time.Millisecond
+)
+
+// Lock is an acquired exclusive advisory lock on a file. Release it exactly once.
+type Lock struct {
+	file *os.File
+}
+
+// AcquireContext acquires an exclusive advisory lock on lockPath, creating the
+// file (and not its parent directories) if it does not exist. It waits for a
+// holder to release, returning ctx.Err() if the context is cancelled or its
+// deadline passes first, so a wedged holder cannot hang a caller past its own
+// deadline.
+func AcquireContext(ctx context.Context, lockPath string) (*Lock, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
+	// Read-write access is required by LockFileEx on Windows.
+	// #nosec G304 - controlled path from config
+	file, err := os.OpenFile(lockPath, os.O_RDWR|os.O_CREATE, 0o600)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open lock file %s: %w", lockPath, err)
+	}
+
+	interval := acquireMinInterval
+	for {
+		err := flockExclusive(file)
+		if err == nil {
+			return &Lock{file: file}, nil
+		}
+		if !errors.Is(err, errDaemonLocked) {
+			_ = file.Close()
+			return nil, fmt.Errorf("failed to lock %s: %w", lockPath, err)
+		}
+
+		timer := time.NewTimer(interval)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			_ = file.Close()
+			return nil, ctx.Err()
+		case <-timer.C:
+		}
+
+		if interval < acquireMaxInterval {
+			interval *= 2
+			if interval > acquireMaxInterval {
+				interval = acquireMaxInterval
+			}
+		}
+	}
+}
+
+// Release unlocks and closes the lock file. Closing the descriptor releases the
+// lock on every supported platform; the explicit unlock keeps the intent visible
+// and surfaces unlock errors.
+func (l *Lock) Release() error {
+	if l == nil || l.file == nil {
+		return nil
+	}
+	unlockErr := FlockUnlock(l.file)
+	closeErr := l.file.Close()
+	l.file = nil
+	if unlockErr != nil {
+		return unlockErr
+	}
+	return closeErr
+}
 
 // LockInfo represents the metadata stored in the daemon.lock file
 type LockInfo struct {

@@ -6,6 +6,7 @@ import (
 	"cmp"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -15,6 +16,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/steveyegge/beads/internal/debug"
+	"github.com/steveyegge/beads/internal/jsonlpub"
 	"github.com/steveyegge/beads/internal/storage/sqlite"
 	"github.com/steveyegge/beads/internal/types"
 	"github.com/steveyegge/beads/internal/utils"
@@ -131,9 +133,13 @@ NOTE: Import requires direct database access and does not work with daemon mode.
 			in = f
 		}
 
-		// Phase 1: Read and parse all JSONL
+		// Phase 1: Read and parse all JSONL.
+		// The content hash is taken from the bytes this parse consumes, not from
+		// a later re-read of the file: if the file changes after the read, the
+		// repository correctly reads diverged and the next import picks it up.
 		ctx := rootCtx
-		scanner := bufio.NewScanner(in)
+		importHasher := jsonlpub.NewHasher()
+		scanner := bufio.NewScanner(io.TeeReader(in, importHasher))
 
 		var allIssues []*types.Issue
 		lineNum := 0
@@ -190,7 +196,8 @@ NOTE: Import requires direct database access and does not work with daemon mode.
 						}
 					}()
 					in = f
-					scanner = bufio.NewScanner(in)
+					importHasher = jsonlpub.NewHasher()
+					scanner = bufio.NewScanner(io.TeeReader(in, importHasher))
 					allIssues = nil // Reset issues list
 					lineNum = 0     // Reset line counter
 					continue        // Restart parsing from beginning
@@ -371,36 +378,29 @@ NOTE: Import requires direct database access and does not work with daemon mode.
 			fmt.Fprintf(os.Stderr, "\nAll text and dependency references have been updated.\n")
 		}
 
+		// Record the imported content BEFORE the flush below: the flush publishes
+		// the database back to the same file, and a publication that finds bytes
+		// no hash describes reads them as somebody else's writing and aborts.
+		//
+		// Only the repository's own JSONL is recorded. `bd import -i backup.jsonl`
+		// loads a different file's content; claiming it as the repository's would
+		// make the real JSONL look diverged.
+		if input != "" && jsonlpub.IsCanonicalTarget(input, findJSONLPath()) {
+			opts := jsonlpub.Options{Warnf: func(format string, args ...any) {
+				debug.Logf("Warning: "+format, args...)
+			}}
+			// Non-fatal: the issues are already in the database, and the cost of
+			// a failed record is one redundant import on the next operation.
+			if err := jsonlpub.RecordImport(ctx, store, input, jsonlpub.HashSum(importHasher), opts); err != nil {
+				debug.Logf("Warning: failed to record imported JSONL content: %v", err)
+			}
+		}
+
 		// Flush immediately after import (no debounce) to ensure daemon sees changes
 		// Without this, daemon FileWatcher won't detect the import for up to 30s
 		// Only flush if there were actual changes to avoid unnecessary I/O
 		if result.Created > 0 || result.Updated > 0 || len(result.IDMapping) > 0 {
 			flushToJSONLWithState(flushState{forceDirty: true})
-		}
-
-		// Update jsonl_content_hash metadata to enable content-based staleness detection (bd-khnb fix)
-		// This prevents git operations from resurrecting deleted issues by comparing content instead of mtime
-		// ALWAYS update metadata after successful import, even if no changes were made (fixes staleness check)
-		// This ensures that running `bd import` marks the database as fresh for staleness detection
-		// Renamed from last_import_hash (bd-39o) - more accurate since updated on both import AND export
-		if input != "" {
-			if currentHash, err := computeJSONLHash(input); err == nil {
-				if err := store.SetMetadata(ctx, "jsonl_content_hash", currentHash); err != nil {
-					// Non-fatal warning: Metadata update failures are intentionally non-fatal to prevent blocking
-					// successful imports. System degrades gracefully to mtime-based staleness detection if metadata
-					// is unavailable. This ensures import operations always succeed even if metadata storage fails.
-					debug.Logf("Warning: failed to update jsonl_content_hash: %v", err)
-				}
-				// Use RFC3339Nano for nanosecond precision to avoid race with file mtime (fixes #399)
-				importTime := time.Now().Format(time.RFC3339Nano)
-				if err := store.SetMetadata(ctx, "last_import_time", importTime); err != nil {
-					// Non-fatal warning (see above comment about graceful degradation)
-					debug.Logf("Warning: failed to update last_import_time: %v", err)
-				}
-				// Note: mtime tracking removed in bd-v0y fix (git doesn't preserve mtime)
-			} else {
-				debug.Logf("Warning: failed to read JSONL for hash update: %v", err)
-			}
 		}
 
 		// Update database mtime to reflect it's now in sync with JSONL

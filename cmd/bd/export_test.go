@@ -4,10 +4,12 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
 
+	"github.com/steveyegge/beads/internal/jsonlpub"
 	"github.com/steveyegge/beads/internal/types"
 )
 
@@ -242,6 +244,24 @@ func TestExportCommand(t *testing.T) {
 		emptyDBPath := filepath.Join(tmpDir, "empty.db")
 		emptyStore := newTestStore(t, emptyDBPath)
 		defer emptyStore.Close()
+
+		// A file this database never recorded is refused before anything is
+		// written at all: its contents may be somebody else's, and the repair
+		// is an import.
+		err = exportToJSONLWithStore(ctx, emptyStore, exportPath)
+		if !errors.Is(err, jsonlpub.ErrDiverged) {
+			t.Errorf("Expected a divergence refusal for an unrecorded JSONL, got: %v", err)
+		}
+
+		// Record the file as imported, so the divergence guard passes and the
+		// empty-database check below is the thing under test.
+		fileHash, err := jsonlpub.HashFile(exportPath)
+		if err != nil {
+			t.Fatalf("Failed to hash JSONL: %v", err)
+		}
+		if err := jsonlpub.RecordImport(ctx, emptyStore, exportPath, fileHash, jsonlpub.Options{}); err != nil {
+			t.Fatalf("Failed to record imported JSONL: %v", err)
+		}
 
 		// Test using exportToJSONLWithStore directly (daemon code path)
 		err = exportToJSONLWithStore(ctx, emptyStore, exportPath)

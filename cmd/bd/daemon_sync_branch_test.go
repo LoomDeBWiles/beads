@@ -720,7 +720,7 @@ func TestSyncBranchIntegration_EndToEnd(t *testing.T) {
 
 	// Import JSONL to database
 	clone2JSONLPath := filepath.Join(clone2BeadsDir, "issues.jsonl")
-	if err := importToJSONLWithStore(ctx, store2, clone2JSONLPath); err != nil {
+	if _, err := importToJSONLWithStore(ctx, store2, clone2JSONLPath); err != nil {
 		t.Fatalf("Failed to import: %v", err)
 	}
 

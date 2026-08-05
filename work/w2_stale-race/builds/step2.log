@@ -1,0 +1,41 @@
+=== RUN   TestAddIssueCommentMarksDirty
+--- PASS: TestAddIssueCommentMarksDirty (0.13s)
+=== RUN   TestGetDirtyIssueSnapshotsRoundTrip
+--- PASS: TestGetDirtyIssueSnapshotsRoundTrip (0.06s)
+=== RUN   TestClearDirtyIssuesIfUnchangedKeepsRemarkedIssue
+--- PASS: TestClearDirtyIssuesIfUnchangedKeepsRemarkedIssue (0.06s)
+=== RUN   TestClearDirtyIssuesIfUnchangedIgnoresStaleSnapshot
+--- PASS: TestClearDirtyIssuesIfUnchangedIgnoresStaleSnapshot (0.06s)
+=== RUN   TestClearDirtyIssuesIfUnchangedEmpty
+--- PASS: TestClearDirtyIssuesIfUnchangedEmpty (0.06s)
+=== RUN   TestPublishClearsDirtyIssuesEndToEnd
+--- PASS: TestPublishClearsDirtyIssuesEndToEnd (0.06s)
+=== RUN   TestMarkIssueDirty
+--- PASS: TestMarkIssueDirty (0.06s)
+=== RUN   TestMarkIssuesDirty
+--- PASS: TestMarkIssuesDirty (0.05s)
+=== RUN   TestMarkIssuesDirtyEmpty
+--- PASS: TestMarkIssuesDirtyEmpty (0.05s)
+=== RUN   TestGetDirtyIssueCount
+--- PASS: TestGetDirtyIssueCount (0.06s)
+=== RUN   TestClearDirtyIssuesByID
+--- PASS: TestClearDirtyIssuesByID (0.06s)
+=== RUN   TestClearDirtyIssuesByIDEmpty
+--- PASS: TestClearDirtyIssuesByIDEmpty (0.05s)
+=== RUN   TestDirtyIssuesOrdering
+--- PASS: TestDirtyIssuesOrdering (0.09s)
+=== RUN   TestDirtyIssuesUpdateTimestamp
+--- PASS: TestDirtyIssuesUpdateTimestamp (0.11s)
+=== RUN   TestAddCommentMarksDirty
+--- PASS: TestAddCommentMarksDirty (0.05s)
+=== RUN   TestLabelMarksDirty
+--- PASS: TestLabelMarksDirty (0.05s)
+=== RUN   TestMigrateDirtyIssuesTable
+=== RUN   TestMigrateDirtyIssuesTable/creates_dirty_issues_table_if_not_exists
+=== RUN   TestMigrateDirtyIssuesTable/adds_content_hash_column_to_existing_table
+--- PASS: TestMigrateDirtyIssuesTable (0.11s)
+    --- PASS: TestMigrateDirtyIssuesTable/creates_dirty_issues_table_if_not_exists (0.06s)
+    --- PASS: TestMigrateDirtyIssuesTable/adds_content_hash_column_to_existing_table (0.06s)
+PASS
+ok  	github.com/steveyegge/beads/internal/storage/sqlite	1.184s
+status=0

@@ -4,8 +4,6 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -13,6 +11,7 @@ import (
 	"time"
 
 	"github.com/steveyegge/beads/internal/debug"
+	"github.com/steveyegge/beads/internal/jsonlpub"
 	"github.com/steveyegge/beads/internal/storage"
 	"github.com/steveyegge/beads/internal/types"
 	"github.com/steveyegge/beads/internal/utils"
@@ -80,9 +79,7 @@ func AutoImportIfNewer(ctx context.Context, store storage.Storage, dbPath string
 		return nil
 	}
 
-	hasher := sha256.New()
-	hasher.Write(jsonlData)
-	currentHash := hex.EncodeToString(hasher.Sum(nil))
+	currentHash := jsonlpub.HashBytes(jsonlData)
 
 	// Try new key first, fall back to old key for migration (bd-39o)
 	lastHash, err := store.GetMetadata(ctx, "jsonl_content_hash")
@@ -96,13 +93,9 @@ func AutoImportIfNewer(ctx context.Context, store storage.Storage, dbPath string
 
 	if currentHash == lastHash {
 		notify.Debugf("auto-import skipped, JSONL unchanged (hash match)")
-		// Update last_import_time to prevent repeated staleness warnings
-		// This handles the case where mtime changed but content didn't (e.g., git pull, touch)
-		// Use RFC3339Nano for nanosecond precision to avoid race with file mtime (fixes #399)
-		importTime := time.Now().Format(time.RFC3339Nano)
-		if err := store.SetMetadata(ctx, "last_import_time", importTime); err != nil {
-			notify.Warnf("failed to update last_import_time: %v", err)
-		}
+		// Content already imported, but recording it again refreshes the import
+		// timestamp so a mtime-only change (git pull, touch) stops looking new.
+		recordImport(ctx, store, jsonlPath, currentHash, notify)
 		return nil
 	}
 
@@ -128,24 +121,30 @@ func AutoImportIfNewer(ctx context.Context, store storage.Storage, dbPath string
 	// Show detailed remapping if any
 	showRemapping(allIssues, idMapping, notify)
 
+	// Record before the callback: onChanged usually exports, and its publication
+	// must find the imported content already recorded or it reads diverged.
+	recordImport(ctx, store, jsonlPath, currentHash, notify)
+
 	changed := (created + updated + len(idMapping)) > 0
 	if changed && onChanged != nil {
 		needsFullExport := len(idMapping) > 0
 		onChanged(needsFullExport)
 	}
 
-	if err := store.SetMetadata(ctx, "jsonl_content_hash", currentHash); err != nil {
-		notify.Warnf("failed to update jsonl_content_hash after import: %v", err)
+	return nil
+}
+
+// recordImport records the content this import parsed. currentHash covers the
+// bytes actually read: hashing the file again here would bless a rewrite that
+// landed during the import and hide it from the next one.
+//
+// A failure warns rather than propagating: the issues are in the database, and
+// the worst outcome is that the next operation imports the same content again.
+func recordImport(ctx context.Context, store storage.Storage, jsonlPath, currentHash string, notify Notifier) {
+	if err := jsonlpub.RecordImport(ctx, store, jsonlPath, currentHash, jsonlpub.Options{Warnf: notify.Warnf}); err != nil {
+		notify.Warnf("failed to record imported JSONL content: %v", err)
 		notify.Warnf("This may cause auto-import to retry the same import on next operation.")
 	}
-
-	// Use RFC3339Nano for nanosecond precision to avoid race with file mtime (fixes #399)
-	importTime := time.Now().Format(time.RFC3339Nano)
-	if err := store.SetMetadata(ctx, "last_import_time", importTime); err != nil {
-		notify.Warnf("failed to update last_import_time after import: %v", err)
-	}
-
-	return nil
 }
 
 // showRemapping displays ID remapping details
@@ -254,55 +253,33 @@ func parseJSONL(jsonlData []byte, _ Notifier) ([]*types.Issue, error) {
 	return allIssues, nil
 }
 
-// CheckStaleness checks if JSONL is newer than last import
-// dbPath is the full path to the database file
+// CheckStaleness reports whether the JSONL file holds content the database has
+// not imported. dbPath is the full path to the database file.
+//
+// Staleness is a question about content, not about clocks: a file rewritten
+// with the same bytes, or republished by an export, is not stale no matter how
+// new its mtime is. Only content nobody recorded makes the database stale.
 //
 // Returns:
-//   - (true, nil) if JSONL is newer than last import (database is stale)
-//   - (false, nil) if database is fresh or no JSONL exists yet
+//   - (true, nil) if the file holds content this database never imported
+//   - (false, nil) if the content is recorded, or there is no JSONL yet
 //   - (false, err) if an abnormal error occurred (file system issues, permissions, etc.)
 func CheckStaleness(ctx context.Context, store storage.Storage, dbPath string) (bool, error) {
-	lastImportStr, err := store.GetMetadata(ctx, "last_import_time")
-	if err != nil {
-		// No metadata yet - expected for first run
-		return false, nil
-	}
-
-	// Empty string means no metadata was set (memory store behavior)
-	if lastImportStr == "" {
-		// No metadata yet - expected for first run
-		return false, nil
-	}
-
-	// Try RFC3339Nano first (has nanosecond precision), fall back to RFC3339
-	// This supports both old timestamps (RFC3339) and new ones with nanoseconds (fixes #399)
-	lastImportTime, err := time.Parse(time.RFC3339Nano, lastImportStr)
-	if err != nil {
-		lastImportTime, err = time.Parse(time.RFC3339, lastImportStr)
-		if err != nil {
-			// Corrupted metadata - this is abnormal and should be reported
-			return false, fmt.Errorf("corrupted last_import_time in metadata (cannot parse as RFC3339): %w", err)
-		}
-	}
-
 	// Find JSONL using database directory
 	dbDir := filepath.Dir(dbPath)
 	jsonlPath := utils.FindJSONLInDir(dbDir)
-
-	// Use Lstat to get the symlink's own mtime, not the target's.
-	// This is critical for NixOS and other systems where JSONL may be symlinked.
-	// Using Stat would follow symlinks and return the target's mtime, which can
-	// cause false staleness detection when symlinks are recreated (e.g., by home-manager).
-	stat, err := os.Lstat(jsonlPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			// JSONL doesn't exist - expected for new repo
-			return false, nil
-		}
-		// Other stat error (permissions, etc.) - abnormal
-		return false, fmt.Errorf("failed to stat JSONL file %s: %w", jsonlPath, err)
+	if jsonlPath == "" {
+		// No JSONL yet - expected for a new repo
+		return false, nil
 	}
 
-	return stat.ModTime().After(lastImportTime), nil
-}
+	status, err := jsonlpub.ContentState(ctx, store, jsonlPath, "")
+	if err != nil {
+		return false, err
+	}
 
+	// A file no hash was ever recorded for is the first-run state, which every
+	// caller of this predicate has always treated as fresh: reporting it stale
+	// would fail-stop a brand new repository.
+	return status == jsonlpub.StatusDiverged, nil
+}

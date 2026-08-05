@@ -1,0 +1,23 @@
+=== RUN   TestCheckStaleness_NoMetadata
+--- PASS: TestCheckStaleness_NoMetadata (0.00s)
+=== RUN   TestCheckStaleness_UnrecordedContent
+--- PASS: TestCheckStaleness_UnrecordedContent (0.00s)
+=== RUN   TestCheckStaleness_RepublishedSameBytes
+--- PASS: TestCheckStaleness_RepublishedSameBytes (0.00s)
+=== RUN   TestCheckStaleness_RestoredOlderFile
+--- PASS: TestCheckStaleness_RestoredOlderFile (0.00s)
+=== RUN   TestCheckStaleness_PendingHashAccepted
+--- PASS: TestCheckStaleness_PendingHashAccepted (0.00s)
+=== RUN   TestCheckStaleness_LegacyImportHash
+--- PASS: TestCheckStaleness_LegacyImportHash (0.00s)
+=== RUN   TestCheckStaleness_UnparseableImportTime
+--- PASS: TestCheckStaleness_UnparseableImportTime (0.00s)
+=== RUN   TestCheckStaleness_PullThenImport
+--- PASS: TestCheckStaleness_PullThenImport (0.00s)
+=== RUN   TestCheckStaleness_SymlinkedJSONL_RecordedContentIsFresh
+--- PASS: TestCheckStaleness_SymlinkedJSONL_RecordedContentIsFresh (0.00s)
+=== RUN   TestCheckStaleness_SymlinkedJSONL_UnrecordedContentIsStale
+--- PASS: TestCheckStaleness_SymlinkedJSONL_UnrecordedContentIsStale (0.00s)
+PASS
+ok  	github.com/steveyegge/beads/internal/autoimport	0.003s
+status=0

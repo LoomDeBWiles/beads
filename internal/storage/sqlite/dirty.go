@@ -6,6 +6,8 @@ import (
 	"database/sql"
 	"fmt"
 	"time"
+
+	"github.com/steveyegge/beads/internal/jsonlpub"
 )
 
 // MarkIssueDirty marks an issue as dirty (needs to be exported to JSONL)
@@ -112,6 +114,60 @@ func (s *SQLiteStorage) ClearDirtyIssuesByID(ctx context.Context, issueIDs []str
 		for _, issueID := range issueIDs {
 			if _, err := stmt.ExecContext(ctx, issueID); err != nil {
 				return fmt.Errorf("failed to clear dirty issue %s: %w", issueID, err)
+			}
+		}
+
+		return nil
+	})
+}
+
+// GetDirtyIssueSnapshots returns every dirty issue together with the mark that
+// made it dirty. Callers pair it with ClearDirtyIssuesIfUnchanged so an issue
+// re-marked while an export was running is not silently retired.
+func (s *SQLiteStorage) GetDirtyIssueSnapshots(ctx context.Context) ([]jsonlpub.DirtySnapshot, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT issue_id, marked_at FROM dirty_issues
+		ORDER BY marked_at ASC
+	`)
+	if err != nil {
+		return nil, wrapDBError("get dirty issue snapshots", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var snapshots []jsonlpub.DirtySnapshot
+	for rows.Next() {
+		var snapshot jsonlpub.DirtySnapshot
+		if err := rows.Scan(&snapshot.ID, &snapshot.MarkedAt); err != nil {
+			return nil, fmt.Errorf("failed to scan dirty issue snapshot: %w", err)
+		}
+		snapshots = append(snapshots, snapshot)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, wrapDBError("iterate dirty issue snapshots", err)
+	}
+	return snapshots, nil
+}
+
+// ClearDirtyIssuesIfUnchanged removes the dirty rows that still carry the
+// snapshotted marked_at value. Marking an issue dirty upserts marked_at, so a
+// mutation landing after the snapshot leaves a newer value here, the delete
+// matches nothing for that issue, and the mutation survives to the next export.
+func (s *SQLiteStorage) ClearDirtyIssuesIfUnchanged(ctx context.Context, snapshots []jsonlpub.DirtySnapshot) error {
+	if len(snapshots) == 0 {
+		return nil
+	}
+
+	return s.withTx(ctx, func(tx *sql.Tx) error {
+		stmt, err := tx.PrepareContext(ctx, `DELETE FROM dirty_issues WHERE issue_id = ? AND marked_at = ?`)
+		if err != nil {
+			return fmt.Errorf("failed to prepare statement: %w", err)
+		}
+		defer func() { _ = stmt.Close() }()
+
+		for _, snapshot := range snapshots {
+			if _, err := stmt.ExecContext(ctx, snapshot.ID, snapshot.MarkedAt); err != nil {
+				return fmt.Errorf("failed to clear dirty issue %s: %w", snapshot.ID, err)
 			}
 		}
 

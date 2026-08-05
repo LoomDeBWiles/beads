@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/steveyegge/beads/internal/jsonlpub"
 	"github.com/steveyegge/beads/internal/storage/memory"
 	"github.com/steveyegge/beads/internal/types"
 )
@@ -314,56 +315,219 @@ func TestCheckStaleness_NoMetadata(t *testing.T) {
 	}
 }
 
-func TestCheckStaleness_NewerJSONL(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "bd-stale-test-*")
-	if err != nil {
+// stalenessRepo lays out a database directory next to a JSONL file holding the
+// given content and returns the two paths.
+func stalenessRepo(t *testing.T) (dbPath, jsonlPath string) {
+	t.Helper()
+	tmpDir := t.TempDir()
+	return filepath.Join(tmpDir, "bd.db"), filepath.Join(tmpDir, "issues.jsonl")
+}
+
+func writeJSONL(t *testing.T, path, content string, modTime time.Time) {
+	t.Helper()
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tmpDir)
-
-	dbPath := filepath.Join(tmpDir, "bd.db")
-	jsonlPath := filepath.Join(tmpDir, "issues.jsonl")
-
-	// Create old import time
-	oldTime := time.Now().Add(-1 * time.Hour)
-	store := memory.New("")
-	ctx := context.Background()
-	store.SetMetadata(ctx, "last_import_time", oldTime.Format(time.RFC3339))
-
-	// Create newer JSONL file
-	os.WriteFile(jsonlPath, []byte(`{"id":"test-1"}`), 0644)
-
-	stale, err := CheckStaleness(ctx, store, dbPath)
-	if err != nil {
-		t.Errorf("Expected no error, got: %v", err)
-	}
-
-	if !stale {
-		t.Error("Should be stale when JSONL is newer")
+	if !modTime.IsZero() {
+		if err := os.Chtimes(path, modTime, modTime); err != nil {
+			t.Fatal(err)
+		}
 	}
 }
 
-func TestCheckStaleness_CorruptedMetadata(t *testing.T) {
+// TestCheckStaleness_UnrecordedContent is the case staleness exists for: the
+// file holds issues this database never imported.
+func TestCheckStaleness_UnrecordedContent(t *testing.T) {
+	dbPath, jsonlPath := stalenessRepo(t)
+	writeJSONL(t, jsonlPath, `{"id":"test-1"}`, time.Time{})
+
+	store := memory.New("")
+	ctx := context.Background()
+	// Some other content was the last thing imported.
+	if err := store.SetMetadata(ctx, "jsonl_content_hash", jsonlpub.HashBytes([]byte(`{"id":"test-0"}`))); err != nil {
+		t.Fatal(err)
+	}
+
+	stale, err := CheckStaleness(ctx, store, dbPath)
+	if err != nil {
+		t.Fatalf("CheckStaleness failed: %v", err)
+	}
+	if !stale {
+		t.Error("stale = false for content the database never imported, want true")
+	}
+}
+
+// TestCheckStaleness_RepublishedSameBytes is the false-staleness bug: an export
+// rewrites the file with the bytes already recorded, so the mtime jumps forward
+// while the content does not change. Readers must not fail-stop on that.
+func TestCheckStaleness_RepublishedSameBytes(t *testing.T) {
+	dbPath, jsonlPath := stalenessRepo(t)
+	content := `{"id":"test-1"}`
+
+	store := memory.New("")
+	ctx := context.Background()
+	if err := store.SetMetadata(ctx, "jsonl_content_hash", jsonlpub.HashBytes([]byte(content))); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SetMetadata(ctx, "last_import_time", time.Now().Add(-time.Hour).Format(time.RFC3339Nano)); err != nil {
+		t.Fatal(err)
+	}
+
+	// The rewrite: same bytes, mtime now.
+	writeJSONL(t, jsonlPath, content, time.Now())
+
+	stale, err := CheckStaleness(ctx, store, dbPath)
+	if err != nil {
+		t.Fatalf("CheckStaleness failed: %v", err)
+	}
+	if stale {
+		t.Error("stale = true after a same-bytes rewrite, want false")
+	}
+}
+
+// TestCheckStaleness_RestoredOlderFile guards the other direction: a file
+// restored from a backup or an older commit carries an old mtime but content
+// nobody imported, and that is stale.
+func TestCheckStaleness_RestoredOlderFile(t *testing.T) {
+	dbPath, jsonlPath := stalenessRepo(t)
+
+	store := memory.New("")
+	ctx := context.Background()
+	if err := store.SetMetadata(ctx, "jsonl_content_hash", jsonlpub.HashBytes([]byte(`{"id":"test-current"}`))); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SetMetadata(ctx, "last_import_time", time.Now().Format(time.RFC3339Nano)); err != nil {
+		t.Fatal(err)
+	}
+
+	writeJSONL(t, jsonlPath, `{"id":"test-restored"}`, time.Now().Add(-24*time.Hour))
+
+	stale, err := CheckStaleness(ctx, store, dbPath)
+	if err != nil {
+		t.Fatalf("CheckStaleness failed: %v", err)
+	}
+	if !stale {
+		t.Error("stale = false for a restored older file with different content, want true")
+	}
+}
+
+// TestCheckStaleness_PendingHashAccepted covers a reader arriving between the
+// rename and the promotion: the published content is recorded as pending, which
+// is a promise the writer already kept on disk.
+func TestCheckStaleness_PendingHashAccepted(t *testing.T) {
+	dbPath, jsonlPath := stalenessRepo(t)
+	content := `{"id":"test-1"}`
+	writeJSONL(t, jsonlPath, content, time.Time{})
+
+	store := memory.New("")
+	ctx := context.Background()
+	if err := store.SetMetadata(ctx, "jsonl_content_hash", jsonlpub.HashBytes([]byte(`{"id":"test-0"}`))); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SetMetadata(ctx, "jsonl_pending_hash", jsonlpub.HashBytes([]byte(content))); err != nil {
+		t.Fatal(err)
+	}
+
+	stale, err := CheckStaleness(ctx, store, dbPath)
+	if err != nil {
+		t.Fatalf("CheckStaleness failed: %v", err)
+	}
+	if stale {
+		t.Error("stale = true for content recorded as pending, want false")
+	}
+}
+
+// TestCheckStaleness_LegacyImportHash keeps databases written before the
+// two-key protocol readable: their only record is last_import_hash.
+func TestCheckStaleness_LegacyImportHash(t *testing.T) {
+	dbPath, jsonlPath := stalenessRepo(t)
+	content := `{"id":"test-1"}`
+	writeJSONL(t, jsonlPath, content, time.Now())
+
+	store := memory.New("")
+	ctx := context.Background()
+	if err := store.SetMetadata(ctx, "last_import_hash", jsonlpub.HashBytes([]byte(content))); err != nil {
+		t.Fatal(err)
+	}
+
+	stale, err := CheckStaleness(ctx, store, dbPath)
+	if err != nil {
+		t.Fatalf("CheckStaleness failed: %v", err)
+	}
+	if stale {
+		t.Error("stale = true for content recorded under the legacy key, want false")
+	}
+}
+
+// TestCheckStaleness_UnparseableImportTime pins the contract change: the
+// staleness answer no longer depends on the import timestamp, so a timestamp
+// nothing can parse is no longer an error path.
+func TestCheckStaleness_UnparseableImportTime(t *testing.T) {
+	dbPath, jsonlPath := stalenessRepo(t)
+	content := `{"id":"test-1"}`
+	writeJSONL(t, jsonlPath, content, time.Time{})
+
+	store := memory.New("")
+	ctx := context.Background()
+	if err := store.SetMetadata(ctx, "last_import_time", "not-a-valid-timestamp"); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SetMetadata(ctx, "jsonl_content_hash", jsonlpub.HashBytes([]byte(content))); err != nil {
+		t.Fatal(err)
+	}
+
+	stale, err := CheckStaleness(ctx, store, dbPath)
+	if err != nil {
+		t.Fatalf("CheckStaleness failed: %v", err)
+	}
+	if stale {
+		t.Error("stale = true despite a recorded content hash, want false")
+	}
+}
+
+// TestCheckStaleness_PullThenImport walks the sequence a git pull produces:
+// incoming content reads stale, the import records it, and the same check then
+// passes.
+func TestCheckStaleness_PullThenImport(t *testing.T) {
+	dbPath, jsonlPath := stalenessRepo(t)
 	store := memory.New("")
 	ctx := context.Background()
 
-	tmpDir, err := os.MkdirTemp("", "bd-stale-test-*")
+	// What the pull dropped in.
+	pulled := `{"id":"test-1","title":"pulled"}` + "\n"
+	writeJSONL(t, jsonlPath, pulled, time.Time{})
+
+	stale, err := CheckStaleness(ctx, store, dbPath)
 	if err != nil {
+		t.Fatalf("CheckStaleness failed: %v", err)
+	}
+	if stale {
+		t.Error("stale = true before anything was ever imported, want false (first-run)")
+	}
+
+	// Record something else, so the pulled content is genuinely unimported.
+	if err := store.SetMetadata(ctx, "jsonl_content_hash", jsonlpub.HashBytes([]byte("{}\n"))); err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tmpDir)
-
-	dbPath := filepath.Join(tmpDir, "bd.db")
-
-	// Set invalid timestamp format
-	store.SetMetadata(ctx, "last_import_time", "not-a-valid-timestamp")
-
-	_, err = CheckStaleness(ctx, store, dbPath)
-	if err == nil {
-		t.Error("Expected error for corrupted metadata, got nil")
+	stale, err = CheckStaleness(ctx, store, dbPath)
+	if err != nil {
+		t.Fatalf("CheckStaleness failed: %v", err)
 	}
-	if err != nil && !strings.Contains(err.Error(), "corrupted last_import_time") {
-		t.Errorf("Expected 'corrupted last_import_time' error, got: %v", err)
+	if !stale {
+		t.Fatal("stale = false for pulled content, want true")
+	}
+
+	// The import.
+	if err := jsonlpub.RecordImport(ctx, store, jsonlPath, jsonlpub.HashBytes([]byte(pulled)), jsonlpub.Options{}); err != nil {
+		t.Fatalf("RecordImport failed: %v", err)
+	}
+
+	stale, err = CheckStaleness(ctx, store, dbPath)
+	if err != nil {
+		t.Fatalf("CheckStaleness failed: %v", err)
+	}
+	if stale {
+		t.Error("stale = true after the import recorded the content, want false")
 	}
 }
 
@@ -518,3 +682,48 @@ func TestStderrNotifier(t *testing.T) {
 	})
 }
 
+// TestAutoImportIfNewer_RewriteDuringImport pins R4-6 for the auto-import
+// caller: the hash it records must describe the bytes it parsed, not whatever
+// the file holds when the import finishes. Here a writer replaces the file
+// while the import is running (from inside the import callback). Recording a
+// re-read of the file would bless content the database never took in, and the
+// next reader would call a genuinely diverged repository fresh.
+func TestAutoImportIfNewer_RewriteDuringImport(t *testing.T) {
+	dbPath, jsonlPath := stalenessRepo(t)
+	parsed := `{"id":"test-1","title":"Parsed","status":"open","priority":1,"issue_type":"task"}` + "\n"
+	writeJSONL(t, jsonlPath, parsed, time.Time{})
+
+	store := memory.New("")
+	ctx := context.Background()
+	notify := &testNotifier{}
+
+	// The concurrent rewrite lands while the import is in flight.
+	rewritten := parsed + `{"id":"test-2","title":"Landed mid-import","status":"open","priority":1,"issue_type":"task"}` + "\n"
+	importFunc := func(ctx context.Context, issues []*types.Issue) (int, int, map[string]string, error) {
+		if len(issues) != 1 {
+			t.Errorf("import parsed %d issues, want 1", len(issues))
+		}
+		writeJSONL(t, jsonlPath, rewritten, time.Time{})
+		return len(issues), 0, nil, nil
+	}
+
+	if err := AutoImportIfNewer(ctx, store, dbPath, notify, importFunc, nil); err != nil {
+		t.Fatalf("AutoImportIfNewer failed: %v", err)
+	}
+
+	recorded, err := store.GetMetadata(ctx, "jsonl_content_hash")
+	if err != nil {
+		t.Fatalf("failed to read recorded hash: %v", err)
+	}
+	if want := jsonlpub.HashBytes([]byte(parsed)); recorded != want {
+		t.Errorf("recorded hash %q, want the parsed bytes' hash %q", recorded, want)
+	}
+
+	stale, err := CheckStaleness(ctx, store, dbPath)
+	if err != nil {
+		t.Fatalf("CheckStaleness failed: %v", err)
+	}
+	if !stale {
+		t.Error("stale = false after a rewrite landed mid-import, want true")
+	}
+}

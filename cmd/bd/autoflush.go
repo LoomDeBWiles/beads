@@ -18,6 +18,7 @@ import (
 	"github.com/steveyegge/beads/internal/beads"
 	"github.com/steveyegge/beads/internal/config"
 	"github.com/steveyegge/beads/internal/debug"
+	"github.com/steveyegge/beads/internal/jsonlpub"
 	"github.com/steveyegge/beads/internal/types"
 	"github.com/steveyegge/beads/internal/ui"
 	"github.com/steveyegge/beads/internal/utils"
@@ -557,15 +558,51 @@ func flushToJSONLWithState(state flushState) {
 		flushMutex.Unlock()
 	}
 
+	// Cheap pre-check: an incremental flush with nothing dirty has nothing to
+	// publish, and taking the publish lock to rewrite identical bytes is waste.
+	// The authoritative read happens inside the publish callback below.
+	if !fullExport {
+		dirtyIDs, err := store.GetDirtyIssues(ctx)
+		if err != nil {
+			recordFailure(fmt.Errorf("failed to get dirty issues: %w", err))
+			return
+		}
+		if len(dirtyIDs) == 0 {
+			recordSuccess()
+			return
+		}
+	}
+
+	// One serialized publication: the publisher snapshots the dirty markers,
+	// then calls back for the issues, then writes, records and retires exactly
+	// the markers it flushed.
+	_, err = jsonlpub.Publish(ctx, store, jsonlPath, func(ctx context.Context) ([]*types.Issue, error) {
+		return collectFlushIssues(ctx, jsonlPath, fullExport)
+	}, jsonlpub.Options{Warnf: func(format string, args ...any) {
+		fmt.Fprintf(os.Stderr, "Warning: "+format+"\n", args...)
+	}})
+	if err != nil {
+		recordFailure(err)
+		return
+	}
+
+	// Success! FlushManager manages its local state in run() goroutine.
+	recordSuccess()
+}
+
+// collectFlushIssues assembles the content of the next JSONL: for a full export
+// every issue, for an incremental one the existing file merged with the dirty
+// rows. It runs inside the publish lock and after the dirty snapshot, so an
+// issue mutated while it runs either lands in this content or keeps its marker.
+func collectFlushIssues(ctx context.Context, jsonlPath string, fullExport bool) ([]*types.Issue, error) {
 	// Determine which issues to export
 	var dirtyIDs []string
 
 	if fullExport {
 		// Full export: get ALL issues (needed after ID-changing operations like renumber)
-		allIssues, err2 := store.SearchIssues(ctx, "", types.IssueFilter{})
-		if err2 != nil {
-			recordFailure(fmt.Errorf("failed to get all issues: %w", err2))
-			return
+		allIssues, err := store.SearchIssues(ctx, "", types.IssueFilter{})
+		if err != nil {
+			return nil, fmt.Errorf("failed to get all issues: %w", err)
 		}
 		dirtyIDs = make([]string, len(allIssues))
 		for i, issue := range allIssues {
@@ -573,17 +610,10 @@ func flushToJSONLWithState(state flushState) {
 		}
 	} else {
 		// Incremental export: get only dirty issue IDs (bd-39 optimization)
-		var err2 error
-		dirtyIDs, err2 = store.GetDirtyIssues(ctx)
-		if err2 != nil {
-			recordFailure(fmt.Errorf("failed to get dirty issues: %w", err2))
-			return
-		}
-
-		// No dirty issues? Nothing to do!
-		if len(dirtyIDs) == 0 {
-			recordSuccess()
-			return
+		var err error
+		dirtyIDs, err = store.GetDirtyIssues(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get dirty issues: %w", err)
 		}
 	}
 
@@ -614,8 +644,7 @@ func flushToJSONLWithState(state flushState) {
 			// Check for scanner errors (bd-c6cf)
 			if err := scanner.Err(); err != nil {
 				_ = existingFile.Close()
-				recordFailure(fmt.Errorf("failed to read existing JSONL: %w", err))
-				return
+				return nil, fmt.Errorf("failed to read existing JSONL: %w", err)
 			}
 			_ = existingFile.Close()
 		}
@@ -625,8 +654,7 @@ func flushToJSONLWithState(state flushState) {
 	for _, issueID := range dirtyIDs {
 		issue, err := store.GetIssue(ctx, issueID)
 		if err != nil {
-			recordFailure(fmt.Errorf("failed to get issue %s: %w", issueID, err))
-			return
+			return nil, fmt.Errorf("failed to get issue %s: %w", issueID, err)
 		}
 		if issue == nil {
 			// Issue was deleted, remove from map
@@ -637,8 +665,7 @@ func flushToJSONLWithState(state flushState) {
 		// Get dependencies for this issue
 		deps, err := store.GetDependencyRecords(ctx, issueID)
 		if err != nil {
-			recordFailure(fmt.Errorf("failed to get dependencies for %s: %w", issueID, err))
-			return
+			return nil, fmt.Errorf("failed to get dependencies for %s: %w", issueID, err)
 		}
 		issue.Dependencies = deps
 
@@ -646,7 +673,7 @@ func flushToJSONLWithState(state flushState) {
 		issueMap[issueID] = issue
 	}
 
-	// Convert map to slice (will be sorted by writeJSONLAtomic)
+	// Convert map to slice (the publisher sorts by ID as it writes)
 	// Filter out wisps - they should never be exported to JSONL (bd-687g)
 	// Wisps exist only in SQLite and are shared via .beads/redirect, not JSONL.
 	// This prevents "zombie" issues that resurrect after mol squash deletes them.
@@ -703,52 +730,5 @@ func flushToJSONLWithState(state flushState) {
 		}
 	}
 
-	// Write atomically using common helper
-	exportedIDs, err := writeJSONLAtomic(jsonlPath, issues)
-	if err != nil {
-		recordFailure(err)
-		return
-	}
-
-	// Clear only the dirty issues that were actually exported (fixes bd-52 race condition, bd-159)
-	// Don't clear issues that were skipped due to timestamp-only changes
-	if len(exportedIDs) > 0 {
-		if err := store.ClearDirtyIssuesByID(ctx, exportedIDs); err != nil {
-			// Don't fail the whole flush for this, but warn
-			fmt.Fprintf(os.Stderr, "Warning: failed to clear dirty issues: %v\n", err)
-		}
-	}
-
-	// Store hash of exported JSONL (fixes bd-84: enables hash-based auto-import)
-	// Renamed from last_import_hash to jsonl_content_hash (bd-39o)
-	jsonlData, err := os.ReadFile(jsonlPath)
-	if err == nil {
-		hasher := sha256.New()
-		hasher.Write(jsonlData)
-		exportedHash := hex.EncodeToString(hasher.Sum(nil))
-		if err := store.SetMetadata(ctx, "jsonl_content_hash", exportedHash); err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: failed to update jsonl_content_hash after export: %v\n", err)
-		}
-
-		// Store JSONL file hash for integrity validation (bd-160)
-		if err := store.SetJSONLFileHash(ctx, exportedHash); err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: failed to update jsonl_file_hash after export: %v\n", err)
-		}
-
-		// Update last_import_time so staleness check doesn't see JSONL as "newer" (fixes #399)
-		// CheckStaleness() compares last_import_time against JSONL mtime. After export,
-		// the JSONL mtime is updated, so we must also update last_import_time to prevent
-		// false "stale" detection on subsequent reads.
-		//
-		// Use RFC3339Nano to preserve nanosecond precision. The file mtime has nanosecond
-		// precision, so using RFC3339 (second precision) would cause the stored time to be
-		// slightly earlier than the file mtime, triggering false staleness.
-		exportTime := time.Now().Format(time.RFC3339Nano)
-		if err := store.SetMetadata(ctx, "last_import_time", exportTime); err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: failed to update last_import_time after export: %v\n", err)
-		}
-	}
-
-	// Success! FlushManager manages its local state in run() goroutine.
-	recordSuccess()
+	return issues, nil
 }

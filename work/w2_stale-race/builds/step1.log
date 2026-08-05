@@ -1,0 +1,69 @@
+=== RUN   TestPublishFailpointStates
+=== RUN   TestPublishFailpointStates/after-pending
+=== RUN   TestPublishFailpointStates/after-rename
+=== RUN   TestPublishFailpointStates/after-committed
+=== RUN   TestPublishFailpointStates/after-file-hash
+=== RUN   TestPublishFailpointStates/after-import-time
+=== RUN   TestPublishFailpointStates/after-pending-delete
+=== RUN   TestPublishFailpointStates/after-clear
+--- PASS: TestPublishFailpointStates (0.00s)
+    --- PASS: TestPublishFailpointStates/after-pending (0.00s)
+    --- PASS: TestPublishFailpointStates/after-rename (0.00s)
+    --- PASS: TestPublishFailpointStates/after-committed (0.00s)
+    --- PASS: TestPublishFailpointStates/after-file-hash (0.00s)
+    --- PASS: TestPublishFailpointStates/after-import-time (0.00s)
+    --- PASS: TestPublishFailpointStates/after-pending-delete (0.00s)
+    --- PASS: TestPublishFailpointStates/after-clear (0.00s)
+=== RUN   TestLockedReaderPromotesCrashedPending
+--- PASS: TestLockedReaderPromotesCrashedPending (0.01s)
+=== RUN   TestContentStateRechecksUnderLock
+--- PASS: TestContentStateRechecksUnderLock (0.00s)
+=== RUN   TestPublishAbortsOnDivergence
+--- PASS: TestPublishAbortsOnDivergence (0.00s)
+=== RUN   TestPublishAbortsOnUnrecordedFile
+--- PASS: TestPublishAbortsOnUnrecordedFile (0.00s)
+=== RUN   TestPublishOntoAbsentFileSucceeds
+--- PASS: TestPublishOntoAbsentFileSucceeds (0.00s)
+=== RUN   TestPublishRechecksGuardHashBeforeRename
+--- PASS: TestPublishRechecksGuardHashBeforeRename (0.00s)
+=== RUN   TestPublishKeepsIssueDirtyWhenRemarkedDuringExport
+--- PASS: TestPublishKeepsIssueDirtyWhenRemarkedDuringExport (0.00s)
+=== RUN   TestPublishClearsDirtyMarkers
+--- PASS: TestPublishClearsDirtyMarkers (0.00s)
+=== RUN   TestPublishWithoutDirtySnapshotStore
+--- PASS: TestPublishWithoutDirtySnapshotStore (0.00s)
+=== RUN   TestPublishAbortsWhenPendingWriteFails
+--- PASS: TestPublishAbortsWhenPendingWriteFails (0.00s)
+=== RUN   TestPublishSortsIssues
+--- PASS: TestPublishSortsIssues (0.00s)
+=== RUN   TestAcquireWaitRespectsContext
+--- PASS: TestAcquireWaitRespectsContext (0.05s)
+=== RUN   TestAcquireContextCancelledBeforeWait
+--- PASS: TestAcquireContextCancelledBeforeWait (0.00s)
+=== RUN   TestRecordImportUsesParsedHash
+--- PASS: TestRecordImportUsesParsedHash (0.00s)
+=== RUN   TestRecordImportClearsCrashedPending
+--- PASS: TestRecordImportClearsCrashedPending (0.01s)
+=== RUN   TestRecordImportThenPublish
+--- PASS: TestRecordImportThenPublish (0.00s)
+=== RUN   TestContentStateMigrationKey
+--- PASS: TestContentStateMigrationKey (0.00s)
+=== RUN   TestContentStateNoFile
+--- PASS: TestContentStateNoFile (0.00s)
+=== RUN   TestContentStateNoMetadata
+--- PASS: TestContentStateNoMetadata (0.00s)
+=== RUN   TestKeySuffix
+--- PASS: TestKeySuffix (0.00s)
+=== RUN   TestSuffixedPublishIsolated
+--- PASS: TestSuffixedPublishIsolated (0.00s)
+=== RUN   TestResolveCanonicalRelativePath
+--- PASS: TestResolveCanonicalRelativePath (0.00s)
+=== RUN   TestResolveCanonicalFinalComponentSymlink
+--- PASS: TestResolveCanonicalFinalComponentSymlink (0.00s)
+=== RUN   TestResolveCanonicalParentSymlink
+--- PASS: TestResolveCanonicalParentSymlink (0.00s)
+=== RUN   TestPublishesAreSerialized
+--- PASS: TestPublishesAreSerialized (0.00s)
+PASS
+ok  	github.com/steveyegge/beads/internal/jsonlpub	0.079s
+status=0

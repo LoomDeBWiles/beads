@@ -1,0 +1,1381 @@
+=== RUN   TestPublishFailpointStates
+=== RUN   TestPublishFailpointStates/after-pending
+=== RUN   TestPublishFailpointStates/after-rename
+=== RUN   TestPublishFailpointStates/after-committed
+=== RUN   TestPublishFailpointStates/after-file-hash
+=== RUN   TestPublishFailpointStates/after-import-time
+=== RUN   TestPublishFailpointStates/after-pending-delete
+=== RUN   TestPublishFailpointStates/after-clear
+--- PASS: TestPublishFailpointStates (0.00s)
+    --- PASS: TestPublishFailpointStates/after-pending (0.00s)
+    --- PASS: TestPublishFailpointStates/after-rename (0.00s)
+    --- PASS: TestPublishFailpointStates/after-committed (0.00s)
+    --- PASS: TestPublishFailpointStates/after-file-hash (0.00s)
+    --- PASS: TestPublishFailpointStates/after-import-time (0.00s)
+    --- PASS: TestPublishFailpointStates/after-pending-delete (0.00s)
+    --- PASS: TestPublishFailpointStates/after-clear (0.00s)
+=== RUN   TestLockedReaderPromotesCrashedPending
+--- PASS: TestLockedReaderPromotesCrashedPending (0.01s)
+=== RUN   TestContentStateRechecksUnderLock
+--- PASS: TestContentStateRechecksUnderLock (0.00s)
+=== RUN   TestPublishAbortsOnDivergence
+--- PASS: TestPublishAbortsOnDivergence (0.00s)
+=== RUN   TestPublishAbortsOnUnrecordedFile
+--- PASS: TestPublishAbortsOnUnrecordedFile (0.00s)
+=== RUN   TestPublishOntoAbsentFileSucceeds
+--- PASS: TestPublishOntoAbsentFileSucceeds (0.00s)
+=== RUN   TestPublishRechecksGuardHashBeforeRename
+--- PASS: TestPublishRechecksGuardHashBeforeRename (0.00s)
+=== RUN   TestPublishKeepsIssueDirtyWhenRemarkedDuringExport
+--- PASS: TestPublishKeepsIssueDirtyWhenRemarkedDuringExport (0.00s)
+=== RUN   TestPublishClearsDirtyMarkers
+--- PASS: TestPublishClearsDirtyMarkers (0.00s)
+=== RUN   TestPublishWithoutDirtySnapshotStore
+--- PASS: TestPublishWithoutDirtySnapshotStore (0.00s)
+=== RUN   TestPublishAbortsWhenPendingWriteFails
+--- PASS: TestPublishAbortsWhenPendingWriteFails (0.00s)
+=== RUN   TestPublishSortsIssues
+--- PASS: TestPublishSortsIssues (0.00s)
+=== RUN   TestAcquireWaitRespectsContext
+--- PASS: TestAcquireWaitRespectsContext (0.05s)
+=== RUN   TestAcquireContextCancelledBeforeWait
+--- PASS: TestAcquireContextCancelledBeforeWait (0.00s)
+=== RUN   TestRecordImportUsesParsedHash
+--- PASS: TestRecordImportUsesParsedHash (0.00s)
+=== RUN   TestRecordImportClearsCrashedPending
+--- PASS: TestRecordImportClearsCrashedPending (0.01s)
+=== RUN   TestRecordImportThenPublish
+--- PASS: TestRecordImportThenPublish (0.00s)
+=== RUN   TestContentStateMigrationKey
+--- PASS: TestContentStateMigrationKey (0.00s)
+=== RUN   TestContentStateNoFile
+--- PASS: TestContentStateNoFile (0.00s)
+=== RUN   TestContentStateNoMetadata
+--- PASS: TestContentStateNoMetadata (0.00s)
+=== RUN   TestKeySuffix
+--- PASS: TestKeySuffix (0.00s)
+=== RUN   TestSuffixedPublishIsolated
+--- PASS: TestSuffixedPublishIsolated (0.00s)
+=== RUN   TestResolveCanonicalRelativePath
+--- PASS: TestResolveCanonicalRelativePath (0.00s)
+=== RUN   TestResolveCanonicalFinalComponentSymlink
+--- PASS: TestResolveCanonicalFinalComponentSymlink (0.00s)
+=== RUN   TestResolveCanonicalParentSymlink
+--- PASS: TestResolveCanonicalParentSymlink (0.00s)
+=== RUN   TestPublishesAreSerialized
+--- PASS: TestPublishesAreSerialized (0.00s)
+PASS
+ok  	github.com/steveyegge/beads/internal/jsonlpub	(cached)
+=== RUN   TestCollisionProbability
+--- PASS: TestCollisionProbability (0.00s)
+=== RUN   TestComputeAdaptiveLength
+=== RUN   TestComputeAdaptiveLength/tiny_database_uses_3_chars
+=== RUN   TestComputeAdaptiveLength/small_database_uses_4_chars
+=== RUN   TestComputeAdaptiveLength/medium_database_uses_5_chars
+=== RUN   TestComputeAdaptiveLength/large_database_uses_6_chars
+=== RUN   TestComputeAdaptiveLength/very_large_database_uses_7_chars
+=== RUN   TestComputeAdaptiveLength/custom_threshold_-_stricter
+=== RUN   TestComputeAdaptiveLength/custom_threshold_-_more_lenient
+--- PASS: TestComputeAdaptiveLength (0.00s)
+    --- PASS: TestComputeAdaptiveLength/tiny_database_uses_3_chars (0.00s)
+    --- PASS: TestComputeAdaptiveLength/small_database_uses_4_chars (0.00s)
+    --- PASS: TestComputeAdaptiveLength/medium_database_uses_5_chars (0.00s)
+    --- PASS: TestComputeAdaptiveLength/large_database_uses_6_chars (0.00s)
+    --- PASS: TestComputeAdaptiveLength/very_large_database_uses_7_chars (0.00s)
+    --- PASS: TestComputeAdaptiveLength/custom_threshold_-_stricter (0.00s)
+    --- PASS: TestComputeAdaptiveLength/custom_threshold_-_more_lenient (0.00s)
+=== RUN   TestGenerateHashID_VariableLengths
+=== RUN   TestGenerateHashID_VariableLengths/length_3
+=== RUN   TestGenerateHashID_VariableLengths/length_4
+=== RUN   TestGenerateHashID_VariableLengths/length_5
+=== RUN   TestGenerateHashID_VariableLengths/length_6
+=== RUN   TestGenerateHashID_VariableLengths/length_7
+=== RUN   TestGenerateHashID_VariableLengths/length_8
+--- PASS: TestGenerateHashID_VariableLengths (0.00s)
+    --- PASS: TestGenerateHashID_VariableLengths/length_3 (0.00s)
+    --- PASS: TestGenerateHashID_VariableLengths/length_4 (0.00s)
+    --- PASS: TestGenerateHashID_VariableLengths/length_5 (0.00s)
+    --- PASS: TestGenerateHashID_VariableLengths/length_6 (0.00s)
+    --- PASS: TestGenerateHashID_VariableLengths/length_7 (0.00s)
+    --- PASS: TestGenerateHashID_VariableLengths/length_8 (0.00s)
+=== RUN   TestGetAdaptiveIDLength_Integration
+--- PASS: TestGetAdaptiveIDLength_Integration (0.10s)
+=== RUN   TestValidateBatchIssues
+=== RUN   TestValidateBatchIssues/validates_all_issues_in_batch
+=== RUN   TestValidateBatchIssues/preserves_provided_timestamps
+=== RUN   TestValidateBatchIssues/rejects_nil_issue
+=== RUN   TestValidateBatchIssues/rejects_invalid_issue
+--- PASS: TestValidateBatchIssues (0.00s)
+    --- PASS: TestValidateBatchIssues/validates_all_issues_in_batch (0.00s)
+    --- PASS: TestValidateBatchIssues/preserves_provided_timestamps (0.00s)
+    --- PASS: TestValidateBatchIssues/rejects_nil_issue (0.00s)
+    --- PASS: TestValidateBatchIssues/rejects_invalid_issue (0.00s)
+=== RUN   TestBatchCreateIssues
+=== RUN   TestBatchCreateIssues/creates_multiple_issues_atomically
+=== RUN   TestBatchCreateIssues/rolls_back_on_validation_error
+=== RUN   TestBatchCreateIssues/handles_empty_batch
+=== RUN   TestBatchCreateIssues/handles_explicit_IDs
+=== RUN   TestBatchCreateIssues/handles_mix_of_explicit_and_generated_IDs
+=== RUN   TestBatchCreateIssues/rejects_wrong_prefix
+=== RUN   TestBatchCreateIssues/marks_issues_dirty
+=== RUN   TestBatchCreateIssues/sets_content_hash
+--- PASS: TestBatchCreateIssues (0.07s)
+    --- PASS: TestBatchCreateIssues/creates_multiple_issues_atomically (0.00s)
+    --- PASS: TestBatchCreateIssues/rolls_back_on_validation_error (0.00s)
+    --- PASS: TestBatchCreateIssues/handles_empty_batch (0.00s)
+    --- PASS: TestBatchCreateIssues/handles_explicit_IDs (0.00s)
+    --- PASS: TestBatchCreateIssues/handles_mix_of_explicit_and_generated_IDs (0.00s)
+    --- PASS: TestBatchCreateIssues/rejects_wrong_prefix (0.00s)
+    --- PASS: TestBatchCreateIssues/marks_issues_dirty (0.00s)
+    --- PASS: TestBatchCreateIssues/sets_content_hash (0.00s)
+=== RUN   TestGenerateBatchIDs
+=== RUN   TestGenerateBatchIDs/generates_unique_IDs_for_batch
+=== RUN   TestGenerateBatchIDs/validates_explicit_IDs_match_prefix
+=== RUN   TestGenerateBatchIDs/skips_prefix_validation_when_flag_is_set
+--- PASS: TestGenerateBatchIDs (0.06s)
+    --- PASS: TestGenerateBatchIDs/generates_unique_IDs_for_batch (0.00s)
+    --- PASS: TestGenerateBatchIDs/validates_explicit_IDs_match_prefix (0.00s)
+    --- PASS: TestGenerateBatchIDs/skips_prefix_validation_when_flag_is_set (0.00s)
+=== RUN   TestBulkOperations
+=== RUN   TestBulkOperations/bulkInsertIssues
+=== RUN   TestBulkOperations/bulkRecordEvents
+=== RUN   TestBulkOperations/bulkMarkDirty
+--- PASS: TestBulkOperations (0.06s)
+    --- PASS: TestBulkOperations/bulkInsertIssues (0.00s)
+    --- PASS: TestBulkOperations/bulkRecordEvents (0.00s)
+    --- PASS: TestBulkOperations/bulkMarkDirty (0.00s)
+=== RUN   TestDefensiveClosedAtFix
+=== RUN   TestDefensiveClosedAtFix/sets_closed_at_for_closed_issues_missing_it
+=== RUN   TestDefensiveClosedAtFix/preserves_existing_closed_at
+=== RUN   TestDefensiveClosedAtFix/does_not_set_closed_at_for_open_issues
+=== RUN   TestDefensiveClosedAtFix/sets_deleted_at_for_tombstones_missing_it
+--- PASS: TestDefensiveClosedAtFix (0.00s)
+    --- PASS: TestDefensiveClosedAtFix/sets_closed_at_for_closed_issues_missing_it (0.00s)
+    --- PASS: TestDefensiveClosedAtFix/preserves_existing_closed_at (0.00s)
+    --- PASS: TestDefensiveClosedAtFix/does_not_set_closed_at_for_open_issues (0.00s)
+    --- PASS: TestDefensiveClosedAtFix/sets_deleted_at_for_tombstones_missing_it (0.00s)
+=== RUN   TestBatchGetLabelsAndComments
+--- PASS: TestBatchGetLabelsAndComments (0.06s)
+=== RUN   TestBatchGetEmptyIssueIDs
+--- PASS: TestBatchGetEmptyIssueIDs (0.06s)
+=== RUN   TestCacheInvalidationOnDependencyAdd
+--- PASS: TestCacheInvalidationOnDependencyAdd (0.06s)
+=== RUN   TestCacheInvalidationOnDependencyRemove
+--- PASS: TestCacheInvalidationOnDependencyRemove (0.06s)
+=== RUN   TestCacheInvalidationOnStatusChange
+--- PASS: TestCacheInvalidationOnStatusChange (0.07s)
+=== RUN   TestCacheConsistencyAcrossOperations
+--- PASS: TestCacheConsistencyAcrossOperations (0.06s)
+=== RUN   TestParentChildTransitiveBlocking
+--- PASS: TestParentChildTransitiveBlocking (0.06s)
+=== RUN   TestRelatedDepsDoNotAffectCache
+--- PASS: TestRelatedDepsDoNotAffectCache (0.06s)
+=== RUN   TestDeepHierarchyCacheCorrectness
+--- PASS: TestDeepHierarchyCacheCorrectness (0.06s)
+=== RUN   TestMultipleBlockersInCache
+--- PASS: TestMultipleBlockersInCache (0.06s)
+=== RUN   TestConditionalBlocksCache
+--- PASS: TestConditionalBlocksCache (0.06s)
+=== RUN   TestConditionalBlocksVariousFailureKeywords
+=== RUN   TestConditionalBlocksVariousFailureKeywords/failed
+=== RUN   TestConditionalBlocksVariousFailureKeywords/rejected
+=== RUN   TestConditionalBlocksVariousFailureKeywords/wontfix
+=== RUN   TestConditionalBlocksVariousFailureKeywords/won't_fix
+=== RUN   TestConditionalBlocksVariousFailureKeywords/cancelled
+=== RUN   TestConditionalBlocksVariousFailureKeywords/canceled
+=== RUN   TestConditionalBlocksVariousFailureKeywords/abandoned
+=== RUN   TestConditionalBlocksVariousFailureKeywords/blocked
+=== RUN   TestConditionalBlocksVariousFailureKeywords/error
+=== RUN   TestConditionalBlocksVariousFailureKeywords/timeout
+=== RUN   TestConditionalBlocksVariousFailureKeywords/aborted
+--- PASS: TestConditionalBlocksVariousFailureKeywords (0.69s)
+    --- PASS: TestConditionalBlocksVariousFailureKeywords/failed (0.06s)
+    --- PASS: TestConditionalBlocksVariousFailureKeywords/rejected (0.07s)
+    --- PASS: TestConditionalBlocksVariousFailureKeywords/wontfix (0.06s)
+    --- PASS: TestConditionalBlocksVariousFailureKeywords/won't_fix (0.06s)
+    --- PASS: TestConditionalBlocksVariousFailureKeywords/cancelled (0.06s)
+    --- PASS: TestConditionalBlocksVariousFailureKeywords/canceled (0.06s)
+    --- PASS: TestConditionalBlocksVariousFailureKeywords/abandoned (0.06s)
+    --- PASS: TestConditionalBlocksVariousFailureKeywords/blocked (0.07s)
+    --- PASS: TestConditionalBlocksVariousFailureKeywords/error (0.08s)
+    --- PASS: TestConditionalBlocksVariousFailureKeywords/timeout (0.06s)
+    --- PASS: TestConditionalBlocksVariousFailureKeywords/aborted (0.06s)
+=== RUN   TestWaitsForAllChildren
+--- PASS: TestWaitsForAllChildren (0.06s)
+=== RUN   TestWaitsForAnyChildren
+--- PASS: TestWaitsForAnyChildren (0.06s)
+=== RUN   TestWaitsForNoChildren
+--- PASS: TestWaitsForNoChildren (0.05s)
+=== RUN   TestWaitsForDynamicChildrenAdded
+--- PASS: TestWaitsForDynamicChildrenAdded (0.06s)
+=== RUN   TestMigrateChildCountersTable
+=== RUN   TestMigrateChildCountersTable/creates_child_counters_table_if_not_exists
+=== RUN   TestMigrateChildCountersTable/is_idempotent
+=== RUN   TestMigrateChildCountersTable/has_ON_DELETE_CASCADE_constraint
+--- PASS: TestMigrateChildCountersTable (0.13s)
+    --- PASS: TestMigrateChildCountersTable/creates_child_counters_table_if_not_exists (0.03s)
+    --- PASS: TestMigrateChildCountersTable/is_idempotent (0.05s)
+    --- PASS: TestMigrateChildCountersTable/has_ON_DELETE_CASCADE_constraint (0.05s)
+=== RUN   TestChildCountersTableExists
+--- PASS: TestChildCountersTableExists (0.04s)
+=== RUN   TestGetNextChildNumber
+--- PASS: TestGetNextChildNumber (0.05s)
+=== RUN   TestGetNextChildNumber_DifferentParents
+--- PASS: TestGetNextChildNumber_DifferentParents (0.05s)
+=== RUN   TestGetNextChildNumber_Concurrent
+--- PASS: TestGetNextChildNumber_Concurrent (0.05s)
+=== RUN   TestGetNextChildNumber_NestedHierarchy
+--- PASS: TestGetNextChildNumber_NestedHierarchy (0.04s)
+=== RUN   TestGetNextChildID
+--- PASS: TestGetNextChildID (0.05s)
+=== RUN   TestGetNextChildID_ParentNotExists
+--- PASS: TestGetNextChildID_ParentNotExists (0.04s)
+=== RUN   TestCreateIssue_HierarchicalID
+--- PASS: TestCreateIssue_HierarchicalID (0.07s)
+=== RUN   TestCreateIssue_HierarchicalID_ParentNotExists
+--- PASS: TestCreateIssue_HierarchicalID_ParentNotExists (0.06s)
+=== RUN   TestGetNextChildID_ResurrectParent
+--- PASS: TestGetNextChildID_ResurrectParent (0.05s)
+=== RUN   TestGetNextChildID_ResurrectParent_NotInJSONL
+--- PASS: TestGetNextChildID_ResurrectParent_NotInJSONL (0.05s)
+=== RUN   TestGetNextChildID_ResurrectParent_NoJSONL
+--- PASS: TestGetNextChildID_ResurrectParent_NoJSONL (0.04s)
+=== RUN   TestGetNextChildID_ResurrectParent_MalformedJSONL
+--- PASS: TestGetNextChildID_ResurrectParent_MalformedJSONL (0.04s)
+=== RUN   TestGetNextChildID_ResurrectParentChain
+--- PASS: TestGetNextChildID_ResurrectParentChain (0.04s)
+=== RUN   TestDetectCollisions
+=== RUN   TestDetectCollisions/exact_match_-_idempotent
+=== RUN   TestDetectCollisions/collision_-_different_title
+=== RUN   TestDetectCollisions/collision_-_multiple_fields
+=== RUN   TestDetectCollisions/new_issue
+=== RUN   TestDetectCollisions/mixed_-_exact,_collision,_and_new
+--- PASS: TestDetectCollisions (0.01s)
+    --- PASS: TestDetectCollisions/exact_match_-_idempotent (0.00s)
+    --- PASS: TestDetectCollisions/collision_-_different_title (0.00s)
+    --- PASS: TestDetectCollisions/collision_-_multiple_fields (0.00s)
+    --- PASS: TestDetectCollisions/new_issue (0.00s)
+    --- PASS: TestDetectCollisions/mixed_-_exact,_collision,_and_new (0.00s)
+=== RUN   TestCompareIssues
+=== RUN   TestCompareIssues/identical_issues
+=== RUN   TestCompareIssues/different_title
+=== RUN   TestCompareIssues/different_description
+=== RUN   TestCompareIssues/different_status
+=== RUN   TestCompareIssues/different_priority
+=== RUN   TestCompareIssues/different_assignee
+=== RUN   TestCompareIssues/multiple_differences
+--- PASS: TestCompareIssues (0.00s)
+    --- PASS: TestCompareIssues/identical_issues (0.00s)
+    --- PASS: TestCompareIssues/different_title (0.00s)
+    --- PASS: TestCompareIssues/different_description (0.00s)
+    --- PASS: TestCompareIssues/different_status (0.00s)
+    --- PASS: TestCompareIssues/different_priority (0.00s)
+    --- PASS: TestCompareIssues/different_assignee (0.00s)
+    --- PASS: TestCompareIssues/multiple_differences (0.00s)
+=== RUN   TestHashIssueContent
+--- PASS: TestHashIssueContent (0.00s)
+=== RUN   TestHashIssueContentWithExternalRef
+--- PASS: TestHashIssueContentWithExternalRef (0.00s)
+=== RUN   TestAddIssueComment
+--- PASS: TestAddIssueComment (0.04s)
+=== RUN   TestAddIssueCommentNonexistentIssue
+--- PASS: TestAddIssueCommentNonexistentIssue (0.04s)
+=== RUN   TestGetIssueComments
+--- PASS: TestGetIssueComments (0.04s)
+=== RUN   TestGetIssueCommentsOrdering
+--- PASS: TestGetIssueCommentsOrdering (0.04s)
+=== RUN   TestGetIssueCommentsEmpty
+--- PASS: TestGetIssueCommentsEmpty (0.04s)
+=== RUN   TestGetIssueCommentsNonexistentIssue
+--- PASS: TestGetIssueCommentsNonexistentIssue (0.04s)
+=== RUN   TestAddIssueCommentEmptyText
+--- PASS: TestAddIssueCommentEmptyText (0.04s)
+=== RUN   TestAddIssueCommentMarksDirty
+--- PASS: TestAddIssueCommentMarksDirty (0.04s)
+=== RUN   TestGetIssueCommentsMultipleIssues
+--- PASS: TestGetIssueCommentsMultipleIssues (0.05s)
+=== RUN   TestGetTier1Candidates
+--- PASS: TestGetTier1Candidates (0.05s)
+=== RUN   TestGetTier2Candidates
+--- PASS: TestGetTier2Candidates (0.07s)
+=== RUN   TestCheckEligibilityTier1
+--- PASS: TestCheckEligibilityTier1 (0.05s)
+=== RUN   TestCheckEligibilityOpenIssue
+--- PASS: TestCheckEligibilityOpenIssue (0.04s)
+=== RUN   TestCheckEligibilityAlreadyCompacted
+--- PASS: TestCheckEligibilityAlreadyCompacted (0.04s)
+=== RUN   TestTier1NoCircularDeps
+--- PASS: TestTier1NoCircularDeps (0.05s)
+=== RUN   TestApplyCompaction
+--- PASS: TestApplyCompaction (0.05s)
+=== RUN   TestApplyCompactionNotFound
+--- PASS: TestApplyCompactionNotFound (0.04s)
+=== RUN   TestDetectCyclesSimple
+--- PASS: TestDetectCyclesSimple (0.05s)
+=== RUN   TestDetectCyclesComplex
+--- PASS: TestDetectCyclesComplex (0.05s)
+=== RUN   TestDetectCyclesSelfLoop
+--- PASS: TestDetectCyclesSelfLoop (0.34s)
+=== RUN   TestDetectCyclesMultipleIndependent
+--- PASS: TestDetectCyclesMultipleIndependent (0.05s)
+=== RUN   TestDetectCyclesAcyclicGraph
+--- PASS: TestDetectCyclesAcyclicGraph (0.05s)
+=== RUN   TestDetectCyclesEmptyGraph
+--- PASS: TestDetectCyclesEmptyGraph (0.05s)
+=== RUN   TestDetectCyclesSingleNode
+--- PASS: TestDetectCyclesSingleNode (0.05s)
+=== RUN   TestDetectCyclesDiamond
+--- PASS: TestDetectCyclesDiamond (0.05s)
+=== RUN   TestDetectCyclesLongCycle
+--- PASS: TestDetectCyclesLongCycle (0.05s)
+=== RUN   TestDetectCyclesMixedTypes
+--- PASS: TestDetectCyclesMixedTypes (0.05s)
+=== RUN   TestDetectCyclesRelatesToNotACycle
+--- PASS: TestDetectCyclesRelatesToNotACycle (0.04s)
+=== RUN   TestDetectCyclesRelatesToWithOtherCycle
+--- PASS: TestDetectCyclesRelatesToWithOtherCycle (0.05s)
+=== RUN   TestDeleteIssues
+=== RUN   TestDeleteIssues/delete_non-existent_issue
+=== RUN   TestDeleteIssues/delete_with_dependents_-_should_fail_without_force_or_cascade
+=== RUN   TestDeleteIssues/delete_with_cascade_-_should_delete_all_dependents
+=== RUN   TestDeleteIssues/delete_with_force_-_should_orphan_dependents
+=== RUN   TestDeleteIssues/dry_run_-_should_not_delete
+=== RUN   TestDeleteIssues/delete_multiple_issues_at_once
+--- PASS: TestDeleteIssues (0.08s)
+    --- PASS: TestDeleteIssues/delete_non-existent_issue (0.01s)
+    --- PASS: TestDeleteIssues/delete_with_dependents_-_should_fail_without_force_or_cascade (0.01s)
+    --- PASS: TestDeleteIssues/delete_with_cascade_-_should_delete_all_dependents (0.01s)
+    --- PASS: TestDeleteIssues/delete_with_force_-_should_orphan_dependents (0.01s)
+    --- PASS: TestDeleteIssues/dry_run_-_should_not_delete (0.01s)
+    --- PASS: TestDeleteIssues/delete_multiple_issues_at_once (0.01s)
+=== RUN   TestDeleteIssue
+--- PASS: TestDeleteIssue (0.01s)
+=== RUN   TestDeleteIssueWithComments
+--- PASS: TestDeleteIssueWithComments (0.01s)
+=== RUN   TestBuildIDSet
+--- PASS: TestBuildIDSet (0.00s)
+=== RUN   TestBuildSQLInClause
+--- PASS: TestBuildSQLInClause (0.00s)
+=== RUN   TestAddDependency
+--- PASS: TestAddDependency (0.05s)
+=== RUN   TestAddDependencyDiscoveredFrom
+--- PASS: TestAddDependencyDiscoveredFrom (0.05s)
+=== RUN   TestParentChildValidation
+--- PASS: TestParentChildValidation (0.05s)
+=== RUN   TestRemoveDependency
+--- PASS: TestRemoveDependency (0.05s)
+=== RUN   TestAddDependencyPreservesProvidedMetadata
+--- PASS: TestAddDependencyPreservesProvidedMetadata (0.05s)
+=== RUN   TestGetDependents
+--- PASS: TestGetDependents (0.05s)
+=== RUN   TestGetDependencyTree
+--- PASS: TestGetDependencyTree (0.05s)
+=== RUN   TestGetDependencyTree_TruncationDepth
+--- PASS: TestGetDependencyTree_TruncationDepth (0.05s)
+=== RUN   TestGetDependencyTree_DefaultDepth
+--- PASS: TestGetDependencyTree_DefaultDepth (0.04s)
+=== RUN   TestGetDependencyTree_MaxDepthOne
+--- PASS: TestGetDependencyTree_MaxDepthOne (0.05s)
+=== RUN   TestDetectCycles
+--- PASS: TestDetectCycles (0.05s)
+=== RUN   TestNoCyclesDetected
+--- PASS: TestNoCyclesDetected (0.05s)
+=== RUN   TestCrossTypeCyclePrevention
+--- PASS: TestCrossTypeCyclePrevention (0.04s)
+=== RUN   TestCrossTypeCyclePreventionDiscoveredFrom
+--- PASS: TestCrossTypeCyclePreventionDiscoveredFrom (0.04s)
+=== RUN   TestSelfDependencyPrevention
+--- PASS: TestSelfDependencyPrevention (0.05s)
+=== RUN   TestRelatedTypeCyclePrevention
+--- PASS: TestRelatedTypeCyclePrevention (0.05s)
+=== RUN   TestMixedTypeRelatedCyclePrevention
+--- PASS: TestMixedTypeRelatedCyclePrevention (0.04s)
+=== RUN   TestCrossTypeCyclePreventionThreeIssues
+--- PASS: TestCrossTypeCyclePreventionThreeIssues (0.05s)
+=== RUN   TestGetDependencyTree_Reverse
+--- PASS: TestGetDependencyTree_Reverse (0.05s)
+=== RUN   TestGetDependencyTree_SubstringBug
+--- PASS: TestGetDependencyTree_SubstringBug (0.05s)
+=== RUN   TestGetDependencyCounts
+--- PASS: TestGetDependencyCounts (0.05s)
+=== RUN   TestGetDependencyCountsEmpty
+--- PASS: TestGetDependencyCountsEmpty (0.04s)
+=== RUN   TestGetDependencyCountsNonexistent
+--- PASS: TestGetDependencyCountsNonexistent (0.04s)
+=== RUN   TestGetDependenciesWithMetadata
+--- PASS: TestGetDependenciesWithMetadata (0.05s)
+=== RUN   TestGetDependentsWithMetadata
+--- PASS: TestGetDependentsWithMetadata (0.05s)
+=== RUN   TestGetDependenciesWithMetadataEmpty
+--- PASS: TestGetDependenciesWithMetadataEmpty (0.06s)
+=== RUN   TestGetDependenciesWithMetadataMultipleTypes
+--- PASS: TestGetDependenciesWithMetadataMultipleTypes (0.05s)
+=== RUN   TestGetDependencyTree_ComplexDiamond
+--- PASS: TestGetDependencyTree_ComplexDiamond (0.05s)
+=== RUN   TestGetDependencyTree_ShowAllPaths
+--- PASS: TestGetDependencyTree_ShowAllPaths (0.05s)
+=== RUN   TestGetDependencyTree_ReverseDirection
+--- PASS: TestGetDependencyTree_ReverseDirection (0.05s)
+=== RUN   TestDetectCycles_PreventionAtAddTime
+--- PASS: TestDetectCycles_PreventionAtAddTime (0.05s)
+=== RUN   TestDetectCycles_LongerCyclePrevention
+--- PASS: TestDetectCycles_LongerCyclePrevention (0.05s)
+=== RUN   TestDetectCycles_MultipleGraphs
+--- PASS: TestDetectCycles_MultipleGraphs (0.05s)
+=== RUN   TestDetectCycles_RelatesTypeAllowsBidirectionalWithoutCycleReport
+--- PASS: TestDetectCycles_RelatesTypeAllowsBidirectionalWithoutCycleReport (0.05s)
+=== RUN   TestRemoveDependencyExternal
+--- PASS: TestRemoveDependencyExternal (0.05s)
+=== RUN   TestGetDependencyTreeExternalDeps
+--- PASS: TestGetDependencyTreeExternalDeps (0.05s)
+=== RUN   TestCycleDetectionWithExternalRefs
+--- PASS: TestCycleDetectionWithExternalRefs (0.05s)
+=== RUN   TestGetDirtyIssueSnapshotsRoundTrip
+--- PASS: TestGetDirtyIssueSnapshotsRoundTrip (0.04s)
+=== RUN   TestClearDirtyIssuesIfUnchangedKeepsRemarkedIssue
+--- PASS: TestClearDirtyIssuesIfUnchangedKeepsRemarkedIssue (0.05s)
+=== RUN   TestClearDirtyIssuesIfUnchangedIgnoresStaleSnapshot
+--- PASS: TestClearDirtyIssuesIfUnchangedIgnoresStaleSnapshot (0.04s)
+=== RUN   TestClearDirtyIssuesIfUnchangedEmpty
+--- PASS: TestClearDirtyIssuesIfUnchangedEmpty (0.05s)
+=== RUN   TestPublishClearsDirtyIssuesEndToEnd
+--- PASS: TestPublishClearsDirtyIssuesEndToEnd (0.05s)
+=== RUN   TestMarkIssueDirty
+--- PASS: TestMarkIssueDirty (0.05s)
+=== RUN   TestMarkIssuesDirty
+--- PASS: TestMarkIssuesDirty (0.04s)
+=== RUN   TestMarkIssuesDirtyEmpty
+--- PASS: TestMarkIssuesDirtyEmpty (0.04s)
+=== RUN   TestGetDirtyIssueCount
+--- PASS: TestGetDirtyIssueCount (0.04s)
+=== RUN   TestClearDirtyIssuesByID
+--- PASS: TestClearDirtyIssuesByID (0.04s)
+=== RUN   TestClearDirtyIssuesByIDEmpty
+--- PASS: TestClearDirtyIssuesByIDEmpty (0.05s)
+=== RUN   TestDirtyIssuesOrdering
+--- PASS: TestDirtyIssuesOrdering (0.07s)
+=== RUN   TestDirtyIssuesUpdateTimestamp
+--- PASS: TestDirtyIssuesUpdateTimestamp (0.09s)
+=== RUN   TestGetEpicsEligibleForClosure
+--- PASS: TestGetEpicsEligibleForClosure (0.05s)
+=== RUN   TestGetEpicsEligibleForClosureWithNoChildren
+--- PASS: TestGetEpicsEligibleForClosureWithNoChildren (0.04s)
+=== RUN   TestGetParentEpics
+--- PASS: TestGetParentEpics (0.05s)
+=== RUN   TestIsEpicEligibleForClosure
+--- PASS: TestIsEpicEligibleForClosure (0.05s)
+=== RUN   TestIsEpicEligibleForClosureNoChildren
+--- PASS: TestIsEpicEligibleForClosureNoChildren (0.04s)
+=== RUN   TestWrapDBError
+=== RUN   TestWrapDBError/nil_error_returns_nil
+=== RUN   TestWrapDBError/sql.ErrNoRows_converted_to_ErrNotFound
+=== RUN   TestWrapDBError/generic_error_wrapped_with_context
+=== RUN   TestWrapDBError/already_wrapped_error_preserved
+--- PASS: TestWrapDBError (0.00s)
+    --- PASS: TestWrapDBError/nil_error_returns_nil (0.00s)
+    --- PASS: TestWrapDBError/sql.ErrNoRows_converted_to_ErrNotFound (0.00s)
+    --- PASS: TestWrapDBError/generic_error_wrapped_with_context (0.00s)
+    --- PASS: TestWrapDBError/already_wrapped_error_preserved (0.00s)
+=== RUN   TestWrapDBErrorf
+=== RUN   TestWrapDBErrorf/nil_error_returns_nil
+=== RUN   TestWrapDBErrorf/sql.ErrNoRows_converted_to_ErrNotFound_with_formatting
+=== RUN   TestWrapDBErrorf/generic_error_with_formatted_context
+=== RUN   TestWrapDBErrorf/multiple_format_args
+--- PASS: TestWrapDBErrorf (0.00s)
+    --- PASS: TestWrapDBErrorf/nil_error_returns_nil (0.00s)
+    --- PASS: TestWrapDBErrorf/sql.ErrNoRows_converted_to_ErrNotFound_with_formatting (0.00s)
+    --- PASS: TestWrapDBErrorf/generic_error_with_formatted_context (0.00s)
+    --- PASS: TestWrapDBErrorf/multiple_format_args (0.00s)
+=== RUN   TestSentinelErrors
+=== RUN   TestSentinelErrors/ErrNotFound_detected_by_IsNotFound
+=== RUN   TestSentinelErrors/wrapped_ErrNotFound_detected
+=== RUN   TestSentinelErrors/other_error_not_detected_as_ErrNotFound
+=== RUN   TestSentinelErrors/ErrConflict_detected_by_IsConflict
+=== RUN   TestSentinelErrors/wrapped_ErrConflict_detected
+=== RUN   TestSentinelErrors/ErrCycle_detected_by_IsCycle
+=== RUN   TestSentinelErrors/wrapped_ErrCycle_detected
+--- PASS: TestSentinelErrors (0.00s)
+    --- PASS: TestSentinelErrors/ErrNotFound_detected_by_IsNotFound (0.00s)
+    --- PASS: TestSentinelErrors/wrapped_ErrNotFound_detected (0.00s)
+    --- PASS: TestSentinelErrors/other_error_not_detected_as_ErrNotFound (0.00s)
+    --- PASS: TestSentinelErrors/ErrConflict_detected_by_IsConflict (0.00s)
+    --- PASS: TestSentinelErrors/wrapped_ErrConflict_detected (0.00s)
+    --- PASS: TestSentinelErrors/ErrCycle_detected_by_IsCycle (0.00s)
+    --- PASS: TestSentinelErrors/wrapped_ErrCycle_detected (0.00s)
+=== RUN   TestErrorChaining
+--- PASS: TestErrorChaining (0.00s)
+=== RUN   TestSQLErrNoRowsConversion
+--- PASS: TestSQLErrNoRowsConversion (0.00s)
+=== RUN   TestAddComment
+--- PASS: TestAddComment (0.04s)
+=== RUN   TestAddMultipleComments
+--- PASS: TestAddMultipleComments (0.04s)
+=== RUN   TestGetEventsWithLimit
+--- PASS: TestGetEventsWithLimit (0.05s)
+=== RUN   TestGetEventsEmpty
+--- PASS: TestGetEventsEmpty (0.04s)
+=== RUN   TestAddCommentMarksDirty
+--- PASS: TestAddCommentMarksDirty (0.04s)
+=== RUN   TestAddCommentUpdatesTimestamp
+--- PASS: TestAddCommentUpdatesTimestamp (0.05s)
+=== RUN   TestEventTypesInHistory
+--- PASS: TestEventTypesInHistory (0.05s)
+=== RUN   TestAddCommentNotFound
+--- PASS: TestAddCommentNotFound (0.04s)
+=== RUN   TestGetIssueByExternalRef
+--- PASS: TestGetIssueByExternalRef (0.05s)
+=== RUN   TestGetIssueByExternalRefNotFound
+--- PASS: TestGetIssueByExternalRefNotFound (0.04s)
+=== RUN   TestDetectCollisionsWithExternalRef
+--- PASS: TestDetectCollisionsWithExternalRef (0.04s)
+=== RUN   TestDetectCollisionsExternalRefPriorityOverID
+--- PASS: TestDetectCollisionsExternalRefPriorityOverID (0.04s)
+=== RUN   TestDetectCollisionsNoExternalRef
+--- PASS: TestDetectCollisionsNoExternalRef (0.05s)
+=== RUN   TestExternalRefIndex
+--- PASS: TestExternalRefIndex (0.05s)
+=== RUN   TestExternalRefIndexUsage
+--- PASS: TestExternalRefIndexUsage (0.05s)
+=== RUN   TestExternalInsertDetection
+--- PASS: TestExternalInsertDetection (0.04s)
+=== RUN   TestExternalUpdateDetection
+--- PASS: TestExternalUpdateDetection (0.04s)
+=== RUN   TestExternalDeleteDetection
+--- PASS: TestExternalDeleteDetection (0.04s)
+=== RUN   TestDataVersionChanges
+--- PASS: TestDataVersionChanges (0.04s)
+=== RUN   TestDetectionTiming
+--- PASS: TestDetectionTiming (0.05s)
+=== RUN   TestSameConnectionStaleness
+--- PASS: TestSameConnectionStaleness (0.05s)
+=== RUN   TestPooledConnectionStaleness
+--- PASS: TestPooledConnectionStaleness (0.05s)
+=== RUN   TestDatabaseFileReplacement
+    freshness_test.go:462: Branch issue ID: bd-0xa
+    freshness_test.go:469: Branch issue verified in branch store: Branch Issue
+    freshness_test.go:484: Branch issue verified in branch db after close
+    freshness_test.go:491: Before replacement: daemon db=4096 bytes, branch db=270336 bytes, inode=3409363
+    freshness_test.go:506: Read 270336 bytes from branch db
+    freshness_test.go:520: Atomically replaced daemon db (via rename)
+    freshness_test.go:524: Inode changed: 3409363 -> 3409368 (should be different!)
+    freshness_test.go:547: SUCCESS: Branch issue visible in replaced db via independent connection
+    freshness_test.go:563: DB file after replacement: mtime=2026-08-05 15:36:43.06433666 +0200 CEST size=270336
+    freshness_test.go:567: Freshness checker enabled: true
+    freshness_test.go:569: Freshness tracked state: inode=3409363, mtime=2026-08-05 15:36:42.937336825 +0200 CEST, size=4096
+    freshness_test.go:572: Current file state: mtime=2026-08-05 15:36:43.06433666 +0200 CEST, size=270336
+--- PASS: TestDatabaseFileReplacement (0.24s)
+=== RUN   TestBranchMergeNoErroneousDeletion
+    freshness_test.go:680: Created issue A on main: bd-1ma
+    freshness_test.go:722: Created issue B on branch: bd-5ds
+    freshness_test.go:738: Daemon sees 1 issue(s) before merge
+    freshness_test.go:765: Merge simulation: inode 3409363 -> 3409368
+    freshness_test.go:777: Issue A visible after merge: Issue A (existed on main)
+    freshness_test.go:784: Issue B visible after merge: Issue B (created on branch)
+    freshness_test.go:788: Daemon sees 2 issue(s) after merge
+--- PASS: TestBranchMergeNoErroneousDeletion (0.22s)
+=== RUN   TestConcurrentReadsWithReconnect
+    freshness_test.go:950: Completed 50 goroutines × 100 ops with 0 db closed errors, 0 other errors
+--- PASS: TestConcurrentReadsWithReconnect (2.04s)
+=== RUN   TestRelatesTo
+--- PASS: TestRelatesTo (0.05s)
+=== RUN   TestRelatesTo_MultipleLinks
+--- PASS: TestRelatesTo_MultipleLinks (0.05s)
+=== RUN   TestDuplicateOf
+--- PASS: TestDuplicateOf (0.05s)
+=== RUN   TestSupersededBy
+--- PASS: TestSupersededBy (0.05s)
+=== RUN   TestRepliesTo
+--- PASS: TestRepliesTo (0.05s)
+=== RUN   TestRepliesTo_Chain
+--- PASS: TestRepliesTo_Chain (0.05s)
+=== RUN   TestWispField
+--- PASS: TestWispField (0.05s)
+=== RUN   TestWispFilter
+--- PASS: TestWispFilter (0.05s)
+=== RUN   TestSenderField
+--- PASS: TestSenderField (0.05s)
+=== RUN   TestMessageType
+--- PASS: TestMessageType (0.05s)
+=== RUN   TestHashIDGeneration
+--- PASS: TestHashIDGeneration (0.01s)
+=== RUN   TestHashIDDeterministic
+--- PASS: TestHashIDDeterministic (0.00s)
+=== RUN   TestHashIDCollisionHandling
+--- PASS: TestHashIDCollisionHandling (0.01s)
+=== RUN   TestHashIDBatchCreation
+--- PASS: TestHashIDBatchCreation (0.01s)
+=== RUN   TestIsHierarchicalID
+=== RUN   TestIsHierarchicalID/simple_child_.1
+=== RUN   TestIsHierarchicalID/child_.2
+=== RUN   TestIsHierarchicalID/multi-digit_child_.10
+=== RUN   TestIsHierarchicalID/large_child_number_.999
+=== RUN   TestIsHierarchicalID/nested_hierarchical
+=== RUN   TestIsHierarchicalID/simple_top-level
+=== RUN   TestIsHierarchicalID/no_dot_at_all
+=== RUN   TestIsHierarchicalID/prefix_with_dot_-_my.project
+=== RUN   TestIsHierarchicalID/prefix_with_multiple_dots
+=== RUN   TestIsHierarchicalID/prefix_with_dot_AND_hierarchical_child
+=== RUN   TestIsHierarchicalID/complex_prefix_with_hierarchical
+=== RUN   TestIsHierarchicalID/dot_but_non-numeric_suffix
+=== RUN   TestIsHierarchicalID/mixed_suffix_(starts_with_digit)
+=== RUN   TestIsHierarchicalID/trailing_dot_only
+=== RUN   TestIsHierarchicalID/empty_after_dot
+=== RUN   TestIsHierarchicalID/child_0
+--- PASS: TestIsHierarchicalID (0.00s)
+    --- PASS: TestIsHierarchicalID/simple_child_.1 (0.00s)
+    --- PASS: TestIsHierarchicalID/child_.2 (0.00s)
+    --- PASS: TestIsHierarchicalID/multi-digit_child_.10 (0.00s)
+    --- PASS: TestIsHierarchicalID/large_child_number_.999 (0.00s)
+    --- PASS: TestIsHierarchicalID/nested_hierarchical (0.00s)
+    --- PASS: TestIsHierarchicalID/simple_top-level (0.00s)
+    --- PASS: TestIsHierarchicalID/no_dot_at_all (0.00s)
+    --- PASS: TestIsHierarchicalID/prefix_with_dot_-_my.project (0.00s)
+    --- PASS: TestIsHierarchicalID/prefix_with_multiple_dots (0.00s)
+    --- PASS: TestIsHierarchicalID/prefix_with_dot_AND_hierarchical_child (0.00s)
+    --- PASS: TestIsHierarchicalID/complex_prefix_with_hierarchical (0.00s)
+    --- PASS: TestIsHierarchicalID/dot_but_non-numeric_suffix (0.00s)
+    --- PASS: TestIsHierarchicalID/mixed_suffix_(starts_with_digit) (0.00s)
+    --- PASS: TestIsHierarchicalID/trailing_dot_only (0.00s)
+    --- PASS: TestIsHierarchicalID/empty_after_dot (0.00s)
+    --- PASS: TestIsHierarchicalID/child_0 (0.00s)
+=== RUN   TestAddLabel
+--- PASS: TestAddLabel (0.05s)
+=== RUN   TestAddMultipleLabels
+--- PASS: TestAddMultipleLabels (0.05s)
+=== RUN   TestAddDuplicateLabel
+--- PASS: TestAddDuplicateLabel (0.05s)
+=== RUN   TestRemoveLabel
+--- PASS: TestRemoveLabel (0.05s)
+=== RUN   TestRemoveNonexistentLabel
+--- PASS: TestRemoveNonexistentLabel (0.04s)
+=== RUN   TestGetLabelsEmpty
+--- PASS: TestGetLabelsEmpty (0.04s)
+=== RUN   TestGetIssuesByLabel
+--- PASS: TestGetIssuesByLabel (0.04s)
+=== RUN   TestGetIssuesByLabelEmpty
+--- PASS: TestGetIssuesByLabelEmpty (0.04s)
+=== RUN   TestLabelMarksDirty
+--- PASS: TestLabelMarksDirty (0.04s)
+=== RUN   TestCaptureSnapshot
+--- PASS: TestCaptureSnapshot (0.01s)
+=== RUN   TestCheckRequiredConfig
+--- PASS: TestCheckRequiredConfig (0.01s)
+=== RUN   TestCheckForeignKeys
+--- PASS: TestCheckForeignKeys (0.01s)
+=== RUN   TestCheckIssueCount
+--- PASS: TestCheckIssueCount (0.01s)
+=== RUN   TestVerifyInvariants
+--- PASS: TestVerifyInvariants (0.01s)
+=== RUN   TestGetInvariantNames
+--- PASS: TestGetInvariantNames (0.00s)
+=== RUN   TestMigrateDirtyIssuesTable
+=== RUN   TestMigrateDirtyIssuesTable/creates_dirty_issues_table_if_not_exists
+=== RUN   TestMigrateDirtyIssuesTable/adds_content_hash_column_to_existing_table
+--- PASS: TestMigrateDirtyIssuesTable (0.09s)
+    --- PASS: TestMigrateDirtyIssuesTable/creates_dirty_issues_table_if_not_exists (0.04s)
+    --- PASS: TestMigrateDirtyIssuesTable/adds_content_hash_column_to_existing_table (0.05s)
+=== RUN   TestMigrateExternalRefColumn
+--- PASS: TestMigrateExternalRefColumn (0.05s)
+=== RUN   TestMigrateCompositeIndexes
+--- PASS: TestMigrateCompositeIndexes (0.04s)
+=== RUN   TestMigrateClosedAtConstraint
+--- PASS: TestMigrateClosedAtConstraint (0.05s)
+=== RUN   TestMigrateCompactionColumns
+--- PASS: TestMigrateCompactionColumns (0.05s)
+=== RUN   TestMigrateSnapshotsTable
+--- PASS: TestMigrateSnapshotsTable (0.05s)
+=== RUN   TestMigrateCompactionConfig
+--- PASS: TestMigrateCompactionConfig (0.05s)
+=== RUN   TestMigrateCompactedAtCommitColumn
+--- PASS: TestMigrateCompactedAtCommitColumn (0.05s)
+=== RUN   TestMigrateExportHashesTable
+--- PASS: TestMigrateExportHashesTable (0.04s)
+=== RUN   TestMigrateExternalRefUnique
+=== RUN   TestMigrateExternalRefUnique/creates_unique_index_on_external_ref
+=== RUN   TestMigrateExternalRefUnique/fails_if_duplicates_exist
+--- PASS: TestMigrateExternalRefUnique (0.09s)
+    --- PASS: TestMigrateExternalRefUnique/creates_unique_index_on_external_ref (0.04s)
+    --- PASS: TestMigrateExternalRefUnique/fails_if_duplicates_exist (0.04s)
+=== RUN   TestMigrateRepoMtimesTable
+=== RUN   TestMigrateRepoMtimesTable/creates_repo_mtimes_table_if_not_exists
+=== RUN   TestMigrateRepoMtimesTable/is_idempotent
+--- PASS: TestMigrateRepoMtimesTable (0.09s)
+    --- PASS: TestMigrateRepoMtimesTable/creates_repo_mtimes_table_if_not_exists (0.04s)
+    --- PASS: TestMigrateRepoMtimesTable/is_idempotent (0.04s)
+=== RUN   TestMigrateContentHashColumn
+=== RUN   TestMigrateContentHashColumn/adds_content_hash_column_if_missing
+=== RUN   TestMigrateContentHashColumn/populates_content_hash_for_existing_issues
+--- PASS: TestMigrateContentHashColumn (0.09s)
+    --- PASS: TestMigrateContentHashColumn/adds_content_hash_column_if_missing (0.04s)
+    --- PASS: TestMigrateContentHashColumn/populates_content_hash_for_existing_issues (0.05s)
+=== RUN   TestMigrateOrphanDetection
+=== RUN   TestMigrateOrphanDetection/detects_orphaned_child_issues
+2026/08/05 15:36:47 ⚠️  Orphan Detection: Found 1 orphaned child issue(s):
+2026/08/05 15:36:47   - bd-missing.1
+2026/08/05 15:36:47 
+These issues have hierarchical IDs but their parent issues no longer exist.
+2026/08/05 15:36:47 You can:
+2026/08/05 15:36:47   1. Delete them if no longer needed: bd delete <issue-id>
+2026/08/05 15:36:47   2. Convert to top-level issues by exporting and reimporting with new IDs
+2026/08/05 15:36:47   3. Restore the missing parent issues
+=== RUN   TestMigrateOrphanDetection/no_orphans_found_in_clean_database
+=== RUN   TestMigrateOrphanDetection/is_idempotent
+=== RUN   TestMigrateOrphanDetection/prefix_with_dots_is_not_flagged_as_orphan
+--- PASS: TestMigrateOrphanDetection (0.18s)
+    --- PASS: TestMigrateOrphanDetection/detects_orphaned_child_issues (0.04s)
+    --- PASS: TestMigrateOrphanDetection/no_orphans_found_in_clean_database (0.04s)
+    --- PASS: TestMigrateOrphanDetection/is_idempotent (0.04s)
+    --- PASS: TestMigrateOrphanDetection/prefix_with_dots_is_not_flagged_as_orphan (0.04s)
+=== RUN   TestExpandTilde
+=== RUN   TestExpandTilde/no_tilde
+=== RUN   TestExpandTilde/tilde_alone
+=== RUN   TestExpandTilde/tilde_with_path
+=== RUN   TestExpandTilde/relative_path
+--- PASS: TestExpandTilde (0.00s)
+    --- PASS: TestExpandTilde/no_tilde (0.00s)
+    --- PASS: TestExpandTilde/tilde_alone (0.00s)
+    --- PASS: TestExpandTilde/tilde_with_path (0.00s)
+    --- PASS: TestExpandTilde/relative_path (0.00s)
+=== RUN   TestHydrateFromMultiRepo
+=== RUN   TestHydrateFromMultiRepo/single-repo_mode_returns_nil
+=== RUN   TestHydrateFromMultiRepo/hydrates_from_primary_repo
+=== RUN   TestHydrateFromMultiRepo/uses_mtime_caching_to_skip_unchanged_files
+=== RUN   TestHydrateFromMultiRepo/imports_additional_repos
+--- PASS: TestHydrateFromMultiRepo (0.23s)
+    --- PASS: TestHydrateFromMultiRepo/single-repo_mode_returns_nil (0.05s)
+    --- PASS: TestHydrateFromMultiRepo/hydrates_from_primary_repo (0.09s)
+    --- PASS: TestHydrateFromMultiRepo/uses_mtime_caching_to_skip_unchanged_files (0.05s)
+    --- PASS: TestHydrateFromMultiRepo/imports_additional_repos (0.05s)
+=== RUN   TestImportJSONLFile
+=== RUN   TestImportJSONLFile/imports_issues_with_dependencies_and_labels
+--- PASS: TestImportJSONLFile (0.05s)
+    --- PASS: TestImportJSONLFile/imports_issues_with_dependencies_and_labels (0.05s)
+=== RUN   TestImportJSONLFileOutOfOrderDeps
+=== RUN   TestImportJSONLFileOutOfOrderDeps/handles_out-of-order_dependencies
+=== RUN   TestImportJSONLFileOutOfOrderDeps/detects_orphaned_dependencies_in_corrupted_data
+--- PASS: TestImportJSONLFileOutOfOrderDeps (0.09s)
+    --- PASS: TestImportJSONLFileOutOfOrderDeps/handles_out-of-order_dependencies (0.04s)
+    --- PASS: TestImportJSONLFileOutOfOrderDeps/detects_orphaned_dependencies_in_corrupted_data (0.04s)
+=== RUN   TestDeleteIssuesBySourceRepo
+=== RUN   TestDeleteIssuesBySourceRepo/deletes_all_issues_from_specified_repo
+=== RUN   TestDeleteIssuesBySourceRepo/returns_0_when_no_issues_match
+=== RUN   TestDeleteIssuesBySourceRepo/cleans_up_related_data
+--- PASS: TestDeleteIssuesBySourceRepo (0.13s)
+    --- PASS: TestDeleteIssuesBySourceRepo/deletes_all_issues_from_specified_repo (0.04s)
+    --- PASS: TestDeleteIssuesBySourceRepo/returns_0_when_no_issues_match (0.05s)
+    --- PASS: TestDeleteIssuesBySourceRepo/cleans_up_related_data (0.04s)
+=== RUN   TestClearRepoMtime
+=== RUN   TestClearRepoMtime/clears_mtime_cache_for_repo
+=== RUN   TestClearRepoMtime/handles_non-existent_repo_gracefully
+--- PASS: TestClearRepoMtime (0.09s)
+    --- PASS: TestClearRepoMtime/clears_mtime_cache_for_repo (0.04s)
+    --- PASS: TestClearRepoMtime/handles_non-existent_repo_gracefully (0.04s)
+=== RUN   TestExportToMultiRepo
+=== RUN   TestExportToMultiRepo/returns_nil_in_single-repo_mode
+=== RUN   TestExportToMultiRepo/exports_issues_to_correct_repos
+--- PASS: TestExportToMultiRepo (0.09s)
+    --- PASS: TestExportToMultiRepo/returns_nil_in_single-repo_mode (0.04s)
+    --- PASS: TestExportToMultiRepo/exports_issues_to_correct_repos (0.04s)
+=== RUN   TestOrphanHandling_Strict
+--- PASS: TestOrphanHandling_Strict (0.04s)
+=== RUN   TestOrphanHandling_Resurrect
+--- PASS: TestOrphanHandling_Resurrect (0.04s)
+=== RUN   TestOrphanHandling_Skip
+--- PASS: TestOrphanHandling_Skip (0.04s)
+=== RUN   TestOrphanHandling_Allow
+--- PASS: TestOrphanHandling_Allow (0.04s)
+=== RUN   TestOrphanHandling_Config
+=== RUN   TestOrphanHandling_Config/strict_mode
+=== RUN   TestOrphanHandling_Config/resurrect_mode
+=== RUN   TestOrphanHandling_Config/skip_mode
+=== RUN   TestOrphanHandling_Config/allow_mode
+=== RUN   TestOrphanHandling_Config/empty_defaults_to_allow
+=== RUN   TestOrphanHandling_Config/invalid_defaults_to_allow
+--- PASS: TestOrphanHandling_Config (0.04s)
+    --- PASS: TestOrphanHandling_Config/strict_mode (0.00s)
+    --- PASS: TestOrphanHandling_Config/resurrect_mode (0.00s)
+    --- PASS: TestOrphanHandling_Config/skip_mode (0.00s)
+    --- PASS: TestOrphanHandling_Config/allow_mode (0.00s)
+    --- PASS: TestOrphanHandling_Config/empty_defaults_to_allow (0.00s)
+    --- PASS: TestOrphanHandling_Config/invalid_defaults_to_allow (0.00s)
+=== RUN   TestOrphanHandling_PrefixWithDots
+--- PASS: TestOrphanHandling_PrefixWithDots (0.04s)
+=== RUN   TestOrphanHandling_PrefixWithDotsAndChild
+--- PASS: TestOrphanHandling_PrefixWithDotsAndChild (0.04s)
+=== RUN   TestOrphanHandling_PrefixWithDotsOrphanChild
+--- PASS: TestOrphanHandling_PrefixWithDotsOrphanChild (0.04s)
+=== RUN   TestOrphanHandling_NonHierarchical
+=== RUN   TestOrphanHandling_NonHierarchical/strict
+=== RUN   TestOrphanHandling_NonHierarchical/resurrect
+=== RUN   TestOrphanHandling_NonHierarchical/skip
+=== RUN   TestOrphanHandling_NonHierarchical/allow
+--- PASS: TestOrphanHandling_NonHierarchical (0.05s)
+    --- PASS: TestOrphanHandling_NonHierarchical/strict (0.00s)
+    --- PASS: TestOrphanHandling_NonHierarchical/resurrect (0.00s)
+    --- PASS: TestOrphanHandling_NonHierarchical/skip (0.00s)
+    --- PASS: TestOrphanHandling_NonHierarchical/allow (0.00s)
+=== RUN   TestPrefixValidation
+=== RUN   TestPrefixValidation/valid_prefix_-_matches
+=== RUN   TestPrefixValidation/invalid_prefix_-_wrong_prefix
+=== RUN   TestPrefixValidation/invalid_prefix_-_no_dash
+=== RUN   TestPrefixValidation/invalid_prefix_-_empty
+--- PASS: TestPrefixValidation (0.04s)
+    --- PASS: TestPrefixValidation/valid_prefix_-_matches (0.00s)
+    --- PASS: TestPrefixValidation/invalid_prefix_-_wrong_prefix (0.00s)
+    --- PASS: TestPrefixValidation/invalid_prefix_-_no_dash (0.00s)
+    --- PASS: TestPrefixValidation/invalid_prefix_-_empty (0.00s)
+=== RUN   TestPrefixValidationBatch
+=== RUN   TestPrefixValidationBatch/all_valid_prefixes
+=== RUN   TestPrefixValidationBatch/one_invalid_prefix_in_batch
+=== RUN   TestPrefixValidationBatch/mixed_auto-generated_and_explicit
+=== RUN   TestPrefixValidationBatch/mixed_with_invalid_prefix
+--- PASS: TestPrefixValidationBatch (0.04s)
+    --- PASS: TestPrefixValidationBatch/all_valid_prefixes (0.00s)
+    --- PASS: TestPrefixValidationBatch/one_invalid_prefix_in_batch (0.00s)
+    --- PASS: TestPrefixValidationBatch/mixed_auto-generated_and_explicit (0.00s)
+    --- PASS: TestPrefixValidationBatch/mixed_with_invalid_prefix (0.00s)
+=== RUN   TestGetReadyWork
+--- PASS: TestGetReadyWork (0.05s)
+=== RUN   TestGetReadyWorkPriorityOrder
+--- PASS: TestGetReadyWorkPriorityOrder (0.04s)
+=== RUN   TestGetReadyWorkWithPriorityFilter
+--- PASS: TestGetReadyWorkWithPriorityFilter (0.04s)
+=== RUN   TestGetReadyWorkWithAssigneeFilter
+--- PASS: TestGetReadyWorkWithAssigneeFilter (0.04s)
+=== RUN   TestGetReadyWorkWithUnassignedFilter
+--- PASS: TestGetReadyWorkWithUnassignedFilter (0.04s)
+=== RUN   TestGetReadyWorkWithLimit
+--- PASS: TestGetReadyWorkWithLimit (0.05s)
+=== RUN   TestGetReadyWorkIgnoresRelatedDeps
+--- PASS: TestGetReadyWorkIgnoresRelatedDeps (0.05s)
+=== RUN   TestGetBlockedIssues
+--- PASS: TestGetBlockedIssues (0.05s)
+=== RUN   TestParentBlockerBlocksChildren
+--- PASS: TestParentBlockerBlocksChildren (0.05s)
+=== RUN   TestGrandparentBlockerBlocksGrandchildren
+--- PASS: TestGrandparentBlockerBlocksGrandchildren (0.05s)
+=== RUN   TestMultipleParentsOneBlocked
+--- PASS: TestMultipleParentsOneBlocked (0.05s)
+=== RUN   TestBlockerClosedUnblocksChildren
+--- PASS: TestBlockerClosedUnblocksChildren (0.06s)
+=== RUN   TestRelatedDoesNotPropagate
+--- PASS: TestRelatedDoesNotPropagate (0.05s)
+=== RUN   TestCompositeIndexExists
+--- PASS: TestCompositeIndexExists (0.04s)
+=== RUN   TestReadyIssuesViewMatchesGetReadyWork
+--- PASS: TestReadyIssuesViewMatchesGetReadyWork (0.05s)
+=== RUN   TestDeepHierarchyBlocking
+--- PASS: TestDeepHierarchyBlocking (0.12s)
+=== RUN   TestGetReadyWorkIncludesInProgress
+--- PASS: TestGetReadyWorkIncludesInProgress (0.05s)
+=== RUN   TestExplainQueryPlanReadyWork
+    ready_test.go:687: Query plan:
+    ready_test.go:689:   0: SEARCH i USING INDEX idx_issues_status_priority (status=?)
+    ready_test.go:689:   1: CORRELATED SCALAR SUBQUERY 4
+    ready_test.go:689:   2: CO-ROUTINE blocked_transitively
+    ready_test.go:689:   3: SETUP
+    ready_test.go:689:   4: CO-ROUTINE blocked_directly
+    ready_test.go:689:   5: SEARCH d USING INDEX idx_dependencies_type (type=?)
+    ready_test.go:689:   6: SEARCH blocker USING INDEX sqlite_autoindex_issues_1 (id=?)
+    ready_test.go:689:   7: USE TEMP B-TREE FOR DISTINCT
+    ready_test.go:689:   8: SCAN blocked_directly
+    ready_test.go:689:   9: RECURSIVE STEP
+    ready_test.go:689:   10: SEARCH d USING INDEX idx_dependencies_type (type=?)
+    ready_test.go:689:   11: SCAN bt
+    ready_test.go:689:   12: SEARCH blocked_transitively USING AUTOMATIC COVERING INDEX (issue_id=?)
+    ready_test.go:689:   13: USE TEMP B-TREE FOR ORDER BY
+--- PASS: TestExplainQueryPlanReadyWork (0.05s)
+=== RUN   TestSortPolicyPriority
+--- PASS: TestSortPolicyPriority (0.04s)
+=== RUN   TestSortPolicyOldest
+--- PASS: TestSortPolicyOldest (0.04s)
+=== RUN   TestSortPolicyHybrid
+--- PASS: TestSortPolicyHybrid (0.05s)
+=== RUN   TestSortPolicyDefault
+--- PASS: TestSortPolicyDefault (0.04s)
+=== RUN   TestGetReadyWorkExternalDeps
+    ready_test.go:979: External projects config: map[external-test:/tmp/beads-external-test-3414695865]
+    ready_test.go:982: Resolved path for 'external-test': /tmp/beads-external-test-3414695865
+    ready_test.go:992: Ready issue: bd-40s - Regular issue
+    ready_test.go:1030: Capability issue status: closed
+    ready_test.go:1032: Capability issue labels: [provides:test-capability]
+    ready_test.go:1040: Config database path: /tmp/beads-external-test-3414695865/.beads/beads.db
+    ready_test.go:1041: External DB path we created: /tmp/beads-external-test-3414695865/.beads/beads.db
+    ready_test.go:1046: External dep check: satisfied=true, reason=capability shipped
+--- PASS: TestGetReadyWorkExternalDeps (0.09s)
+=== RUN   TestGetReadyWorkNoExternalProjectsConfigured
+--- PASS: TestGetReadyWorkNoExternalProjectsConfigured (0.05s)
+=== RUN   TestGetBlockedIssuesFiltersExternalDeps
+--- PASS: TestGetBlockedIssuesFiltersExternalDeps (0.09s)
+=== RUN   TestGetBlockedIssuesPartialExternalDeps
+--- PASS: TestGetBlockedIssuesPartialExternalDeps (0.09s)
+=== RUN   TestCheckExternalDepNoBeadsDirectory
+--- PASS: TestCheckExternalDepNoBeadsDirectory (0.00s)
+=== RUN   TestCheckExternalDepInvalidFormats
+=== RUN   TestCheckExternalDepInvalidFormats/not_external_prefix
+=== RUN   TestCheckExternalDepInvalidFormats/missing_capability
+=== RUN   TestCheckExternalDepInvalidFormats/empty_project
+=== RUN   TestCheckExternalDepInvalidFormats/empty_capability
+=== RUN   TestCheckExternalDepInvalidFormats/only_external_prefix
+=== RUN   TestCheckExternalDepInvalidFormats/unconfigured_project
+--- PASS: TestCheckExternalDepInvalidFormats (0.00s)
+    --- PASS: TestCheckExternalDepInvalidFormats/not_external_prefix (0.00s)
+    --- PASS: TestCheckExternalDepInvalidFormats/missing_capability (0.00s)
+    --- PASS: TestCheckExternalDepInvalidFormats/empty_project (0.00s)
+    --- PASS: TestCheckExternalDepInvalidFormats/empty_capability (0.00s)
+    --- PASS: TestCheckExternalDepInvalidFormats/only_external_prefix (0.00s)
+    --- PASS: TestCheckExternalDepInvalidFormats/unconfigured_project (0.00s)
+=== RUN   TestRenameDependencyPrefix
+=== RUN   TestRenameDependencyPrefix/no_error_when_no_dependencies_exist
+=== RUN   TestRenameDependencyPrefix/function_executes_without_error_for_any_prefix
+--- PASS: TestRenameDependencyPrefix (0.09s)
+    --- PASS: TestRenameDependencyPrefix/no_error_when_no_dependencies_exist (0.04s)
+    --- PASS: TestRenameDependencyPrefix/function_executes_without_error_for_any_prefix (0.04s)
+=== RUN   TestTryResurrectParent_AlreadyExists
+--- PASS: TestTryResurrectParent_AlreadyExists (0.04s)
+=== RUN   TestTryResurrectParent_FoundInJSONL
+--- PASS: TestTryResurrectParent_FoundInJSONL (0.05s)
+=== RUN   TestTryResurrectParent_NotFoundInJSONL
+--- PASS: TestTryResurrectParent_NotFoundInJSONL (0.05s)
+=== RUN   TestTryResurrectParent_NoJSONLFile
+--- PASS: TestTryResurrectParent_NoJSONLFile (0.05s)
+=== RUN   TestTryResurrectParent_MalformedJSONL
+Warning: skipping malformed JSONL line 2: unexpected end of JSON input
+--- PASS: TestTryResurrectParent_MalformedJSONL (0.05s)
+=== RUN   TestTryResurrectParent_WithDependencies
+--- PASS: TestTryResurrectParent_WithDependencies (0.05s)
+=== RUN   TestTryResurrectParentChain_MultiLevel
+--- PASS: TestTryResurrectParentChain_MultiLevel (0.05s)
+=== RUN   TestTryResurrectParentChain_PartialChainMissing
+--- PASS: TestTryResurrectParentChain_PartialChainMissing (0.05s)
+=== RUN   TestExtractParentChain
+=== RUN   TestExtractParentChain/top-level_ID
+=== RUN   TestExtractParentChain/one_level_deep
+=== RUN   TestExtractParentChain/two_levels_deep
+=== RUN   TestExtractParentChain/three_levels_deep
+--- PASS: TestExtractParentChain (0.00s)
+    --- PASS: TestExtractParentChain/top-level_ID (0.00s)
+    --- PASS: TestExtractParentChain/one_level_deep (0.00s)
+    --- PASS: TestExtractParentChain/two_levels_deep (0.00s)
+    --- PASS: TestExtractParentChain/three_levels_deep (0.00s)
+=== RUN   TestTryResurrectParent_Idempotent
+--- PASS: TestTryResurrectParent_Idempotent (0.05s)
+=== RUN   TestTryResurrectParent_MultipleVersionsInJSONL
+--- PASS: TestTryResurrectParent_MultipleVersionsInJSONL (0.07s)
+=== RUN   TestProbeSchema_AllTablesPresent
+--- PASS: TestProbeSchema_AllTablesPresent (0.01s)
+=== RUN   TestProbeSchema_MissingTable
+--- PASS: TestProbeSchema_MissingTable (0.00s)
+=== RUN   TestProbeSchema_MissingColumn
+--- PASS: TestProbeSchema_MissingColumn (0.00s)
+=== RUN   TestVerifySchemaCompatibility
+--- PASS: TestVerifySchemaCompatibility (0.01s)
+=== RUN   TestVerifySchemaCompatibility_Incompatible
+    schema_probe_test.go:205: got error: database schema is incompatible: missing tables: dependencies, events, config, metadata, dirty_issues, export_hashes, issue_snapshots, labels, comments, child_counters, compaction_snapshots, repo_mtimes; missing columns in issues: description, design, acceptance_criteria, notes, status, priority, issue_type, assignee, estimated_minutes, created_at, updated_at, closed_at, content_hash, external_ref, compaction_level, compacted_at, compacted_at_commit, original_size, source_repo, close_reason, deleted_at, deleted_by, delete_reason, original_type, sender, ephemeral, pinned
+--- PASS: TestVerifySchemaCompatibility_Incompatible (0.00s)
+=== RUN   TestCreateIssue
+--- PASS: TestCreateIssue (0.05s)
+=== RUN   TestCreateIssueValidation
+=== RUN   TestCreateIssueValidation/valid_issue
+=== RUN   TestCreateIssueValidation/missing_title
+=== RUN   TestCreateIssueValidation/invalid_priority
+=== RUN   TestCreateIssueValidation/invalid_status
+--- PASS: TestCreateIssueValidation (0.05s)
+    --- PASS: TestCreateIssueValidation/valid_issue (0.00s)
+    --- PASS: TestCreateIssueValidation/missing_title (0.00s)
+    --- PASS: TestCreateIssueValidation/invalid_priority (0.00s)
+    --- PASS: TestCreateIssueValidation/invalid_status (0.00s)
+=== RUN   TestGetIssue
+--- PASS: TestGetIssue (0.05s)
+=== RUN   TestGetIssueNotFound
+--- PASS: TestGetIssueNotFound (0.05s)
+=== RUN   TestCreateIssues
+=== RUN   TestCreateIssues/empty_batch
+=== RUN   TestCreateIssues/single_issue
+=== RUN   TestCreateIssues/multiple_issues
+=== RUN   TestCreateIssues/mixed_ID_assignment_-_explicit_and_auto-generated
+=== RUN   TestCreateIssues/validation_error_-_missing_title
+=== RUN   TestCreateIssues/validation_error_-_invalid_priority
+=== RUN   TestCreateIssues/validation_error_-_invalid_status
+=== RUN   TestCreateIssues/duplicate_ID_error
+=== RUN   TestCreateIssues/closed_at_invariant_-_open_status_with_closed_at
+=== RUN   TestCreateIssues/closed_at_invariant_-_closed_status_without_closed_at_auto-sets_it_(GH#523)
+=== RUN   TestCreateIssues/nil_item_in_batch
+=== RUN   TestCreateIssues/valid_closed_issue_with_closed_at
+--- PASS: TestCreateIssues (0.05s)
+    --- PASS: TestCreateIssues/empty_batch (0.00s)
+    --- PASS: TestCreateIssues/single_issue (0.00s)
+    --- PASS: TestCreateIssues/multiple_issues (0.00s)
+    --- PASS: TestCreateIssues/mixed_ID_assignment_-_explicit_and_auto-generated (0.00s)
+    --- PASS: TestCreateIssues/validation_error_-_missing_title (0.00s)
+    --- PASS: TestCreateIssues/validation_error_-_invalid_priority (0.00s)
+    --- PASS: TestCreateIssues/validation_error_-_invalid_status (0.00s)
+    --- PASS: TestCreateIssues/duplicate_ID_error (0.00s)
+    --- PASS: TestCreateIssues/closed_at_invariant_-_open_status_with_closed_at (0.00s)
+    --- PASS: TestCreateIssues/closed_at_invariant_-_closed_status_without_closed_at_auto-sets_it_(GH#523) (0.00s)
+    --- PASS: TestCreateIssues/nil_item_in_batch (0.00s)
+    --- PASS: TestCreateIssues/valid_closed_issue_with_closed_at (0.00s)
+=== RUN   TestCreateIssuesRollback
+=== RUN   TestCreateIssuesRollback/rollback_on_validation_error
+--- PASS: TestCreateIssuesRollback (0.04s)
+    --- PASS: TestCreateIssuesRollback/rollback_on_validation_error (0.00s)
+=== RUN   TestUpdateIssue
+--- PASS: TestUpdateIssue (0.05s)
+=== RUN   TestUpdateIssueValidation
+--- PASS: TestUpdateIssueValidation (0.04s)
+=== RUN   TestCloseIssue
+--- PASS: TestCloseIssue (0.05s)
+=== RUN   TestClosedAtInvariant
+=== RUN   TestClosedAtInvariant/UpdateIssue_auto-sets_closed_at_when_closing
+=== RUN   TestClosedAtInvariant/UpdateIssue_clears_closed_at_when_reopening
+=== RUN   TestClosedAtInvariant/CreateIssue_auto-sets_closed_at_for_closed_issue_(GH#523)
+=== RUN   TestClosedAtInvariant/CreateIssue_rejects_open_issue_with_closed_at
+--- PASS: TestClosedAtInvariant (0.05s)
+    --- PASS: TestClosedAtInvariant/UpdateIssue_auto-sets_closed_at_when_closing (0.00s)
+    --- PASS: TestClosedAtInvariant/UpdateIssue_clears_closed_at_when_reopening (0.00s)
+    --- PASS: TestClosedAtInvariant/CreateIssue_auto-sets_closed_at_for_closed_issue_(GH#523) (0.00s)
+    --- PASS: TestClosedAtInvariant/CreateIssue_rejects_open_issue_with_closed_at (0.00s)
+=== RUN   TestSearchIssues
+--- PASS: TestSearchIssues (0.05s)
+=== RUN   TestGetStatistics
+--- PASS: TestGetStatistics (0.04s)
+=== RUN   TestParallelIssueCreation
+--- PASS: TestParallelIssueCreation (0.06s)
+=== RUN   TestSetAndGetMetadata
+--- PASS: TestSetAndGetMetadata (0.04s)
+=== RUN   TestGetMetadataNotFound
+--- PASS: TestGetMetadataNotFound (0.04s)
+=== RUN   TestSetMetadataUpdate
+--- PASS: TestSetMetadataUpdate (0.04s)
+=== RUN   TestMetadataMultipleKeys
+--- PASS: TestMetadataMultipleKeys (0.04s)
+=== RUN   TestPath
+--- PASS: TestPath (0.05s)
+=== RUN   TestMultipleStorageDistinctPaths
+--- PASS: TestMultipleStorageDistinctPaths (0.09s)
+=== RUN   TestInMemoryDatabase
+--- PASS: TestInMemoryDatabase (0.01s)
+=== RUN   TestInMemorySharedCache
+    sqlite_test.go:1316: Multiple separate New(":memory:") calls create independent databases - this is expected SQLite behavior
+--- SKIP: TestInMemorySharedCache (0.00s)
+=== RUN   TestGetAllConfig
+--- PASS: TestGetAllConfig (0.05s)
+=== RUN   TestDeleteConfig
+--- PASS: TestDeleteConfig (0.05s)
+=== RUN   TestIsClosed
+--- PASS: TestIsClosed (0.04s)
+=== RUN   TestCreateTombstone
+=== RUN   TestCreateTombstone/create_tombstone_for_existing_issue
+=== RUN   TestCreateTombstone/create_tombstone_for_closed_issue
+=== RUN   TestCreateTombstone/create_tombstone_for_non-existent_issue
+=== RUN   TestCreateTombstone/tombstone_excluded_from_normal_search
+=== RUN   TestCreateTombstone/tombstone_included_with_IncludeTombstones_flag
+=== RUN   TestCreateTombstone/search_for_tombstones_explicitly
+--- PASS: TestCreateTombstone (0.01s)
+    --- PASS: TestCreateTombstone/create_tombstone_for_existing_issue (0.00s)
+    --- PASS: TestCreateTombstone/create_tombstone_for_closed_issue (0.00s)
+    --- PASS: TestCreateTombstone/create_tombstone_for_non-existent_issue (0.00s)
+    --- PASS: TestCreateTombstone/tombstone_excluded_from_normal_search (0.00s)
+    --- PASS: TestCreateTombstone/tombstone_included_with_IncludeTombstones_flag (0.00s)
+    --- PASS: TestCreateTombstone/search_for_tombstones_explicitly (0.00s)
+=== RUN   TestDeleteIssuesCreatesTombstones
+=== RUN   TestDeleteIssuesCreatesTombstones/single_issue_deletion_creates_tombstone
+=== RUN   TestDeleteIssuesCreatesTombstones/batch_deletion_creates_tombstones
+=== RUN   TestDeleteIssuesCreatesTombstones/batch_deletion_of_closed_issues_creates_tombstones_(bd-tnsq)
+=== RUN   TestDeleteIssuesCreatesTombstones/cascade_deletion_creates_tombstones
+=== RUN   TestDeleteIssuesCreatesTombstones/dependencies_removed_from_tombstones
+--- PASS: TestDeleteIssuesCreatesTombstones (0.07s)
+    --- PASS: TestDeleteIssuesCreatesTombstones/single_issue_deletion_creates_tombstone (0.01s)
+    --- PASS: TestDeleteIssuesCreatesTombstones/batch_deletion_creates_tombstones (0.01s)
+    --- PASS: TestDeleteIssuesCreatesTombstones/batch_deletion_of_closed_issues_creates_tombstones_(bd-tnsq) (0.01s)
+    --- PASS: TestDeleteIssuesCreatesTombstones/cascade_deletion_creates_tombstones (0.02s)
+    --- PASS: TestDeleteIssuesCreatesTombstones/dependencies_removed_from_tombstones (0.01s)
+=== RUN   TestRunInTransactionBasic
+--- PASS: TestRunInTransactionBasic (0.04s)
+=== RUN   TestRunInTransactionRollbackOnError
+--- PASS: TestRunInTransactionRollbackOnError (0.04s)
+=== RUN   TestRunInTransactionPanicRecovery
+--- PASS: TestRunInTransactionPanicRecovery (0.04s)
+=== RUN   TestTransactionCreateIssue
+--- PASS: TestTransactionCreateIssue (0.04s)
+=== RUN   TestTransactionRollbackOnCreateError
+--- PASS: TestTransactionRollbackOnCreateError (0.04s)
+=== RUN   TestTransactionMultipleIssues
+--- PASS: TestTransactionMultipleIssues (0.04s)
+=== RUN   TestTransactionUpdateIssue
+--- PASS: TestTransactionUpdateIssue (0.04s)
+=== RUN   TestTransactionCloseIssue
+--- PASS: TestTransactionCloseIssue (0.04s)
+=== RUN   TestTransactionDeleteIssue
+--- PASS: TestTransactionDeleteIssue (0.04s)
+=== RUN   TestTransactionGetIssue
+--- PASS: TestTransactionGetIssue (0.04s)
+=== RUN   TestTransactionCreateIssues
+--- PASS: TestTransactionCreateIssues (0.04s)
+=== RUN   TestTransactionAddDependency
+--- PASS: TestTransactionAddDependency (0.05s)
+=== RUN   TestTransactionAddDependency_RelatesTo
+--- PASS: TestTransactionAddDependency_RelatesTo (0.05s)
+=== RUN   TestTransactionAddDependency_RepliesTo
+--- PASS: TestTransactionAddDependency_RepliesTo (0.05s)
+=== RUN   TestTransactionRemoveDependency
+--- PASS: TestTransactionRemoveDependency (0.05s)
+=== RUN   TestTransactionAddLabel
+--- PASS: TestTransactionAddLabel (0.04s)
+=== RUN   TestTransactionRemoveLabel
+--- PASS: TestTransactionRemoveLabel (0.05s)
+=== RUN   TestTransactionAtomicIssueWithDependency
+--- PASS: TestTransactionAtomicIssueWithDependency (0.05s)
+=== RUN   TestTransactionAtomicIssueWithLabels
+--- PASS: TestTransactionAtomicIssueWithLabels (0.04s)
+=== RUN   TestTransactionEmpty
+--- PASS: TestTransactionEmpty (0.04s)
+=== RUN   TestTransactionConcurrent
+--- PASS: TestTransactionConcurrent (0.06s)
+=== RUN   TestTransactionNestedFailure
+--- PASS: TestTransactionNestedFailure (0.05s)
+=== RUN   TestTransactionAtomicPlanApproval
+--- PASS: TestTransactionAtomicPlanApproval (0.05s)
+=== RUN   TestTransactionSetConfig
+--- PASS: TestTransactionSetConfig (0.04s)
+=== RUN   TestTransactionGetConfig
+--- PASS: TestTransactionGetConfig (0.04s)
+=== RUN   TestTransactionConfigRollback
+--- PASS: TestTransactionConfigRollback (0.04s)
+=== RUN   TestTransactionSetMetadata
+--- PASS: TestTransactionSetMetadata (0.04s)
+=== RUN   TestTransactionGetMetadata
+--- PASS: TestTransactionGetMetadata (0.04s)
+=== RUN   TestTransactionMetadataRollback
+--- PASS: TestTransactionMetadataRollback (0.04s)
+=== RUN   TestTransactionAddComment
+--- PASS: TestTransactionAddComment (0.05s)
+=== RUN   TestTransactionAddCommentToCreatedIssue
+--- PASS: TestTransactionAddCommentToCreatedIssue (0.04s)
+=== RUN   TestTransactionAddCommentNonexistentIssue
+--- PASS: TestTransactionAddCommentNonexistentIssue (0.04s)
+=== RUN   TestTransactionCommentRollback
+--- PASS: TestTransactionCommentRollback (0.04s)
+=== RUN   TestTransactionAtomicConfigWithIssue
+--- PASS: TestTransactionAtomicConfigWithIssue (0.05s)
+=== RUN   TestTransactionConfigOverwrite
+--- PASS: TestTransactionConfigOverwrite (0.04s)
+=== RUN   TestTransactionGetConfigNonexistent
+--- PASS: TestTransactionGetConfigNonexistent (0.04s)
+=== RUN   TestTransactionGetMetadataNonexistent
+--- PASS: TestTransactionGetMetadataNonexistent (0.04s)
+=== RUN   TestTransactionSearchIssuesBasic
+--- PASS: TestTransactionSearchIssuesBasic (0.04s)
+=== RUN   TestTransactionSearchIssuesReadYourWrites
+--- PASS: TestTransactionSearchIssuesReadYourWrites (0.04s)
+=== RUN   TestTransactionSearchIssuesWithFilters
+--- PASS: TestTransactionSearchIssuesWithFilters (0.04s)
+=== RUN   TestTransactionSearchIssuesWithLabels
+--- PASS: TestTransactionSearchIssuesWithLabels (0.05s)
+=== RUN   TestTransactionSearchIssuesRollback
+--- PASS: TestTransactionSearchIssuesRollback (0.04s)
+=== RUN   TestTransactionSearchIssuesLimit
+--- PASS: TestTransactionSearchIssuesLimit (0.05s)
+=== RUN   TestTransactionSearchIssuesWithPriorityRange
+--- PASS: TestTransactionSearchIssuesWithPriorityRange (0.05s)
+=== RUN   TestTransactionSearchIssuesWithDateRange
+--- PASS: TestTransactionSearchIssuesWithDateRange (0.04s)
+=== RUN   TestTransactionSearchIssuesWithIDs
+--- PASS: TestTransactionSearchIssuesWithIDs (0.04s)
+=== RUN   TestUnderlyingDB_BasicAccess
+--- PASS: TestUnderlyingDB_BasicAccess (0.04s)
+=== RUN   TestUnderlyingDB_CreateExtensionTable
+--- PASS: TestUnderlyingDB_CreateExtensionTable (0.04s)
+=== RUN   TestUnderlyingDB_ConcurrentAccess
+--- PASS: TestUnderlyingDB_ConcurrentAccess (0.05s)
+=== RUN   TestUnderlyingDB_AfterClose
+--- PASS: TestUnderlyingDB_AfterClose (0.05s)
+=== RUN   TestUnderlyingDB_LongTxDoesNotDeadlock
+--- PASS: TestUnderlyingDB_LongTxDoesNotDeadlock (0.04s)
+=== RUN   TestUnderlyingConn_BasicAccess
+--- PASS: TestUnderlyingConn_BasicAccess (0.04s)
+=== RUN   TestUnderlyingConn_DDLOperations
+--- PASS: TestUnderlyingConn_DDLOperations (0.04s)
+=== RUN   TestUnderlyingConn_ContextCancellation
+--- PASS: TestUnderlyingConn_ContextCancellation (0.04s)
+=== RUN   TestUnderlyingConn_MultipleConnections
+--- PASS: TestUnderlyingConn_MultipleConnections (0.04s)
+=== RUN   TestIsUniqueConstraintError
+=== RUN   TestIsUniqueConstraintError/nil_error
+=== RUN   TestIsUniqueConstraintError/UNIQUE_constraint_error
+=== RUN   TestIsUniqueConstraintError/unique_constraint_lowercase
+=== RUN   TestIsUniqueConstraintError/other_error
+=== RUN   TestIsUniqueConstraintError/empty_error_message
+--- PASS: TestIsUniqueConstraintError (0.00s)
+    --- PASS: TestIsUniqueConstraintError/nil_error (0.00s)
+    --- PASS: TestIsUniqueConstraintError/UNIQUE_constraint_error (0.00s)
+    --- PASS: TestIsUniqueConstraintError/unique_constraint_lowercase (0.00s)
+    --- PASS: TestIsUniqueConstraintError/other_error (0.00s)
+    --- PASS: TestIsUniqueConstraintError/empty_error_message (0.00s)
+=== RUN   TestIsForeignKeyConstraintError
+=== RUN   TestIsForeignKeyConstraintError/nil_error
+=== RUN   TestIsForeignKeyConstraintError/FOREIGN_KEY_constraint_error_(uppercase)
+=== RUN   TestIsForeignKeyConstraintError/foreign_key_constraint_error_(lowercase)
+=== RUN   TestIsForeignKeyConstraintError/FOREIGN_KEY_with_details
+=== RUN   TestIsForeignKeyConstraintError/UNIQUE_constraint_error
+=== RUN   TestIsForeignKeyConstraintError/other_error
+--- PASS: TestIsForeignKeyConstraintError (0.00s)
+    --- PASS: TestIsForeignKeyConstraintError/nil_error (0.00s)
+    --- PASS: TestIsForeignKeyConstraintError/FOREIGN_KEY_constraint_error_(uppercase) (0.00s)
+    --- PASS: TestIsForeignKeyConstraintError/foreign_key_constraint_error_(lowercase) (0.00s)
+    --- PASS: TestIsForeignKeyConstraintError/FOREIGN_KEY_with_details (0.00s)
+    --- PASS: TestIsForeignKeyConstraintError/UNIQUE_constraint_error (0.00s)
+    --- PASS: TestIsForeignKeyConstraintError/other_error (0.00s)
+=== RUN   TestExecInTransaction
+=== RUN   TestExecInTransaction/successful_transaction
+=== RUN   TestExecInTransaction/failed_transaction_rolls_back
+--- PASS: TestExecInTransaction (0.05s)
+    --- PASS: TestExecInTransaction/successful_transaction (0.00s)
+    --- PASS: TestExecInTransaction/failed_transaction_rolls_back (0.00s)
+=== RUN   TestBeginTx
+--- PASS: TestBeginTx (0.05s)
+=== RUN   TestQueryContext
+--- PASS: TestQueryContext (0.05s)
+=== RUN   TestIsBusyError
+=== RUN   TestIsBusyError/nil_error
+=== RUN   TestIsBusyError/database_is_locked
+=== RUN   TestIsBusyError/SQLITE_BUSY
+=== RUN   TestIsBusyError/SQLITE_BUSY_with_context
+=== RUN   TestIsBusyError/other_error
+=== RUN   TestIsBusyError/UNIQUE_constraint_error
+--- PASS: TestIsBusyError (0.00s)
+    --- PASS: TestIsBusyError/nil_error (0.00s)
+    --- PASS: TestIsBusyError/database_is_locked (0.00s)
+    --- PASS: TestIsBusyError/SQLITE_BUSY (0.00s)
+    --- PASS: TestIsBusyError/SQLITE_BUSY_with_context (0.00s)
+    --- PASS: TestIsBusyError/other_error (0.00s)
+    --- PASS: TestIsBusyError/UNIQUE_constraint_error (0.00s)
+=== RUN   TestBeginImmediateWithRetry
+=== RUN   TestBeginImmediateWithRetry/successful_on_first_try
+=== RUN   TestBeginImmediateWithRetry/context_cancellation
+=== RUN   TestBeginImmediateWithRetry/defaults_for_invalid_parameters
+--- PASS: TestBeginImmediateWithRetry (0.05s)
+    --- PASS: TestBeginImmediateWithRetry/successful_on_first_try (0.00s)
+    --- PASS: TestBeginImmediateWithRetry/context_cancellation (0.00s)
+    --- PASS: TestBeginImmediateWithRetry/defaults_for_invalid_parameters (0.00s)
+=== RUN   TestValidatePriority
+=== RUN   TestValidatePriority/valid_priority_0
+=== RUN   TestValidatePriority/valid_priority_1
+=== RUN   TestValidatePriority/valid_priority_2
+=== RUN   TestValidatePriority/valid_priority_3
+=== RUN   TestValidatePriority/valid_priority_4
+=== RUN   TestValidatePriority/invalid_negative
+=== RUN   TestValidatePriority/invalid_too_high
+=== RUN   TestValidatePriority/non-int_ignored
+--- PASS: TestValidatePriority (0.00s)
+    --- PASS: TestValidatePriority/valid_priority_0 (0.00s)
+    --- PASS: TestValidatePriority/valid_priority_1 (0.00s)
+    --- PASS: TestValidatePriority/valid_priority_2 (0.00s)
+    --- PASS: TestValidatePriority/valid_priority_3 (0.00s)
+    --- PASS: TestValidatePriority/valid_priority_4 (0.00s)
+    --- PASS: TestValidatePriority/invalid_negative (0.00s)
+    --- PASS: TestValidatePriority/invalid_too_high (0.00s)
+    --- PASS: TestValidatePriority/non-int_ignored (0.00s)
+=== RUN   TestValidateStatus
+=== RUN   TestValidateStatus/valid_open
+=== RUN   TestValidateStatus/valid_in_progress
+=== RUN   TestValidateStatus/valid_blocked
+=== RUN   TestValidateStatus/valid_closed
+=== RUN   TestValidateStatus/invalid_status
+=== RUN   TestValidateStatus/non-string_ignored
+--- PASS: TestValidateStatus (0.00s)
+    --- PASS: TestValidateStatus/valid_open (0.00s)
+    --- PASS: TestValidateStatus/valid_in_progress (0.00s)
+    --- PASS: TestValidateStatus/valid_blocked (0.00s)
+    --- PASS: TestValidateStatus/valid_closed (0.00s)
+    --- PASS: TestValidateStatus/invalid_status (0.00s)
+    --- PASS: TestValidateStatus/non-string_ignored (0.00s)
+=== RUN   TestValidateIssueType
+=== RUN   TestValidateIssueType/valid_bug
+=== RUN   TestValidateIssueType/valid_feature
+=== RUN   TestValidateIssueType/valid_task
+=== RUN   TestValidateIssueType/valid_epic
+=== RUN   TestValidateIssueType/valid_chore
+=== RUN   TestValidateIssueType/invalid_type
+=== RUN   TestValidateIssueType/non-string_ignored
+--- PASS: TestValidateIssueType (0.00s)
+    --- PASS: TestValidateIssueType/valid_bug (0.00s)
+    --- PASS: TestValidateIssueType/valid_feature (0.00s)
+    --- PASS: TestValidateIssueType/valid_task (0.00s)
+    --- PASS: TestValidateIssueType/valid_epic (0.00s)
+    --- PASS: TestValidateIssueType/valid_chore (0.00s)
+    --- PASS: TestValidateIssueType/invalid_type (0.00s)
+    --- PASS: TestValidateIssueType/non-string_ignored (0.00s)
+=== RUN   TestValidateTitle
+=== RUN   TestValidateTitle/valid_title
+=== RUN   TestValidateTitle/empty_title
+=== RUN   TestValidateTitle/max_length_title
+=== RUN   TestValidateTitle/too_long_title
+=== RUN   TestValidateTitle/non-string_ignored
+--- PASS: TestValidateTitle (0.00s)
+    --- PASS: TestValidateTitle/valid_title (0.00s)
+    --- PASS: TestValidateTitle/empty_title (0.00s)
+    --- PASS: TestValidateTitle/max_length_title (0.00s)
+    --- PASS: TestValidateTitle/too_long_title (0.00s)
+    --- PASS: TestValidateTitle/non-string_ignored (0.00s)
+=== RUN   TestValidateEstimatedMinutes
+=== RUN   TestValidateEstimatedMinutes/valid_zero
+=== RUN   TestValidateEstimatedMinutes/valid_positive
+=== RUN   TestValidateEstimatedMinutes/invalid_negative
+=== RUN   TestValidateEstimatedMinutes/non-int_ignored
+--- PASS: TestValidateEstimatedMinutes (0.00s)
+    --- PASS: TestValidateEstimatedMinutes/valid_zero (0.00s)
+    --- PASS: TestValidateEstimatedMinutes/valid_positive (0.00s)
+    --- PASS: TestValidateEstimatedMinutes/invalid_negative (0.00s)
+    --- PASS: TestValidateEstimatedMinutes/non-int_ignored (0.00s)
+=== RUN   TestValidateFieldUpdate
+=== RUN   TestValidateFieldUpdate/valid_priority
+=== RUN   TestValidateFieldUpdate/invalid_priority
+=== RUN   TestValidateFieldUpdate/valid_status
+=== RUN   TestValidateFieldUpdate/invalid_status
+=== RUN   TestValidateFieldUpdate/unknown_field
+--- PASS: TestValidateFieldUpdate (0.00s)
+    --- PASS: TestValidateFieldUpdate/valid_priority (0.00s)
+    --- PASS: TestValidateFieldUpdate/invalid_priority (0.00s)
+    --- PASS: TestValidateFieldUpdate/valid_status (0.00s)
+    --- PASS: TestValidateFieldUpdate/invalid_status (0.00s)
+    --- PASS: TestValidateFieldUpdate/unknown_field (0.00s)
+=== RUN   TestValidateFieldUpdateWithCustomStatuses
+=== RUN   TestValidateFieldUpdateWithCustomStatuses/built-in_status_no_custom
+=== RUN   TestValidateFieldUpdateWithCustomStatuses/built-in_status_with_custom
+=== RUN   TestValidateFieldUpdateWithCustomStatuses/built-in_closed_with_custom
+=== RUN   TestValidateFieldUpdateWithCustomStatuses/custom_status_configured
+=== RUN   TestValidateFieldUpdateWithCustomStatuses/custom_status_awaiting_testing
+=== RUN   TestValidateFieldUpdateWithCustomStatuses/custom_status_not_configured
+=== RUN   TestValidateFieldUpdateWithCustomStatuses/custom_status_not_in_list
+=== RUN   TestValidateFieldUpdateWithCustomStatuses/valid_priority
+=== RUN   TestValidateFieldUpdateWithCustomStatuses/invalid_priority
+=== RUN   TestValidateFieldUpdateWithCustomStatuses/unknown_field
+--- PASS: TestValidateFieldUpdateWithCustomStatuses (0.00s)
+    --- PASS: TestValidateFieldUpdateWithCustomStatuses/built-in_status_no_custom (0.00s)
+    --- PASS: TestValidateFieldUpdateWithCustomStatuses/built-in_status_with_custom (0.00s)
+    --- PASS: TestValidateFieldUpdateWithCustomStatuses/built-in_closed_with_custom (0.00s)
+    --- PASS: TestValidateFieldUpdateWithCustomStatuses/custom_status_configured (0.00s)
+    --- PASS: TestValidateFieldUpdateWithCustomStatuses/custom_status_awaiting_testing (0.00s)
+    --- PASS: TestValidateFieldUpdateWithCustomStatuses/custom_status_not_configured (0.00s)
+    --- PASS: TestValidateFieldUpdateWithCustomStatuses/custom_status_not_in_list (0.00s)
+    --- PASS: TestValidateFieldUpdateWithCustomStatuses/valid_priority (0.00s)
+    --- PASS: TestValidateFieldUpdateWithCustomStatuses/invalid_priority (0.00s)
+    --- PASS: TestValidateFieldUpdateWithCustomStatuses/unknown_field (0.00s)
+=== RUN   TestParseCustomStatuses
+=== RUN   TestParseCustomStatuses/empty_string
+=== RUN   TestParseCustomStatuses/single_status
+=== RUN   TestParseCustomStatuses/multiple_statuses
+=== RUN   TestParseCustomStatuses/with_spaces
+=== RUN   TestParseCustomStatuses/empty_entries_filtered
+=== RUN   TestParseCustomStatuses/whitespace_only_entries
+--- PASS: TestParseCustomStatuses (0.00s)
+    --- PASS: TestParseCustomStatuses/empty_string (0.00s)
+    --- PASS: TestParseCustomStatuses/single_status (0.00s)
+    --- PASS: TestParseCustomStatuses/multiple_statuses (0.00s)
+    --- PASS: TestParseCustomStatuses/with_spaces (0.00s)
+    --- PASS: TestParseCustomStatuses/empty_entries_filtered (0.00s)
+    --- PASS: TestParseCustomStatuses/whitespace_only_entries (0.00s)
+PASS
+ok  	github.com/steveyegge/beads/internal/storage/sqlite	19.580s
+status=0

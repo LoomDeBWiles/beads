@@ -2,19 +2,20 @@ package main
 
 import (
 	"bufio"
-	"cmp"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/steveyegge/beads/internal/beads"
 	"github.com/steveyegge/beads/internal/config"
+	"github.com/steveyegge/beads/internal/jsonlpub"
 	"github.com/steveyegge/beads/internal/storage"
 	"github.com/steveyegge/beads/internal/storage/sqlite"
 	"github.com/steveyegge/beads/internal/types"
@@ -42,12 +43,25 @@ func exportToJSONLWithStore(ctx context.Context, store storage.Storage, jsonlPat
 		}
 	}
 
-	// Single-repo mode - use existing logic
+	// Single-repo mode: one serialized publication. The publisher takes the
+	// dirty snapshot before the issues below are read, writes the file, and
+	// records the content hash across the rename, so the file is never visible
+	// as bytes no metadata describes.
+	_, err := jsonlpub.Publish(ctx, store, jsonlPath, func(ctx context.Context) ([]*types.Issue, error) {
+		return collectIssuesForExport(ctx, store, jsonlPath)
+	}, jsonlpub.Options{})
+	return err
+}
+
+// collectIssuesForExport gathers everything the JSONL mirror holds: the issues
+// plus the dependencies, labels and comments that hang off them. It runs inside
+// the publish lock, so what it reads is what gets written.
+func collectIssuesForExport(ctx context.Context, store storage.Storage, jsonlPath string) ([]*types.Issue, error) {
 	// Get all issues including tombstones for sync propagation (bd-rp4o fix)
 	// Tombstones must be exported so they propagate to other clones and prevent resurrection
 	issues, err := store.SearchIssues(ctx, "", types.IssueFilter{IncludeTombstones: true})
 	if err != nil {
-		return fmt.Errorf("failed to get issues: %w", err)
+		return nil, fmt.Errorf("failed to get issues: %w", err)
 	}
 
 	// Safety check: prevent exporting empty database over non-empty JSONL
@@ -58,22 +72,17 @@ func exportToJSONLWithStore(ctx context.Context, store storage.Storage, jsonlPat
 		if err != nil {
 			// If we can't read the file, it might not exist yet, which is fine
 			if !os.IsNotExist(err) {
-				return fmt.Errorf("warning: failed to read existing JSONL: %w", err)
+				return nil, fmt.Errorf("warning: failed to read existing JSONL: %w", err)
 			}
 		} else if existingCount > 0 {
-			return fmt.Errorf("refusing to export empty database over non-empty JSONL file (database: 0 issues, JSONL: %d issues). This would result in data loss", existingCount)
+			return nil, fmt.Errorf("refusing to export empty database over non-empty JSONL file (database: 0 issues, JSONL: %d issues). This would result in data loss", existingCount)
 		}
 	}
-
-	// Sort by ID for consistent output
-	slices.SortFunc(issues, func(a, b *types.Issue) int {
-		return cmp.Compare(a.ID, b.ID)
-	})
 
 	// Populate dependencies for all issues
 	allDeps, err := store.GetAllDependencyRecords(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to get dependencies: %w", err)
+		return nil, fmt.Errorf("failed to get dependencies: %w", err)
 	}
 	for _, issue := range issues {
 		issue.Dependencies = allDeps[issue.ID]
@@ -83,7 +92,7 @@ func exportToJSONLWithStore(ctx context.Context, store storage.Storage, jsonlPat
 	for _, issue := range issues {
 		labels, err := store.GetLabels(ctx, issue.ID)
 		if err != nil {
-			return fmt.Errorf("failed to get labels for %s: %w", issue.ID, err)
+			return nil, fmt.Errorf("failed to get labels for %s: %w", issue.ID, err)
 		}
 		issue.Labels = labels
 	}
@@ -92,73 +101,31 @@ func exportToJSONLWithStore(ctx context.Context, store storage.Storage, jsonlPat
 	for _, issue := range issues {
 		comments, err := store.GetIssueComments(ctx, issue.ID)
 		if err != nil {
-			return fmt.Errorf("failed to get comments for %s: %w", issue.ID, err)
+			return nil, fmt.Errorf("failed to get comments for %s: %w", issue.ID, err)
 		}
 		issue.Comments = comments
 	}
 
-	// Create temp file for atomic write
-	dir := filepath.Dir(jsonlPath)
-	base := filepath.Base(jsonlPath)
-	tempFile, err := os.CreateTemp(dir, base+".tmp.*")
-	if err != nil {
-		return fmt.Errorf("failed to create temp file: %w", err)
-	}
-	tempPath := tempFile.Name()
-
-	// Use defer pattern for proper cleanup
-	var writeErr error
-	defer func() {
-		_ = tempFile.Close()
-		if writeErr != nil {
-			_ = os.Remove(tempPath) // Remove temp file on error
-		}
-	}()
-
-	// Write JSONL
-	for _, issue := range issues {
-		data, marshalErr := json.Marshal(issue)
-		if marshalErr != nil {
-			writeErr = fmt.Errorf("failed to marshal issue %s: %w", issue.ID, marshalErr)
-			return writeErr
-		}
-		if _, writeErr = tempFile.Write(data); writeErr != nil {
-			writeErr = fmt.Errorf("failed to write issue %s: %w", issue.ID, writeErr)
-			return writeErr
-		}
-		if _, writeErr = tempFile.WriteString("\n"); writeErr != nil {
-			writeErr = fmt.Errorf("failed to write newline: %w", writeErr)
-			return writeErr
-		}
-	}
-
-	// Close before rename
-	if writeErr = tempFile.Close(); writeErr != nil {
-		writeErr = fmt.Errorf("failed to close temp file: %w", writeErr)
-		return writeErr
-	}
-
-	// Atomic rename
-	if writeErr = os.Rename(tempPath, jsonlPath); writeErr != nil {
-		writeErr = fmt.Errorf("failed to rename temp file: %w", writeErr)
-		return writeErr
-	}
-
-	return nil
+	return issues, nil
 }
 
-// importToJSONLWithStore imports issues from JSONL using the provided store
-func importToJSONLWithStore(ctx context.Context, store storage.Storage, jsonlPath string) error {
+// importToJSONLWithStore imports issues from JSONL using the provided store.
+// It returns the sha256 of the bytes it parsed, which the caller records with
+// jsonlpub.RecordImport. Hashing during the read (rather than re-reading the
+// file afterwards) is what keeps a rewrite that landed mid-import visible: the
+// recorded hash describes the content the database actually holds. Multi-repo
+// mode returns an empty hash - it has no single canonical file.
+func importToJSONLWithStore(ctx context.Context, store storage.Storage, jsonlPath string) (string, error) {
 	// Try multi-repo import first
 	sqliteStore, ok := store.(*sqlite.SQLiteStorage)
 	if ok {
 		results, err := sqliteStore.HydrateFromMultiRepo(ctx)
 		if err != nil {
-			return fmt.Errorf("multi-repo import failed: %w", err)
+			return "", fmt.Errorf("multi-repo import failed: %w", err)
 		}
 		if results != nil {
 			// Multi-repo mode active - import succeeded
-			return nil
+			return "", nil
 		}
 	}
 
@@ -166,13 +133,14 @@ func importToJSONLWithStore(ctx context.Context, store storage.Storage, jsonlPat
 	// Read JSONL file
 	file, err := os.Open(jsonlPath) // #nosec G304 - controlled path from config
 	if err != nil {
-		return fmt.Errorf("failed to open JSONL: %w", err)
+		return "", fmt.Errorf("failed to open JSONL: %w", err)
 	}
 	defer file.Close()
 
 	// Parse all issues
 	var issues []*types.Issue
-	scanner := bufio.NewScanner(file)
+	hasher := jsonlpub.NewHasher()
+	scanner := bufio.NewScanner(io.TeeReader(file, hasher))
 	lineNum := 0
 
 	for scanner.Scan() {
@@ -197,7 +165,7 @@ func importToJSONLWithStore(ctx context.Context, store storage.Storage, jsonlPat
 	}
 
 	if err := scanner.Err(); err != nil {
-		return fmt.Errorf("failed to read JSONL: %w", err)
+		return "", fmt.Errorf("failed to read JSONL: %w", err)
 	}
 
 	// Use existing import logic with auto-conflict resolution
@@ -208,8 +176,27 @@ func importToJSONLWithStore(ctx context.Context, store storage.Storage, jsonlPat
 		SkipPrefixValidation: true, // Skip prefix validation for auto-import
 	}
 
-	_, err = importIssuesCore(ctx, "", store, issues, opts)
-	return err
+	if _, err = importIssuesCore(ctx, "", store, issues, opts); err != nil {
+		return "", err
+	}
+	return jsonlpub.HashSum(hasher), nil
+}
+
+// recordDaemonImport commits the content an import parsed. A failure warns
+// rather than aborting: the issues are already in the database, and the cost is
+// one redundant import on the next cycle.
+func recordDaemonImport(ctx context.Context, store storage.Storage, jsonlPath, importedHash, repoKey string, log daemonLogger) {
+	if importedHash == "" {
+		// Multi-repo mode: no canonical file to record.
+		return
+	}
+	opts := jsonlpub.Options{
+		KeySuffix: repoKey,
+		Warnf:     func(format string, args ...any) { log.log("Warning: "+format, args...) },
+	}
+	if err := jsonlpub.RecordImport(ctx, store, jsonlPath, importedHash, opts); err != nil {
+		log.log("Warning: failed to record imported JSONL content: %v", err)
+	}
 }
 
 // getRepoKeyForPath extracts the stable repo identifier from a JSONL path.
@@ -447,17 +434,13 @@ func performExport(ctx context.Context, store storage.Storage, autoCommit, autoP
 		}
 		log.log("Exported to JSONL")
 
-		// Update export metadata (bd-ymj fix, bd-ar2.2 multi-repo support, bd-ar2.11 stable keys)
+		// Update export metadata (bd-ar2.2 multi-repo support, bd-ar2.11 stable keys).
+		// Single-repo mode needs nothing here: the publisher recorded the content
+		// hash inside the same lock that renamed the file.
 		multiRepoPaths := getMultiRepoJSONLPaths()
-		if multiRepoPaths != nil {
-			// Multi-repo mode: update metadata for each JSONL with stable repo key
-			for _, path := range multiRepoPaths {
-				repoKey := getRepoKeyForPath(path)
-				updateExportMetadata(exportCtx, store, path, log, repoKey)
-			}
-		} else {
-			// Single-repo mode: update metadata for main JSONL
-			updateExportMetadata(exportCtx, store, jsonlPath, log, "")
+		for _, path := range multiRepoPaths {
+			repoKey := getRepoKeyForPath(path)
+			updateExportMetadata(exportCtx, store, path, log, repoKey)
 		}
 
 		// Update database mtime to be >= JSONL mtime (fixes #278, #301, #321)
@@ -567,8 +550,11 @@ func performAutoImport(ctx context.Context, store storage.Storage, skipGit bool,
 		}
 
 		// Flush dirty local mutations before pulling, so import doesn't overwrite
-		// pending changes with stale JSONL content (dep-removal persistence fix)
+		// pending changes with stale JSONL content (dep-removal persistence fix).
+		// The publisher retires the dirty markers it flushed, so a repository
+		// with no new mutations flushes once and stops.
 		repoKey := getRepoKeyForPath(jsonlPath)
+		flushAfterImport := false
 		if sqlStore, ok := store.(*sqlite.SQLiteStorage); ok {
 			dirtyCount, err := sqlStore.GetDirtyIssueCount(importCtx)
 			if err != nil {
@@ -576,10 +562,18 @@ func performAutoImport(ctx context.Context, store storage.Storage, skipGit bool,
 			} else if dirtyCount > 0 {
 				log.log("Flushing %d dirty issues before import...", dirtyCount)
 				if err := exportToJSONLWithStore(importCtx, store, jsonlPath); err != nil {
-					log.log("Pre-import export failed: %v", err)
-					return
+					if !errors.Is(err, jsonlpub.ErrDiverged) {
+						log.log("Pre-import export failed: %v", err)
+						return
+					}
+					// The file holds content this database never imported.
+					// Publishing over it would destroy that content, and giving
+					// up here would abort every retry at the same point, starving
+					// the import that heals the divergence. Import first; the
+					// dirty rows kept their markers and publish afterwards.
+					log.log("Pre-import flush skipped: JSONL diverged, importing first")
+					flushAfterImport = true
 				}
-				updateExportMetadata(importCtx, store, jsonlPath, log, repoKey)
 			}
 		}
 
@@ -630,11 +624,16 @@ func performAutoImport(ctx context.Context, store storage.Storage, skipGit bool,
 		}
 
 		// Import from JSONL
-		if err := importToJSONLWithStore(importCtx, store, jsonlPath); err != nil {
+		importedHash, err := importToJSONLWithStore(importCtx, store, jsonlPath)
+		if err != nil {
 			log.log("Import failed: %v", err)
 			return
 		}
 		log.log("Imported from JSONL")
+
+		// Record what was imported before anything republishes: a publication
+		// that ran against an unrecorded file would read it as diverged.
+		recordDaemonImport(importCtx, store, jsonlPath, importedHash, repoKey, log)
 
 		// Validate import
 		afterCount, err := countDBIssues(importCtx, store)
@@ -646,6 +645,16 @@ func performAutoImport(ctx context.Context, store storage.Storage, skipGit bool,
 		if err := validatePostImport(beforeCount, afterCount, jsonlPath); err != nil {
 			log.log("Post-import validation failed: %v", err)
 			return
+		}
+
+		// The flush the divergence deferred: the imported content is recorded
+		// now, so publishing the still-dirty rows is legal.
+		if flushAfterImport {
+			if err := exportToJSONLWithStore(importCtx, store, jsonlPath); err != nil {
+				log.log("Post-import flush failed: %v", err)
+				return
+			}
+			log.log("Flushed dirty issues after import")
 		}
 
 		if skipGit {
@@ -734,16 +743,12 @@ func performSync(ctx context.Context, store storage.Storage, autoCommit, autoPus
 		}
 		log.log("Exported to JSONL")
 
-		// Update export metadata (bd-ymj fix, bd-ar2.2 multi-repo support, bd-ar2.11 stable keys)
-		if multiRepoPaths != nil {
-			// Multi-repo mode: update metadata for each JSONL with stable repo key
-			for _, path := range multiRepoPaths {
-				repoKey := getRepoKeyForPath(path)
-				updateExportMetadata(syncCtx, store, path, log, repoKey)
-			}
-		} else {
-			// Single-repo mode: update metadata for main JSONL
-			updateExportMetadata(syncCtx, store, jsonlPath, log, "")
+		// Update export metadata (bd-ar2.2 multi-repo support, bd-ar2.11 stable keys).
+		// Single-repo mode needs nothing here: the publisher recorded the content
+		// hash inside the same lock that renamed the file.
+		for _, path := range multiRepoPaths {
+			repoKey := getRepoKeyForPath(path)
+			updateExportMetadata(syncCtx, store, path, log, repoKey)
 		}
 
 		// Update database mtime to be >= JSONL mtime (fixes #278, #301, #321)
@@ -851,11 +856,16 @@ func performSync(ctx context.Context, store storage.Storage, autoCommit, autoPus
 			}
 		}
 
-		if err := importToJSONLWithStore(syncCtx, store, jsonlPath); err != nil {
+		importedHash, err := importToJSONLWithStore(syncCtx, store, jsonlPath)
+		if err != nil {
 			log.log("Import failed: %v", err)
 			return
 		}
 		log.log("Imported from JSONL")
+
+		// Record what was imported before anything republishes: a publication
+		// that ran against an unrecorded file would read it as diverged.
+		recordDaemonImport(syncCtx, store, jsonlPath, importedHash, getRepoKeyForPath(jsonlPath), log)
 
 		// Update database mtime after import (fixes #278, #301, #321)
 		// Sync branch import can update JSONL timestamp, so ensure DB >= JSONL

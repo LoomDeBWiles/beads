@@ -15,6 +15,7 @@ import (
 	"github.com/steveyegge/beads/internal/debug"
 	"github.com/steveyegge/beads/internal/export"
 	"github.com/steveyegge/beads/internal/importer"
+	"github.com/steveyegge/beads/internal/jsonlpub"
 	"github.com/steveyegge/beads/internal/storage"
 	"github.com/steveyegge/beads/internal/storage/sqlite"
 	"github.com/steveyegge/beads/internal/types"
@@ -49,93 +50,77 @@ func (s *Server) handleExport(req *Request) Response {
 		manifest = export.NewManifest(cfg.Policy)
 	}
 
-	// Get all issues including tombstones for sync propagation (bd-rp4o fix)
-	// Tombstones must be exported so they propagate to other clones and prevent resurrection
-	issues, err := store.SearchIssues(ctx, "", types.IssueFilter{IncludeTombstones: true})
+	sqliteStore, ok := store.(*sqlite.SQLiteStorage)
+	if !ok {
+		return Response{
+			Success: false,
+			Error:   "storage is not SQLiteStorage",
+		}
+	}
+
+	// Exporting the repository's own JSONL is a publication: it is serialized
+	// against every other writer and its content hash is recorded across the
+	// rename. Any other target is just a file the caller asked for, so it takes
+	// the plain atomic write below and touches no metadata.
+	canonicalPath := utils.FindJSONLInDir(filepath.Dir(sqliteStore.Path()))
+	if jsonlpub.IsCanonicalTarget(exportArgs.JSONLPath, canonicalPath) {
+		var encodingWarnings []string
+		result, err := jsonlpub.Publish(ctx, store, exportArgs.JSONLPath, func(ctx context.Context) ([]*types.Issue, error) {
+			issues, err := collectExportIssues(ctx, sqliteStore, store, cfg, manifest)
+			if err != nil {
+				return nil, err
+			}
+			// The publisher fails the whole publication on an encoding error. When
+			// the policy says to skip such issues instead, drop them here so the
+			// publication only ever sees issues that encode.
+			if cfg.SkipEncodingErrors {
+				issues, encodingWarnings = dropUnencodableIssues(issues, manifest)
+			}
+			return issues, nil
+		}, jsonlpub.Options{Warnf: func(format string, args ...any) {
+			fmt.Fprintf(os.Stderr, "Warning: "+format+"\n", args...)
+		}})
+		if err != nil {
+			return Response{
+				Success: false,
+				Error:   err.Error(),
+			}
+		}
+
+		if manifest != nil {
+			manifest.ExportedCount = result.IssueCount
+			manifest.Warnings = append(manifest.Warnings, encodingWarnings...)
+			if err := export.WriteManifest(exportArgs.JSONLPath, manifest); err != nil {
+				// Non-fatal, just log
+				fmt.Fprintf(os.Stderr, "Warning: failed to write manifest: %v\n", err)
+			}
+		}
+
+		responseData := map[string]interface{}{
+			"exported_count": result.IssueCount,
+			"path":           exportArgs.JSONLPath,
+			"skipped_count":  len(encodingWarnings),
+		}
+		if len(encodingWarnings) > 0 {
+			responseData["warnings"] = encodingWarnings
+		}
+		data, _ := json.Marshal(responseData)
+		return Response{
+			Success: true,
+			Data:    data,
+		}
+	}
+
+	issues, err := collectExportIssues(ctx, sqliteStore, store, cfg, manifest)
 	if err != nil {
 		return Response{
 			Success: false,
-			Error:   fmt.Sprintf("failed to get issues: %v", err),
+			Error:   err.Error(),
 		}
 	}
-
-	// Sort by ID for consistent output
 	sort.Slice(issues, func(i, j int) bool {
 		return issues[i].ID < issues[j].ID
 	})
-
-	// Populate dependencies for all issues (core data)
-	var allDeps map[string][]*types.Dependency
-	result := export.FetchWithPolicy(ctx, cfg, export.DataTypeCore, "get dependencies", func() error {
-		var err error
-		allDeps, err = store.GetAllDependencyRecords(ctx)
-		return err
-	})
-	if result.Err != nil {
-		return Response{
-			Success: false,
-			Error:   fmt.Sprintf("failed to get dependencies: %v", result.Err),
-		}
-	}
-	for _, issue := range issues {
-		issue.Dependencies = allDeps[issue.ID]
-	}
-
-	// Populate labels for all issues (enrichment data)
-	issueIDs := make([]string, len(issues))
-	for i, issue := range issues {
-		issueIDs[i] = issue.ID
-	}
-	var allLabels map[string][]string
-	result = export.FetchWithPolicy(ctx, cfg, export.DataTypeLabels, "get labels", func() error {
-		var err error
-		allLabels, err = store.GetLabelsForIssues(ctx, issueIDs)
-		return err
-	})
-	if result.Err != nil {
-		return Response{
-			Success: false,
-			Error:   fmt.Sprintf("failed to get labels: %v", result.Err),
-		}
-	}
-	if !result.Success {
-		// Labels fetch failed but policy allows continuing
-		allLabels = make(map[string][]string) // Empty map
-		if manifest != nil {
-			manifest.PartialData = append(manifest.PartialData, "labels")
-			manifest.Warnings = append(manifest.Warnings, result.Warnings...)
-			manifest.Complete = false
-		}
-	}
-	for _, issue := range issues {
-		issue.Labels = allLabels[issue.ID]
-	}
-
-	// Populate comments for all issues (enrichment data)
-	var allComments map[string][]*types.Comment
-	result = export.FetchWithPolicy(ctx, cfg, export.DataTypeComments, "get comments", func() error {
-		var err error
-		allComments, err = store.GetCommentsForIssues(ctx, issueIDs)
-		return err
-	})
-	if result.Err != nil {
-		return Response{
-			Success: false,
-			Error:   fmt.Sprintf("failed to get comments: %v", result.Err),
-		}
-	}
-	if !result.Success {
-		// Comments fetch failed but policy allows continuing
-		allComments = make(map[string][]*types.Comment) // Empty map
-		if manifest != nil {
-			manifest.PartialData = append(manifest.PartialData, "comments")
-			manifest.Warnings = append(manifest.Warnings, result.Warnings...)
-			manifest.Complete = false
-		}
-	}
-	for _, issue := range issues {
-		issue.Comments = allComments[issue.ID]
-	}
 
 	// Create temp file for atomic write
 	dir := filepath.Dir(exportArgs.JSONLPath)
@@ -199,11 +184,8 @@ func (s *Server) handleExport(req *Request) Response {
 		fmt.Fprintf(os.Stderr, "Warning: failed to set file permissions: %v\n", err)
 	}
 
-	// Clear dirty flags for exported issues
-	if err := store.ClearDirtyIssuesByID(ctx, exportedIDs); err != nil {
-		// Non-fatal, just log
-		fmt.Fprintf(os.Stderr, "Warning: failed to clear dirty flags: %v\n", err)
-	}
+	// No dirty flags are cleared here: this file is not the repository's JSONL,
+	// so its contents say nothing about what the canonical file still owes.
 
 	// Write manifest if configured
 	if manifest != nil {
@@ -465,19 +447,54 @@ func (s *Server) triggerExport(ctx context.Context, store storage.Storage, dbPat
 		}
 	}
 
+	// One serialized publication: the publisher takes the dirty snapshot, calls
+	// back for the content below, and records the content hash across the rename.
+	// Sorting by ID happens as it writes.
+	_, err = jsonlpub.Publish(ctx, store, jsonlPath, func(ctx context.Context) ([]*types.Issue, error) {
+		return collectExportIssues(ctx, sqliteStore, store, cfg, nil)
+	}, jsonlpub.Options{Warnf: func(format string, args ...any) {
+		fmt.Fprintf(os.Stderr, "Warning: "+format+"\n", args...)
+	}})
+	return err
+}
+
+// dropUnencodableIssues removes issues that cannot be JSON-encoded, returning
+// the survivors and one warning per dropped issue. It exists for the
+// skip_encoding_errors policy: the publisher writes all-or-nothing, so an issue
+// that would fail encoding has to be removed before the write, not during it.
+func dropUnencodableIssues(issues []*types.Issue, manifest *export.Manifest) ([]*types.Issue, []string) {
+	kept := make([]*types.Issue, 0, len(issues))
+	var warnings []string
+	for _, issue := range issues {
+		if _, err := json.Marshal(issue); err != nil {
+			warning := fmt.Sprintf("skipped encoding issue %s: %v", issue.ID, err)
+			fmt.Fprintf(os.Stderr, "Warning: %s\n", warning)
+			warnings = append(warnings, warning)
+			if manifest != nil {
+				manifest.FailedIssues = append(manifest.FailedIssues, export.FailedIssue{
+					IssueID: issue.ID,
+					Reason:  err.Error(),
+				})
+				manifest.Complete = false
+			}
+			continue
+		}
+		kept = append(kept, issue)
+	}
+	return kept, warnings
+}
+
+// collectExportIssues fetches every issue plus the dependencies, labels and
+// comments the JSONL mirror carries, applying the export policy for each data
+// type. When manifest is non-nil, degraded fetches are recorded on it.
+func collectExportIssues(ctx context.Context, sqliteStore *sqlite.SQLiteStorage, store storage.Storage, cfg *export.Config, manifest *export.Manifest) ([]*types.Issue, error) {
 	// Export to JSONL including tombstones for sync propagation (bd-rp4o fix)
 	allIssues, err := sqliteStore.SearchIssues(ctx, "", types.IssueFilter{IncludeTombstones: true})
 	if err != nil {
-		return fmt.Errorf("failed to fetch issues for export: %w", err)
+		return nil, fmt.Errorf("failed to fetch issues for export: %w", err)
 	}
 
-	// Sort by ID for consistent output (same as handleExport)
-	sort.Slice(allIssues, func(i, j int) bool {
-		return allIssues[i].ID < allIssues[j].ID
-	})
-
 	// CRITICAL: Populate all related data to prevent data loss
-	// This mirrors the logic in handleExport
 
 	// Populate dependencies for all issues (core data)
 	var allDeps map[string][]*types.Dependency
@@ -487,7 +504,7 @@ func (s *Server) triggerExport(ctx context.Context, store storage.Storage, dbPat
 		return err
 	})
 	if result.Err != nil {
-		return fmt.Errorf("failed to get dependencies: %w", result.Err)
+		return nil, fmt.Errorf("failed to get dependencies: %w", result.Err)
 	}
 	for _, issue := range allIssues {
 		issue.Dependencies = allDeps[issue.ID]
@@ -505,11 +522,16 @@ func (s *Server) triggerExport(ctx context.Context, store storage.Storage, dbPat
 		return err
 	})
 	if result.Err != nil {
-		return fmt.Errorf("failed to get labels: %w", result.Err)
+		return nil, fmt.Errorf("failed to get labels: %w", result.Err)
 	}
 	if !result.Success {
 		// Labels fetch failed but policy allows continuing
 		allLabels = make(map[string][]string) // Empty map
+		if manifest != nil {
+			manifest.PartialData = append(manifest.PartialData, "labels")
+			manifest.Warnings = append(manifest.Warnings, result.Warnings...)
+			manifest.Complete = false
+		}
 	}
 	for _, issue := range allIssues {
 		issue.Labels = allLabels[issue.ID]
@@ -523,43 +545,20 @@ func (s *Server) triggerExport(ctx context.Context, store storage.Storage, dbPat
 		return err
 	})
 	if result.Err != nil {
-		return fmt.Errorf("failed to get comments: %w", result.Err)
+		return nil, fmt.Errorf("failed to get comments: %w", result.Err)
 	}
 	if !result.Success {
 		// Comments fetch failed but policy allows continuing
 		allComments = make(map[string][]*types.Comment) // Empty map
+		if manifest != nil {
+			manifest.PartialData = append(manifest.PartialData, "comments")
+			manifest.Warnings = append(manifest.Warnings, result.Warnings...)
+			manifest.Complete = false
+		}
 	}
 	for _, issue := range allIssues {
 		issue.Comments = allComments[issue.ID]
 	}
 
-	// Write to JSONL file with atomic replace (temp file + rename)
-	dir := filepath.Dir(jsonlPath)
-	base := filepath.Base(jsonlPath)
-	tempFile, err := os.CreateTemp(dir, base+".tmp.*")
-	if err != nil {
-		return fmt.Errorf("failed to create temp file: %w", err)
-	}
-	tempPath := tempFile.Name()
-	defer func() {
-		_ = tempFile.Close()
-		_ = os.Remove(tempPath)
-	}()
-
-	encoder := json.NewEncoder(tempFile)
-	for _, issue := range allIssues {
-		if err := encoder.Encode(issue); err != nil {
-			return fmt.Errorf("failed to encode issue %s: %w", issue.ID, err)
-		}
-	}
-
-	// Close temp file before rename
-	_ = tempFile.Close()
-
-	// Atomic replace
-	if err := os.Rename(tempPath, jsonlPath); err != nil {
-		return fmt.Errorf("failed to replace JSONL file: %w", err)
-	}
-
-	return nil
+	return allIssues, nil
 }

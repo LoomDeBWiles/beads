@@ -8,6 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/steveyegge/beads/internal/config"
+	"github.com/steveyegge/beads/internal/jsonlpub"
 	"github.com/steveyegge/beads/internal/storage/sqlite"
 )
 
@@ -221,8 +222,16 @@ local database, then exports any local changes back to JSONL.`,
 
 		// Import from all repos
 		jsonlPath := findJSONLPath()
-		if err := importToJSONLWithStore(ctx, store, jsonlPath); err != nil {
+		importedHash, err := importToJSONLWithStore(ctx, store, jsonlPath)
+		if err != nil {
 			return fmt.Errorf("import failed: %w", err)
+		}
+		// Single-repo fallback: record the imported content so the export below
+		// does not read the file it just imported as somebody else's writing.
+		if importedHash != "" {
+			if err := jsonlpub.RecordImport(ctx, store, jsonlPath, importedHash, jsonlpub.Options{}); err != nil {
+				return fmt.Errorf("failed to record imported JSONL content: %w", err)
+			}
 		}
 
 		// Export to all repos

@@ -14,6 +14,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/steveyegge/beads/internal/jsonlpub"
 	"github.com/steveyegge/beads/internal/storage"
 	"github.com/steveyegge/beads/internal/types"
 )
@@ -88,13 +89,18 @@ func computeJSONLHash(jsonlPath string) (string, error) {
 	return hex.EncodeToString(hasher.Sum(nil)), nil
 }
 
-// hasJSONLChanged checks if JSONL content has changed since last import using SHA256 hash.
-// Returns true if JSONL content differs from last import, false otherwise.
-// This is safe against git operations that restore old files with recent mtimes.
+// hasJSONLChanged checks if JSONL content has changed since last import.
+// Returns true if the file holds content this database has not recorded, false
+// otherwise. It is safe against git operations that restore old files with
+// recent mtimes: the answer is about content, never about timestamps.
 //
-// Performance optimization: Checks mtime first as a fast-path. Only computes expensive
-// SHA256 hash if mtime changed. This makes 99% of checks instant (mtime unchanged = content
-// unchanged) while still catching git operations that restore old content with new mtimes.
+// The verdict comes from jsonlpub.ContentState, so a file published but not yet
+// promoted (its hash recorded as pending) counts as unchanged - that is what
+// keeps validatePreExport from refusing every future export after a publication
+// crashed between the rename and the promotion.
+//
+// A file no hash was ever recorded for counts as changed: an unrecorded JSONL
+// must be imported before an export is allowed to replace it.
 //
 // In multi-repo mode, keySuffix should be the stable repo identifier (e.g., ".", "../frontend").
 // The keySuffix must not contain the ':' separator character (bd-ar2.12).
@@ -105,40 +111,18 @@ func hasJSONLChanged(ctx context.Context, store storage.Storage, jsonlPath strin
 		return true
 	}
 
-	// Build metadata keys with optional suffix for per-repo tracking (bd-ar2.10, bd-ar2.11)
-	// Renamed from last_import_hash to jsonl_content_hash (bd-39o) - more accurate name
-	// since this hash is updated on both import AND export
-	hashKey := "jsonl_content_hash"
-	oldHashKey := "last_import_hash" // Migration: check old key if new key missing
-	if keySuffix != "" {
-		hashKey += ":" + keySuffix
-		oldHashKey += ":" + keySuffix
-	}
-
-	// Always compute content hash (bd-v0y fix)
-	// Previous mtime-based fast-path was unsafe: git operations (pull, checkout, rebase)
-	// can change file content without updating mtime, causing false negatives.
-	// Hash computation is fast enough for sync operations (~10-50ms even for large DBs).
-	currentHash, err := computeJSONLHash(jsonlPath)
+	status, err := jsonlpub.ContentState(ctx, store, jsonlPath, keySuffix)
 	if err != nil {
 		// If we can't read JSONL, assume no change (don't auto-import broken files)
 		return false
 	}
 
-	// Get content hash from metadata (try new key first, fall back to old for migration)
-	lastHash, err := store.GetMetadata(ctx, hashKey)
-	if err != nil || lastHash == "" {
-		// Try old key for migration (bd-39o)
-		lastHash, err = store.GetMetadata(ctx, oldHashKey)
-		if err != nil || lastHash == "" {
-			// No previous hash - this is the first run or metadata is missing
-			// Assume changed to trigger import
-			return true
-		}
+	switch status {
+	case jsonlpub.StatusDiverged, jsonlpub.StatusNoMetadata:
+		return true
+	default:
+		return false
 	}
-
-	// Compare hashes
-	return currentHash != lastHash
 }
 
 // validatePreExport performs integrity checks before exporting database to JSONL.
