@@ -242,3 +242,11 @@
 - Actual: `divergence_caught=yes` plus "Error: Database out of sync with JSONL." The one case where refusing is correct still refuses.
 - Verdict: PASS
 - All nine Verification checks now satisfied: 1-5 by the builder pre-merge, 6-9 live post-install.
+
+## 2026-08-06T00:25 — ITEM DONE: SHIPPED + DEPLOYED + LIVE
+- Deploy log committed (ab6801473), final wt-merge.sh completed: merged, pushed, branch w2_stale-race deleted, worktree removed. main == origin/main. Canonical report: ~/projects/tools/beads/work/w2_stale-race/work_report.md
+- All nine Verification checks satisfied: 1-5 pre-merge by the builder, 6-9 live post-install by me.
+- Inbox completion row posted: beads-w2-done, with the rendered report URL.
+- Deployed state: ~/.local/bin/bd = 0.34.0 (f31496d65). Rollback artifact ~/.local/bin/bd.cd33f0f3.bak retained (stop daemons, mv it back, verify `bd version` reports cd33f0f3). One fleet daemon running on the new binary (pid 1765086); the other six relaunch on demand, which is the approved lock-in scope.
+- Process note for the next item: this final entry had to be landed through a second worktree (w3_w2-deploylog) because the item worktree was removed by the final wt-merge before the entry was written. WORK.md's Deploy safety net (lane `work/*/manager_log.md` in .wt-lanes) does not apply here — the beads repo has no .wt-lanes file. Write the closing entry BEFORE the final merge, or add the lane.
+- JANITOR (beads): worktree backup-2026-01-17 orphan 199d — relayed to user, OWNER work, untouched.
