@@ -1,0 +1,21 @@
+Phases 1 and 2 are implemented, both gates are green, and the work is committed as `43903f9c9` on `w2_stale-race`.
+
+**What the change does:** a new package `internal/jsonlpub` owns the JSONL file and its metadata as one unit. Publishing takes a per-file lock, snapshots the dirty rows *before* building the issue set, records a pending hash *before* the rename and promotes it after, then clears only the rows that did not change while the export ran. Readers get a four-state verdict; anything other than "fresh" is re-sampled under the publish lock, so a reader straddling a publish no longer calls a healthy repo diverged. Importers hash the bytes they actually parsed. Every reader/writer (daemon export/import, CLI export/import/sync, autoflush, RPC server, staleness checks) now goes through it, and non-canonical targets no longer touch canonical metadata or dirty flags.
+
+**Verification (checks 1-5, logs in `work/w2_stale-race/builds/`):**
+
+| Check | Log | Result |
+|---|---|---|
+| 1 protocol state machine (`./internal/jsonlpub -v`) | step1.log | PASS |
+| 2 mid-export mutation vs conditional clear | step2.log | PASS |
+| 3 staleness/record-import regressions | step3.log | PASS |
+| 4 pre-import flush loop dead | step4.log | PASS |
+| 5 no new suite failures | step5.log | `comm -13` printed nothing |
+
+Phase 1 gate and Phase 2 gate both status 0 (`phase1_gate.log`, `phase2_gate.log`). Full-suite baseline and post runs both exit 1 on the same two pre-existing signatures only: `TestMergeDriverWithLockedConfig_E2E` (+ its subtest), which fails at baseline because a write to a read-only git config succeeds in this environment.
+
+**Three test expectations were updated**, documented in the build report with reasoning: two multi-repo tests asserted the global `jsonl_content_hash` was unset while themselves invoking the single-repo publisher (now they assert the suffixed writes leave that key unchanged), and the empty-database export test now asserts the divergence refusal first, records the file, then re-runs the original empty-DB message assertion. Ten other divergences from the plan (all same-scope, no data risk) are listed in `work/w2_stale-race/builds/build.md`.
+
+**Lock order** is documented with evidence: `operationMu` (three sites in `cmd/bd/daemon_sync.go`) → publish flock (three sites in `internal/jsonlpub`), never inverted — `operationMu` is unexported in `package main` and unreachable from the library, and no `buildIssues` callback locks it.
+
+**Phase 3 is untouched and yours:** nothing was built to `/tmp/bd.new`, no daemon was stopped, `~/.local/bin` was not touched. `work/w2_stale-race/e2e_scratch.sh` is the plan's script byte-for-byte, `chmod +x`, unrun. Checks 6-9 are listed PENDING with commands in the report's "Pending User Verification" section, including the plan's `$BD --help` flag verification, which needs the Phase 3 binary.

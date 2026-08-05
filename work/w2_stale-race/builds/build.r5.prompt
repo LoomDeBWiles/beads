@@ -1,0 +1,39 @@
+You are a Builder agent. Apply one accepted final-review finding to work item work/w2_stale-race.
+
+**Worker contract:** you were dispatched into this item's worktree — /home/ben/worktrees/beads/w2_stale-race is that worktree. Read and edit this repo only through it; `~/projects/` paths are for OTHER repos. Commit by pathspec on the work branch. Done = commit + report, then stop. wt-new / wt-merge / wt-janitor belong to your dispatcher — never run them.
+
+## Context
+
+Read `work/w2_stale-race/plan_v5.md` (the contract), `work/w2_stale-race/builds/build.md` (Rounds 3 and 4), and `work/w2_stale-race/final_review_v2.md` (the review, finding F1). The finding is ACCEPTED; do not re-litigate it.
+
+The previous round's dispatch told you to preserve the `recordImport` call on the unchanged-content path of `AutoImportIfNewer`. That instruction was wrong, and this round corrects it — the behavior it preserved had a rationale ("refreshes the import timestamp so a mtime-only change stops looking new") that this very work item abolishes, and preserving it created a defect.
+
+## Scope — exactly this fix, nothing else
+
+**`internal/autoimport/autoimport.go:105`, the `StatusFresh` branch.** `currentHash` is the hash of the bytes `os.ReadFile` returned at line 76. `ContentState` reaches its Fresh verdict by independently re-reading and re-hashing the file (`jsonlpub.sampleState` → `HashFile`). So Fresh can be true because the *new* bytes match committed-or-pending while `currentHash` matches nothing. Recording that orphan hash sets `jsonl_content_hash` to a value describing content the database neither holds nor has on disk, and `clearPending` destroys the pending record that described the real content — after which every `ContentState` returns `StatusDiverged`, `cmd/bd/staleness.go:48` prints "Database out of sync with JSONL" on a healthy repo, and `jsonlpub.Publish` refuses every export with `ErrDiverged`. That is precisely the failure this work item exists to eliminate. It is new in commit `beee58774`: before it, the branch condition was `currentHash == lastHash`, so the hash compared and the hash recorded always described the same bytes.
+
+Fix: delete the `recordImport` call from the `StatusFresh` branch so it only logs and returns, matching the sibling CLI path in `cmd/bd/autoflush.go`, whose Fresh branch already returns without recording. Remove the now-false comment above it.
+
+This is safe because nothing in non-test code reads `last_import_time` — verify that yourself with a grep and report the result. Its only non-test appearances are the key constant at `internal/jsonlpub/jsonlpub.go:45`, the multi-repo writer at `cmd/bd/daemon_sync.go:282`, and comments. Staleness is content-based now, so the timestamp-refresh rationale is vestigial, and `contentStateLocked` already promotes a lingering pending hash at the next locked event.
+
+Do not change the `StatusNoFile`, `StatusDiverged`, or `StatusNoMetadata` branches, the error-direction mapping, or the `recordImport` call on the post-import path (`internal/autoimport/autoimport.go:140`), which correctly records bytes it actually parsed.
+
+Add a regression test pinning the defect: a file whose bytes differ from the ones the caller read, in a state where `ContentState` returns Fresh, must leave `jsonl_content_hash` and `jsonl_pending_hash` untouched. Verify the test fails on the pre-fix tree and record that output, as the previous rounds did (restore the old code with the Edit tool, never `git checkout`).
+
+Do not make any other change. Do not add guards, tests, or refactors beyond the above.
+
+## Gates
+
+1. `go test ./cmd/bd/ ./internal/autoimport/ ./internal/rpc/ ./internal/jsonlpub/ ./internal/storage/sqlite/ -count=1` must pass. If an existing test asserted the deleted recording behavior, say so explicitly in your report and explain why the assertion is no longer correct — do not silently rewrite it.
+2. Full-suite comparison exactly as the plan's Verification specifies: `go test ./... -count=1 -json` into `work/w2_stale-race/artifacts/post4.json` (with its stderr and status files), the existing `work/w2_stale-race/artifacts/normalize_failures.py` → `work/w2_stale-race/artifacts/post4_failures.txt`, then `comm -13 work/w2_stale-race/artifacts/baseline_failures.txt work/w2_stale-race/artifacts/post4_failures.txt` must print nothing.
+3. Capture each gate's stdout+stderr under `work/w2_stale-race/builds/`.
+
+## Report
+
+Append a `## Round 5 (Fresh-path record removal)` section to `work/w2_stale-race/builds/build.md`: what changed and where, the `last_import_time` grep result, the regression test's pre-fix failure and post-fix pass, the gate output, and any divergence. Leave the rest of build.md intact.
+
+## Exit Conditions
+- SUCCESS: gates green, report appended, changes committed by pathspec on the work branch.
+- FAILURE: write the report, exit without committing.
+- NEVER run `git checkout` — stay on your work branch.
+- Do not build to /tmp/bd.new, do not stop any daemon, do not touch ~/.local/bin. Phase 3 is the dispatcher's.

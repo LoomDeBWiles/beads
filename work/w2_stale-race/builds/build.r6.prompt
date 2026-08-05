@@ -1,0 +1,42 @@
+You are a Builder agent. Strengthen one regression test in work item work/w2_stale-race. This is the last change before deploy.
+
+**Worker contract:** you were dispatched into this item's worktree — /home/ben/worktrees/beads/w2_stale-race is that worktree. Read and edit this repo only through it; `~/projects/` paths are for OTHER repos. Commit by pathspec on the work branch. Done = commit + report, then stop. wt-new / wt-merge / wt-janitor belong to your dispatcher — never run them.
+
+## Context
+
+Read `work/w2_stale-race/final_review_v3.md` (finding F1) and your own Round 5 section in `work/w2_stale-race/builds/build.md`. The finding is ACCEPTED; do not re-litigate it.
+
+Your Round 5 divergence note claimed no seam exists to inject "the file is replaced between the caller's `os.ReadFile` and the protocol's re-read". That claim is wrong, and I verified the refutation myself in source: `internal/jsonlpub/jsonlpub.go:244-260`, `sampleState` calls `HashFile(jsonlPath)` at line 245 **before** `readCommitted` at :253 and the pending `GetMetadata` at :257. A `MetadataStore` wrapper whose `GetMetadata` replaces the file's bytes therefore fires strictly inside the window.
+
+Consequently `TestAutoImportIfNewer_FreshPathRecordsNothing` never reaches the state the defect describes. In its fixture the pre-fix code wrote the hash of the bytes actually on disk and cleared pending — byte-for-byte the healthy promoted steady state — so it pins the implementation rule "the Fresh branch writes nothing" rather than the harm rule "never commit a hash for content the database did not parse". It would also reject a legitimate future implementation that promotes a lingering pending hash on the fresh path.
+
+## Scope — exactly this, nothing else
+
+Rewrite `TestAutoImportIfNewer_FreshPathRecordsNothing` (`internal/autoimport/autoimport_test.go`) to reach Fresh through that seam:
+
+- Wrap the store so its first `GetMetadata` call replaces the JSONL file's bytes.
+- Set `jsonl_pending_hash` (or committed, whichever makes the state coherent) so that after the swap the *new* bytes read Fresh, while the bytes `AutoImportIfNewer` actually read hash to something else.
+- Pre-fix, the deleted line then commits a hash matching neither the file nor any recorded content.
+- Assert the post-condition the finding names: `jsonlpub.ContentState(...)` still returns `StatusFresh` after the call. The deleted line turns that into `StatusDiverged` — which is the user-visible harm, the message this whole work item exists to eliminate.
+
+Keep the test deterministic: the swap must be driven by the wrapper's call ordering, never by a goroutine racing the read.
+
+Verify the rewritten test fails on the pre-fix tree — restore the deleted `recordImport` call with the Edit tool, run, capture the output, then restore the fixed code verbatim. Never `git checkout`. The pre-fix failure must show `StatusDiverged`, not merely a changed metadata value; if it does not, your fixture still is not reaching the defect state and you should say so rather than settle.
+
+Change no production code. Change no other test.
+
+## Gates
+
+1. `go test ./internal/autoimport/ ./internal/jsonlpub/ ./cmd/bd/ -count=1` must pass.
+2. Full-suite comparison exactly as the plan's Verification specifies: `go test ./... -count=1 -json` into `work/w2_stale-race/artifacts/post5.json` (with its stderr and status files), the existing `work/w2_stale-race/artifacts/normalize_failures.py` → `work/w2_stale-race/artifacts/post5_failures.txt`, then `comm -13 work/w2_stale-race/artifacts/baseline_failures.txt work/w2_stale-race/artifacts/post5_failures.txt` must print nothing.
+3. Capture each gate's stdout+stderr under `work/w2_stale-race/builds/`.
+
+## Report
+
+Append a `## Round 6 (regression test strengthened)` section to `work/w2_stale-race/builds/build.md`: the new fixture's mechanism, the pre-fix failure output showing `StatusDiverged`, the post-fix pass, the gate output, and an explicit retraction of Round 5's "no seam exists" claim. Leave the rest of build.md intact.
+
+## Exit Conditions
+- SUCCESS: gates green, report appended, changes committed by pathspec on the work branch.
+- FAILURE: write the report, exit without committing.
+- NEVER run `git checkout` — stay on your work branch.
+- Do not build to /tmp/bd.new, do not stop any daemon, do not touch ~/.local/bin. Phase 3 is the dispatcher's.

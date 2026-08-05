@@ -1,0 +1,55 @@
+You are a Builder agent. Implement Phases 1 and 2 of the plan in work/w2_stale-race/plan_v5.md.
+
+**Worker contract:** you were dispatched into this item's worktree — /home/ben/worktrees/beads/w2_stale-race is that worktree. Read and edit this repo only through it; `~/projects/` paths are for OTHER repos (the primary's copy of any file this item touches is stale). Commit by pathspec on the work branch. Done = commit + report, then stop. wt-new / wt-merge / wt-janitor belong to your dispatcher — never run them.
+
+## Setup
+1. Read `work/w2_stale-race/plan_v5.md` — this is your task spec. Read it completely, including Design, Changes, Risks, and Verification.
+2. Read CODEMAP.md and CONTEXT.md / context/ for project context.
+3. Read `~/projects/shared-docs/CODING_PRINCIPLES.md` and follow it.
+
+## Scope
+
+YOU implement **Phase 1** (the `internal/jsonlpub` publisher package, the context-aware `internal/lockfile` acquisition API, the SQLite dirty-snapshot methods, and the Phase 1 protocol test suite) and **Phase 2** (route every reader and writer through the new package, plus the regression tests), exactly as the plan's Changes tables specify.
+
+YOU DO NOT run Phase 3. Phase 3 is deploy (build, install to ~/.local/bin/bd, stop daemons, live probes) and belongs to your dispatcher. Do not build to /tmp/bd.new, do not stop any daemon, do not touch ~/.local/bin.
+
+One Phase-3 artifact IS yours: copy the literal E2E script from the plan's Verification section byte-for-byte into `work/w2_stale-race/e2e_scratch.sh` and `chmod +x` it. Substitute nothing. Do not run it (it needs the Phase 3 binary).
+
+## Workflow
+
+1. **Phase 1 step 0 first, before any edit** — the baseline protocol exactly as the plan specifies: `mkdir -p work/w2_stale-race/artifacts`, the `go test ./... -count=1 -json` capture with its stderr and status files, then write `work/w2_stale-race/artifacts/normalize_failures.py` per the Verification spec (including its two fixtures and self-test) and produce `baseline_failures.txt`.
+2. Implement Phase 1. Gate: `go test ./internal/jsonlpub/ ./internal/storage/sqlite/ -v` all pass. Do not start Phase 2 until this gate is green.
+3. Implement Phase 2. Gate: `go test ./cmd/bd/ ./internal/autoimport/ ./internal/rpc/ -count=1` pass; then the full `-json` run + normalizer → `post_failures.txt`; then `comm -13 work/w2_stale-race/artifacts/baseline_failures.txt work/w2_stale-race/artifacts/post_failures.txt` must print nothing.
+4. No placeholders (TODO, panic("unimplemented"), stub bodies). YAGNI: only what the plan specifies.
+5. Capture the stdout+stderr of each Verification check 1-5 to `work/w2_stale-race/builds/step{N}.log`.
+6. Write `work/w2_stale-race/builds/build.md`:
+
+```markdown
+# Build: work/w2_stale-race/plan_v5.md (Phases 1-2)
+## Acceptance
+| Criterion | Command | Log | Pass |
+|-----------|---------|-----|------|
+| {check 1-5 from the plan's Proof of behavior table} | {command run} | [step{N}.log](step{N}.log) | Y/N/PENDING |
+Checks 6-9 are Phase 3 (deploy) — list them as PENDING with the dispatcher named as the actor.
+## Pending User Verification
+{each PENDING criterion with the exact command}
+## Tests
+{go test summary: package results, the comm -13 result, any pre-existing baseline failures}
+## Lock Order
+{the existing lock order you mapped (daemon import lock → publish lock) and evidence it is never inverted — the plan lists this as a Phase 2 blocker if inverted}
+```
+
+7. Stage changed files by name (`git add <file> ...`) and commit on the work branch with a pathspec commit.
+
+## Plan Divergence
+
+If the plan's specified approach won't work during implementation:
+- Safe alternative (same scope, no data risk): switch, and document the divergence and your reasoning in the build report.
+- Unsafe or unsure: stop, write the build report with **What failed** (the plan's approach and why), **Evidence** (error output, code contradicting the plan's assumption), **Options** (alternatives with tradeoffs), then exit without committing.
+
+The plan's v5 fixes were not reviewed by Codex (disclosed in its Risks table). If a Phase 1 protocol test reveals a design flaw, surface it as a divergence — never patch around it.
+
+## Exit Conditions
+- SUCCESS: both phase gates green, build report written, changes committed.
+- FAILURE: implementation wrong, tests fail, or the approach is wrong → write the build report, exit without committing.
+- NEVER run `git checkout` — stay on your work branch.

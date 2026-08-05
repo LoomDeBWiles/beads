@@ -1,0 +1,19 @@
+Both fixes applied, gates green, committed as `757611577` on `w2_stale-race`.
+
+**F1 — `cmd/bd/autoflush.go`.** `autoImportIfNewer` decided freshness by reading `jsonl_content_hash` itself, so it never saw `jsonl_pending_hash` — the key a publication writes before its rename. Between a publish's rename and its promote, the file matches only pending, so this reader called the database's own just-exported bytes "new" and re-imported them; and its bare `SetMetadata` of the committed key, outside the publish lock, could interleave with a daemon promote and leave the record describing the pre-import file, which is the `StatusDiverged` behind "Database out of sync with JSONL" on a healthy repo.
+
+- `:103` — hash of the read bytes now via `jsonlpub.HashBytes`, one hashing authority, and it is the value carried to the record.
+- `:105-131` — freshness via `jsonlpub.ContentState`. Fresh (committed **or** pending) → skip; diverged → import; no-metadata → import (first import); no-file → skip. A `ContentState` error falls through as no-metadata, which is the bd-663 "treat as first import" recovery, same direction as before.
+- `:263-272` — the old metadata tail replaced by `jsonlpub.RecordImport(..., currentHash, jsonlpub.Options{})`, under the publish lock, which also retires pending and stamps `last_import_time`.
+
+Preserved untouched: the merge-conflict check, the ID-remapping full-export vs incremental-flush decision, `ClearAllExportHashes`, and every stderr message.
+
+Regression test `cmd/bd/autoimport_test.go:120` `TestAutoImportIfNewer_PendingHashIsFresh` records the file's hash under pending and a different hash under committed, then asserts no import. It fails on the pre-fix tree (log `r3_prefix_test_fails.log`) and passes after.
+
+**F2 — `work/w2_stale-race/builds/build.md:68`.** `SnapshotDirtyIssues` → `GetDirtyIssueSnapshots`. The file held one occurrence, not the two the review counted; none remain.
+
+**Gates.** Gate 1 (`go test` on the five packages) status 0. Gate 2: full `go test ./... -count=1 -json` → `artifacts/post2.json`, normalized to `post2_failures.txt`, and `comm -13 baseline_failures.txt post2_failures.txt` printed nothing — only the two pre-existing environmental failures remain. Logs in `work/w2_stale-race/builds/r3_gate1.log` and `r3_gate2.log`.
+
+**No divergences.** Two notes recorded in the report: `RecordImport` also sets `jsonl_file_hash`, which this path never did (a correction — it used to leave that key stale after clearing `export_hashes`, which `validateJSONLIntegrity` would later warn about); and `jsonlpub.Options{}` carries no `Warnf`, as the dispatch specified, so the publisher's best-effort warnings are silent here while the `RecordImport` error still prints.
+
+One thing outside scope, flagged not changed: `internal/autoimport.AutoImportIfNewer` (`autoimport.go:84-97`) still makes its *freshness* decision with the same direct `jsonl_content_hash` read — the last commit converted its metadata *tails* to `RecordImport`, which is all the plan's line 177 asked of it. Same blindness to pending, smaller blast radius since its write side is now correct.

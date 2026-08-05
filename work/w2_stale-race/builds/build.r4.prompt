@@ -1,0 +1,39 @@
+You are a Builder agent. Apply one fix to work item work/w2_stale-race.
+
+**Worker contract:** you were dispatched into this item's worktree — /home/ben/worktrees/beads/w2_stale-race is that worktree. Read and edit this repo only through it; `~/projects/` paths are for OTHER repos. Commit by pathspec on the work branch. Done = commit + report, then stop. wt-new / wt-merge / wt-janitor belong to your dispatcher — never run them.
+
+## Context
+
+Read `work/w2_stale-race/plan_v5.md` (the contract, especially its Design section), `work/w2_stale-race/builds/build.md` (the build report, including its Round 3 section), and `work/w2_stale-race/final_review_v1.md`.
+
+The prior round fixed `cmd/bd/autoflush.go`, whose auto-import decided freshness with a hand-rolled `jsonl_content_hash` comparison blind to `jsonl_pending_hash`. Its own report flagged that `internal/autoimport.AutoImportIfNewer` still has the identical defect on its read side. That is the same bug class a second time, which means the first pass was too shallow: the plan's design makes `internal/jsonlpub` the sole authority for deciding freshness, and a hand-rolled hash comparison anywhere contradicts it.
+
+## Scope — exactly this, nothing else
+
+**`internal/autoimport/autoimport.go:84-97`.** `AutoImportIfNewer` reads `jsonl_content_hash` directly (with the `last_import_hash` migration fallback) and compares it to the hash of the bytes it just read. It is blind to `jsonl_pending_hash`, so in the window between a publish's rename and its promote — or after a crash there — it re-imports the database's own just-exported bytes.
+
+Fix: make the freshness decision through `jsonlpub.ContentState`, exactly as `cmd/bd/autoflush.go` now does (read that implementation and its caller-specific mapping first; match it). Its write side already goes through `RecordImport` and must stay as it is.
+
+Preserve every behavior that is not this defect, in particular the existing `recordImport` call on the unchanged-content path (the comment there explains it refreshes the import timestamp so a mtime-only change stops looking new) and the bd-39o migration fallback semantics, mapped onto the tri-state the same way `autoflush.go` maps them.
+
+Add a regression test pinning the defect: with the file matching only `jsonl_pending_hash` and a different hash under `jsonl_content_hash`, `AutoImportIfNewer` must not re-import. Verify the test fails on the pre-fix tree and record that output, as the previous round did.
+
+Then confirm the class is closed: `grep -rn 'jsonl_content_hash\|last_import_hash' --include=*.go .` excluding tests and `internal/jsonlpub` must show no remaining *freshness decision*. Two known non-defects that should remain untouched — state in your report that you checked them and why each is not a freshness decision: the daemon health check at `cmd/bd/daemon_event_loop.go:242` (tests only whether metadata is readable) and the multi-repo `updateExportMetadata` at `cmd/bd/daemon_sync.go:281` (the plan preserves multi-repo metadata byte-identical). Report anything else you find; do not fix it without saying so.
+
+Do not make any other change. Do not add guards, tests, or refactors beyond the above.
+
+## Gates
+
+1. `go test ./cmd/bd/ ./internal/autoimport/ ./internal/rpc/ ./internal/jsonlpub/ ./internal/storage/sqlite/ -count=1` must pass.
+2. Full-suite comparison exactly as the plan's Verification specifies: `go test ./... -count=1 -json` into `work/w2_stale-race/artifacts/post3.json` (with its stderr and status files), the existing `work/w2_stale-race/artifacts/normalize_failures.py` → `work/w2_stale-race/artifacts/post3_failures.txt`, then `comm -13 work/w2_stale-race/artifacts/baseline_failures.txt work/w2_stale-race/artifacts/post3_failures.txt` must print nothing.
+3. Capture each gate's stdout+stderr under `work/w2_stale-race/builds/`.
+
+## Report
+
+Append a `## Round 4 (freshness-authority sweep)` section to `work/w2_stale-race/builds/build.md`: what changed and where, the regression test's pre-fix failure and post-fix pass, the gate output, the result of the class-closure grep with your judgment on each remaining hit, and any divergence. Leave the rest of build.md intact.
+
+## Exit Conditions
+- SUCCESS: gates green, report appended, changes committed by pathspec on the work branch.
+- FAILURE: write the report, exit without committing.
+- NEVER run `git checkout` — stay on your work branch.
+- Do not build to /tmp/bd.new, do not stop any daemon, do not touch ~/.local/bin. Phase 3 is the dispatcher's.

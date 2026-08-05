@@ -1,0 +1,16 @@
+Done. Committed `0b0c47773` on `w2_stale-race`.
+
+**What changed:** only `TestAutoImportIfNewer_FreshPathRecordsNothing` in `internal/autoimport/autoimport_test.go` (+ the Round 6 report). `git diff internal/autoimport/autoimport.go` against HEAD is empty — production code is byte-identical.
+
+**Mechanism:** a `swapOnFirstRead` store embeds `storage.Storage` and overrides `GetMetadata` so the first metadata read replaces the JSONL file's bytes exactly once. Since `sampleState` hashes the file at `internal/jsonlpub/jsonlpub.go:245` before `readCommitted` at :253, that swap lands strictly inside the freshness check, driven by call ordering with no goroutine. The caller reads bytes A; the swap puts bytes B on disk; `jsonl_pending_hash` records B; committed names older content. The first sample is provisional Diverged, the locked re-sample sees B, returns Fresh, and promotes B — so the Fresh branch is entered carrying hash(A), which matches neither the file nor any recorded key.
+
+**Pre-fix (deleted `recordImport` restored with Edit, then reverted verbatim):**
+```
+autoimport_test.go:849: ContentState = diverged after a Fresh auto-import, want fresh
+--- FAIL: TestAutoImportIfNewer_FreshPathRecordsNothing (0.01s)
+```
+`diverged` — the state behind the "database is out of sync with JSONL" message, not just a changed metadata value. Post-fix: PASS.
+
+**Gates:** Gate 1 `go test ./internal/autoimport/ ./internal/jsonlpub/ ./cmd/bd/ -count=1` exit 0. Gate 2 full suite → `artifacts/post5.json` (stderr 0 bytes), normalized to `post5_failures.txt`; `comm -13` against baseline printed nothing — the same two pre-existing environmental failures, no new ones. Logs in `builds/r6.prefix_test.log`, `r6.gate1.log`, `r6.gate2.log`.
+
+Round 5's "no seam exists" claim is explicitly retracted in the report.

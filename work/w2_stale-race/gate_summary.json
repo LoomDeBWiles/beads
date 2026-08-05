@@ -1,0 +1,74 @@
+{
+  "item": "w2_stale-race",
+  "title": "Fix the Beads false-staleness bug that killed the fleet w25 supervisor",
+  "gate_id": "w2-v5",
+  "context": [
+    "/home/ben/worktrees/beads/w2_stale-race/work/w2_stale-race",
+    "/home/ben/projects/beads/work/w2_stale-race"
+  ],
+  "plan_path": "/home/ben/worktrees/beads/w2_stale-race/work/w2_stale-race/plan_v5.md",
+  "what_this_does": "Beads keeps issues in two places: a SQLite database and the issues.jsonl text file that git syncs. A safety gate refuses to run when it thinks the two disagree, but it judges by file timestamps, so the daemon's own rewrites constantly trip it on healthy repos — that false alarm killed the w25 supervisor. This plan makes the gate compare actual content instead of clocks, routes every writer of the file through one publisher that records a content hash before and after each atomic replace, adds the matching record step after every import, and stops the daemon's once-per-second rewrite loop. Then it rebuilds bd, installs it, and proves the fix live on the fleet repo.",
+  "why_bother": "The false alarm has already cost a full supervisor run (w25 spent days in manual fallback) and it can kill any future orchestrator run on any repo with a beads daemon. True divergence detection is kept: only bytes written by someone else can trip the gate.",
+  "flow": [
+    { "label": "Build the publisher package", "detail": "internal/jsonlpub: freshness check, serialized publish, import record; failpoint tests for every crash state.", "actor": "agent" },
+    { "label": "Route all readers and writers", "detail": "Six file writers and every import path go through the one package; the daemon loop's missing cleanup lands here.", "actor": "agent" },
+    { "label": "Prove it end to end", "detail": "Scripted scratch-repo test on the new binary: loop dead, same-bytes rewrite fresh, real divergence still refused.", "actor": "agent" },
+    { "label": "Deploy", "detail": "Stop the 7 bd daemons with bd's own stop command, install the new binary by rename, verify live on fleet; daemons relaunch on demand.", "actor": "agent" },
+    { "label": "Decide", "detail": "Approve or send back through the page rail.", "actor": "human" }
+  ],
+  "approving": [
+    {
+      "plain": "The staleness check will compare what the file actually contains against what the database recorded, so touching or rewriting the file with identical content can never again trigger the out-of-sync failure.",
+      "detail": "CheckStaleness and hasJSONLChanged both delegate to jsonlpub.ContentState: file sha256 vs the committed hash (jsonl_content_hash) and a new pending hash (jsonl_pending_hash). Verified live: fleet's stored hash d1df2880… already equals the file's sha256 exactly where the old mtime check false-fired."
+    },
+    {
+      "plain": "Every program that writes or imports the issues file will go through one shared code path that keeps the file and its record consistent at every instant, even across crashes.",
+      "detail": "Publish: lock → divergence guard → dirty-first snapshot → temp write → pending hash → guard re-check → rename → promote → conditional dirty clear. RecordImport is the import-side twin committing the hash of the bytes actually parsed. Six writers routed (daemon export/flush/sync, autoflush, bd sync, bd export default path, RPC canonical path); custom-path exports stay plain."
+    },
+    {
+      "plain": "The daemon bug that rewrote the file once per second forever gets the one missing cleanup call, so the race window stops recurring.",
+      "detail": "The pre-import flush at cmd/bd/daemon_sync.go:569-583 finally clears the dirty rows it exports (marked_at-conditional, so a mutation made mid-export is never silently lost), plus a divergence branch so a pulled file imports instead of starving."
+    },
+    {
+      "plain": "The new bd binary replaces the installed one and the running daemons are stopped with bd's own command; they restart themselves on demand, as agreed at lock-in.",
+      "detail": "Backup kept at ~/.local/bin/bd.cd33f0f3.bak; install by rename (immune to text-file-busy); live probes on fleet: touch + info exits 0, daemon quiet over 60 s, true divergence still refused. Rollback is seconds: stop daemons, rename the backup over."
+    },
+    {
+      "plain": "Four Codex review rounds shaped this plan; the final round's ten fixes are applied but had no further review round, which is disclosed as a risk with the test suite as backstop.",
+      "detail": "Trajectory of accepted findings: 11 → 11 → 12 → 10 across rounds, moving from design gaps to implementation precision. The Phase 1 failpoint tests exercise every final-round mechanism (guard re-check, starvation branch, lock-held sampler, cancellation) before any caller migrates."
+    }
+  ],
+  "prompt_changes": [],
+  "rejected": [
+    {
+      "idea": "Upgrade to upstream Beads v1.x (Dolt), which deleted this whole design",
+      "why": "It is one architecture away, not three versions: 109 local fork commits, the wt-merge JSONL lanes, and the orchestrator's bd integration all assume the current design. Recorded as a separate future work item candidate; you chose to fix the local fork now."
+    },
+    {
+      "idea": "Bake BD_ALLOW_STALE / no-daemon armor into supervise-launch.sh",
+      "why": "That treats the alarm, not the lie. With staleness meaning real content divergence, the emergency overrides used during w25 become unnecessary."
+    },
+    {
+      "idea": "Persistent crash-evidence files to close the last theoretical gap",
+      "why": "The gap needs a mid-crash publish followed by a byte-exact manual restore before any locked operation — two rarities in sequence, self-correcting at the next publish or import. Standing state costs more than the transient; documented as a revisit-if-observed risk."
+    }
+  ],
+  "risks": [
+    {
+      "risk": "The final review round's ten fixes went into v5 without another Codex pass (the 4-round ceiling).",
+      "response": "Every one of those mechanisms is covered by the Phase 1 protocol tests that must pass before any caller migrates; a test-revealed design flaw comes back as a defect, not a workaround."
+    },
+    {
+      "risk": "Every freshness check now hashes the file (mtime shortcut removed).",
+      "response": "The codebase already accepted this cost for auto-import (bd-v0y: 10-50 ms worst case); fleet's 811 KB file hashes in under a millisecond."
+    },
+    {
+      "risk": "The conditional dirty-clear depends on the SQLite driver round-tripping timestamps exactly.",
+      "response": "A dedicated Phase 1 test proves insert → snapshot → conditional delete on the real driver before anything relies on it."
+    },
+    {
+      "risk": "A publisher wedged inside the lock could briefly block readers that saw a mismatch.",
+      "response": "Lock hold is milliseconds; acquisition is context-aware so RPC deadlines interrupt it; the steady-state fresh path never locks."
+    }
+  ]
+}

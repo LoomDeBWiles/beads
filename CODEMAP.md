@@ -63,7 +63,9 @@ Storage layer:
 | `internal/routing/routing.go` | Maintainer vs contributor role detection |
 | `internal/beads/beads.go` | Database/dir discovery, redirect support |
 | `internal/config/config.go` | Config loading (YAML, env, git config) |
-| `internal/lockfile/lock.go` | Cross-platform file locking |
+| `internal/lockfile/lock.go` | Cross-platform file locking; `AcquireContext` for interruptible waits |
+| `internal/jsonlpub/jsonlpub.go` | Sole authority for DB↔JSONL consistency: `ContentState` (freshness), `Publish` (DB→file), `RecordImport` (file→DB) |
+| `internal/jsonlpub/store.go` | `DirtySnapshotStore` — narrow SQLite-only interface for `(id, marked_at)` snapshots and conditional clears |
 
 ## Data Flow
 
@@ -76,6 +78,16 @@ bd sync → export dirty → git add/commit → git push
   → git pull → JSONL import → reconcile DB
 
 bd ready → query open issues → filter out blocked → sort by policy → display
+
+JSONL publication (every canonical write goes through internal/jsonlpub.Publish):
+  publish lock → divergence guard → snapshot (dirty rows first, then issues)
+  → write temp + hash → record jsonl_pending_hash → re-check guard hash
+  → rename into place → promote to jsonl_content_hash, delete pending
+  → conditional dirty clear (DELETE WHERE issue_id=? AND marked_at=?)
+
+Freshness (ContentState): file sha256 ∈ {jsonl_content_hash, jsonl_pending_hash}
+  → fresh; matches neither → diverged; neither key set → no-metadata.
+  Provisional mismatches are re-sampled under the lock before a verdict.
 ```
 
 ## Configuration

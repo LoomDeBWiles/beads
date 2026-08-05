@@ -1,0 +1,84 @@
+{
+  "item": "w2_stale-race",
+  "title": "Beads no longer reports a healthy repository as out of sync",
+  "report_path": "/home/ben/worktrees/beads/w2_stale-race/work/w2_stale-race/work_report.md",
+  "context": [
+    "/home/ben/worktrees/beads/w2_stale-race/work/w2_stale-race",
+    "/home/ben/projects/beads/work/w2_stale-race"
+  ],
+  "what_shipped": "Beads keeps its issues in two places at once: a SQLite database and a JSONL text file that git tracks. Before answering a question it checked whether the file was newer than the database by comparing the file's modification time against a stored timestamp, and refused to answer if it was. That test measured clock order rather than content, so an export that rewrote the file with identical bytes read as a conflict. Freshness is now decided by comparing the file's actual content against the hash the database recorded, and an export records the new content's hash before it reveals the file rather than after, so no moment exists where the two disagree. A daemon bug that rewrote the file once per second, reopening that window continuously, was also fixed.",
+  "how_verified": [
+    {
+      "check": "Publisher protocol tested at every intermediate state, including a simulated crash after each step",
+      "result": "Pass — a reader gets the correct verdict at all seven failpoints"
+    },
+    {
+      "check": "The original failure shape, pinned as a regression test: an export rewrites the file with identical bytes",
+      "result": "Pass — reads fresh, where the old code read stale"
+    },
+    {
+      "check": "The daemon's once-per-second rewrite loop",
+      "result": "Pass — the second watcher pass exports nothing and leaves zero unflushed rows"
+    },
+    {
+      "check": "Genuine divergence, where someone else wrote the file, is still caught",
+      "result": "Pass — still refuses, which is the one case where refusing is correct"
+    },
+    {
+      "check": "Whole test suite compared against a baseline recorded before any edit",
+      "result": "No new failures across four separate post-change runs; the two failures present are pre-existing and environmental"
+    }
+  ],
+  "numbers": [
+    {"label": "Source and test files changed", "value": "23"},
+    {"label": "Commits", "value": "5"},
+    {"label": "Review rounds", "value": "3"},
+    {"label": "Findings accepted / rejected", "value": "4 / 0"},
+    {"label": "New failing tests introduced", "value": "0"}
+  ],
+  "deviations": [
+    {
+      "planned": "The plan inventoried every place that reads or writes the shared file and routed them all through the new single authority",
+      "actual": "Two more freshness checks were found during review, one of them running before nearly every command a user types",
+      "why": "Both decided freshness with their own hand-rolled hash comparison that knew nothing about the new protocol. Finding the same defect twice meant the first fix was too shallow, so it was taken to the root and the closure proven by an exhaustive search with a verdict on every remaining hit."
+    },
+    {
+      "planned": "Preserve a call that re-records the content hash when nothing has changed",
+      "actual": "That call was removed",
+      "why": "I asked for it to be preserved and was wrong. Its purpose was to refresh a timestamp so a touched file stops looking new, which is exactly the behavior this work abolishes. Kept, it recorded a hash from one read of the file while the freshness verdict came from a second, independent read, which could commit a hash describing content that exists nowhere and produce the very error this item removes."
+    },
+    {
+      "planned": "Each caller sorts its own records before writing them out",
+      "actual": "Sorting moved inside the publisher",
+      "why": "It makes 'the same content always produces the same hash' a property of the protocol rather than a convention every future caller has to remember."
+    }
+  ],
+  "key_decisions": [
+    {
+      "decision": "Record the hash before revealing the file, using two keys rather than one",
+      "why": "A database write and a file rename cannot commit together. With one key, whichever happens second leaves a window where the two disagree, and a crash in the wrong spot makes the system refuse every future export. With a pending key written first and promoted after, every reachable state — steady, mid-write, crashed on either side — still reads as fresh."
+    },
+    {
+      "decision": "Every regression test had to fail on the old code before it was accepted",
+      "why": "A test that passes both before and after a fix proves nothing about the fix. Each was checked by restoring the old code in place and watching the test fail with the intended message."
+    },
+    {
+      "decision": "The last review round's finding was about a test, not shipped behavior, so it was applied without another review round",
+      "why": "The test reached the right answer through a setup that never entered the broken state, so it pinned an implementation detail instead of the actual harm. Worth fixing, but not worth a further round of review."
+    }
+  ],
+  "follow_up": [
+    {
+      "issue": "Two functions that compare modification times are now dead code; their only callers are each other",
+      "suggestion": "Delete them in a later item to retire the modification-time predicate from the codebase entirely"
+    },
+    {
+      "issue": "The older blocking lock API remains alongside the new interruptible one, kept for its existing callers",
+      "suggestion": "Migrate those callers and remove the old entry point"
+    },
+    {
+      "issue": "Upstream beads has since replaced this whole two-store design with a different database, deleting this class of bug outright",
+      "suggestion": "Treat that upgrade as its own platform migration, as decided when this plan was locked in"
+    }
+  ]
+}

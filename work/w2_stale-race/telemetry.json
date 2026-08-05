@@ -1,0 +1,113 @@
+{
+  "schema": 2,
+  "item_id": "beads__w2__stale-race",
+  "repo": "beads",
+  "work_id": "w2",
+  "slug": "stale-race",
+  "dates": {
+    "first": "2026-08-11",
+    "last": "2026-08-11",
+    "source": "log-entries"
+  },
+  "route": "manual",
+  "orchestrator_failed": true,
+  "route_evidence": "supervisor/ has zero daemon-dispatched runs; found direct builder execution artifacts: builds/build.md, builds/build.r1.meta, builds/step1.log, builds/step2.log, builds/step3.log, builds/step4.log, builds/step5.log",
+  "task_type": "code",
+  "ext_shares": {
+    "infra": 0.0,
+    "prompt_skill": 0.0,
+    "context_docs": 0.0,
+    "config": 0.0,
+    "code": 1.0,
+    "docs": 0.0
+  },
+  "plan_reviews": [
+    {
+      "round": "v1",
+      "model": "gpt-5.6-sol",
+      "model_confidence": "era",
+      "raised": 11,
+      "accepted": 11,
+      "rejected": 0,
+      "effort": "xhigh"
+    },
+    {
+      "round": "v2",
+      "model": "gpt-5.6-sol",
+      "model_confidence": "era",
+      "raised": 12,
+      "accepted": 11,
+      "rejected": 1,
+      "effort": "xhigh"
+    },
+    {
+      "round": "v3",
+      "model": "gpt-5.6-sol",
+      "model_confidence": "era",
+      "raised": 12,
+      "accepted": 12,
+      "rejected": 0,
+      "effort": "xhigh"
+    },
+    {
+      "round": "v4",
+      "model": "gpt-5.6-sol",
+      "model_confidence": "era",
+      "raised": 10,
+      "accepted": 10,
+      "rejected": 0,
+      "effort": "xhigh"
+    }
+  ],
+  "final_reviews": [
+    {
+      "version": "v1",
+      "model": "gpt-5.6-sol",
+      "model_confidence": "era",
+      "raised": 2,
+      "accepted": 2,
+      "rejected": 0,
+      "repaired": null
+    },
+    {
+      "version": "v2",
+      "model": "gpt-5.6-sol",
+      "model_confidence": "era",
+      "raised": 1,
+      "accepted": 1,
+      "rejected": 0,
+      "repaired": true
+    },
+    {
+      "version": "v3",
+      "model": "gpt-5.6-sol",
+      "model_confidence": "era",
+      "raised": 1,
+      "accepted": 1,
+      "rejected": 0,
+      "repaired": null
+    }
+  ],
+  "fix_cycles": 1,
+  "builder_dispatches": [
+    {
+      "bead": "build",
+      "run": "r1",
+      "model": "gpt-5.6-terra",
+      "effort": "xhigh",
+      "model_confidence": "banner",
+      "outcome": "dead",
+      "review_verdict": "unknown",
+      "review_artifact": "unknown"
+    }
+  ],
+  "bug_beads": null,
+  "failure_causes": [],
+  "parse": {
+    "dispositions": "regex",
+    "sources": [
+      "manager_log.md"
+    ],
+    "notes": []
+  }
+}

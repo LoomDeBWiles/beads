@@ -1,0 +1,3 @@
+# Raw `go test -json` streams (~3 MB each). The committed evidence is the
+# normalized failure lists these produce plus the recorded exit statuses.
+*.json

@@ -1,0 +1,11 @@
+SUCCESS — committed `1e2128ae6` on `w2_stale-race`.
+
+**What changed.** `internal/autoimport/autoimport.go`, the `StatusFresh` branch: deleted the `recordImport` call and the now-false comment about refreshing the import timestamp. The branch logs and returns, like `cmd/bd/autoflush.go`'s Fresh branch. Nothing else touched — the other three status branches, the error-direction mapping, and the post-import `recordImport` are unchanged.
+
+**`last_import_time` grep.** 19 hits, four non-test and none of them a read: the key constant at `internal/jsonlpub/jsonlpub.go:45`, the multi-repo `SetMetadata` writer at `cmd/bd/daemon_sync.go:282`, and comments at `daemon_sync.go:252-253` and `autoflush.go:266`. The other 15 are tests that set it as fixture state or assert the multi-repo writer wrote it. Removing the refresh changes no decision anywhere.
+
+**Regression test.** `TestAutoImportIfNewer_FreshPathRecordsNothing` puts the repo in the state between a publication's rename and its promote (file bytes recorded under `jsonl_pending_hash`, `jsonl_content_hash` still naming the previous content) and asserts both keys are untouched. Pre-fix it fails on both: the committed key is overwritten with a hash this call never parsed, and the pending record is wiped to `""`. Post-fix it passes. Output in `builds/r5.prefix_test.log`.
+
+**Gates.** Targeted five packages: all `ok`, exit 0. No existing test asserted the removed behavior, so nothing was rewritten. Full suite → `artifacts/post4.json` (stderr 0 bytes); `comm -13` against the baseline prints nothing — the same two pre-existing `TestMergeDriverWithLockedConfig_E2E` environmental failures, no new ones.
+
+**One divergence, in the test's setup only.** The dispatch asked for a file whose bytes differ from the ones the caller read. There's no deterministic seam for that: between `os.ReadFile` and `sampleState`'s `HashFile` the only code is the pure `HashBytes` call, so no store wrapper or callback can rewrite the file in that window and a racing goroutine would be flaky. Reaching Fresh through the pending key instead produces the identical observable defect deterministically and asserts exactly the two keys the dispatch named. Recorded in build.md, which also retracts Round 4's "self-heals" observation.

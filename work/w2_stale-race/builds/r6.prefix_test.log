@@ -1,0 +1,6 @@
+=== RUN   TestAutoImportIfNewer_FreshPathRecordsNothing
+    autoimport_test.go:849: ContentState = diverged after a Fresh auto-import, want fresh: the Fresh branch recorded a hash for bytes it never parsed, so a healthy repository now reports being out of sync with its JSONL
+--- FAIL: TestAutoImportIfNewer_FreshPathRecordsNothing (0.01s)
+FAIL
+FAIL	github.com/steveyegge/beads/internal/autoimport	0.010s
+FAIL

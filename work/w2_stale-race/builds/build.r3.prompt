@@ -1,0 +1,35 @@
+You are a Builder agent. Apply two accepted final-review findings to work item work/w2_stale-race.
+
+**Worker contract:** you were dispatched into this item's worktree — /home/ben/worktrees/beads/w2_stale-race is that worktree. Read and edit this repo only through it; `~/projects/` paths are for OTHER repos. Commit by pathspec on the work branch. Done = commit + report, then stop. wt-new / wt-merge / wt-janitor belong to your dispatcher — never run them.
+
+## Context
+
+The item's implementation landed in commit 43903f9c9. Read `work/w2_stale-race/plan_v5.md` (the contract, especially its Design section), `work/w2_stale-race/builds/build.md` (the prior build report), and `work/w2_stale-race/final_review_v1.md` (the review). Both findings below were ACCEPTED by the conductor; do not re-litigate them.
+
+## Scope — exactly these two fixes, nothing else
+
+**F1 (med) — `cmd/bd/autoflush.go:107,258`.** `autoImportIfNewer` is a fourth import path the plan's caller list at line 177 never named. It runs in `PersistentPreRun` for nearly every CLI command (`cmd/bd/main.go:790,793`) and in direct mode (`cmd/bd/direct_mode.go:105`). Today it reads `jsonl_content_hash` directly at :107 and writes it back with a bare `SetMetadata` at :258 outside the publish lock, so it is blind to `jsonl_pending_hash` and can commit a hash for bytes that are no longer in the file. Two reachable consequences: between a publish's rename and its promote (or after a crash there) the file matches only pending, so this reader calls it newer and re-imports the database's own just-exported bytes; and an unlocked write of the committed key racing a daemon promote leaves committed = hash of the pre-import file while the file holds newer bytes — the exact `StatusDiverged` that makes `cmd/bd/staleness.go:48` print "Database out of sync with JSONL" on a healthy repo.
+
+Fix: give `autoImportIfNewer` the same treatment the plan specifies for `internal/autoimport.AutoImportIfNewer` — decide freshness through `jsonlpub.ContentState` instead of the hand-rolled hash comparison, and replace the `:258-268` metadata tail with `jsonlpub.RecordImport(ctx, store, jsonlPath, currentHash, jsonlpub.Options{})` carrying the hash of the bytes this path actually parsed. Preserve its existing behaviors that are not part of this defect: the merge-conflict-marker check, the ID-remapping full-export vs incremental-flush decision, and the bd-663 "metadata error ⇒ treat as first import" recovery, mapped onto the tri-state the way the plan's caller-specific mapping rules require.
+
+Add a regression test pinning the defect: with a pending hash recorded and the file matching only pending, this path must not re-import.
+
+**F2 (low) — `work/w2_stale-race/builds/build.md:68`.** The Tests section names a storage method `SnapshotDirtyIssues` that does not exist. The shipped method is `GetDirtyIssueSnapshots`. Rename the two occurrences.
+
+Do not make any other change. Do not add guards, tests, or refactors beyond the two fixes above. If you believe F1's fix requires touching something not named here, that is a divergence — document it in the report with evidence.
+
+## Gates
+
+1. `go test ./cmd/bd/ ./internal/autoimport/ ./internal/rpc/ ./internal/jsonlpub/ ./internal/storage/sqlite/ -count=1` must pass.
+2. Re-run the full-suite comparison exactly as the plan's Verification specifies: `go test ./... -count=1 -json` into `work/w2_stale-race/artifacts/post2.json` (with its stderr and status files), the existing `work/w2_stale-race/artifacts/normalize_failures.py` → `work/w2_stale-race/artifacts/post2_failures.txt`, then `comm -13 work/w2_stale-race/artifacts/baseline_failures.txt work/w2_stale-race/artifacts/post2_failures.txt` must print nothing.
+3. Capture each gate's stdout+stderr under `work/w2_stale-race/builds/`.
+
+## Report
+
+Append a `## Round 3 (final-review fixes)` section to `work/w2_stale-race/builds/build.md` recording, for each of F1 and F2: what changed, the file:line, the gate output, and any divergence. Leave the existing content of build.md intact apart from the F2 rename.
+
+## Exit Conditions
+- SUCCESS: gates green, report appended, changes committed by pathspec on the work branch.
+- FAILURE: write the report, exit without committing.
+- NEVER run `git checkout` — stay on your work branch.
+- Do not build to /tmp/bd.new, do not stop any daemon, do not touch ~/.local/bin. Phase 3 is the dispatcher's.
