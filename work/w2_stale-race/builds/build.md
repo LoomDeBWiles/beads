@@ -646,3 +646,152 @@ $ comm -13 work/w2_stale-race/artifacts/baseline_failures.txt work/w2_stale-race
 The same two pre-existing environmental failures as the baseline, no new ones.
 
 `gofmt -l internal/autoimport/autoimport_test.go` is clean.
+
+---
+
+## Round 7 (E2E gate corrected)
+
+Applied corrections E1-E4 from `plan_delta_v6.md` to `work/w2_stale-race/e2e_scratch.sh`.
+No production code touched; no test under `cmd/` or `internal/` touched.
+
+### The four edits
+
+**E1 — readiness probe waits for the watcher, not the socket.**
+
+Before (lines 14-16, following `daemon --start`):
+```
+"$BD" daemon --start --interval 1s
+for i in $(seq 1 20); do [ -S .beads/bd.sock ] && break; sleep 0.5; done
+LOG=$(ls -1 .beads/daemon-*.log 2>/dev/null | tail -1) || LOG=.beads/daemon.log
+```
+After (lines 12-15):
+```
+"$BD" daemon --start --interval 1s
+LOG=.beads/daemon.log
+for i in $(seq 1 40); do grep -q "Using event-driven mode" "$LOG" 2>/dev/null && break; sleep 0.5; done   # E1: wait for the watcher, not the socket
+sleep 1
+```
+The socket is bound at "RPC server ready", before the startup sync cycle and before the
+file watcher exists. Polling the log line "Using event-driven mode" waits for the watcher
+itself; the `sleep 1` is the settle. `LOG` moved up because the probe needs it.
+
+**E2 — the stranded dirty row is created after the readiness wait.**
+
+Before (lines 12-13, immediately after `create`, i.e. *before* `daemon --start`):
+```
+"$BD" --no-daemon --no-auto-flush update "$ID" --status in_progress
+D=$(sqlite3 .beads/beads.db "SELECT COUNT(*) FROM dirty_issues"); echo "dirty_after_update=$D"; test "$D" = 1
+"$BD" daemon --start --interval 1s
+```
+After (lines 16-17, following the E1 settle):
+```
+"$BD" --no-daemon --no-auto-flush update "$ID" --status in_progress   # E2: after the startup publish, not before
+D=$(sqlite3 .beads/beads.db "SELECT COUNT(*) FROM dirty_issues"); echo "dirty_after_update=$D"; test "$D" = 1
+```
+Both the update and its `dirty_after_update` assertion moved as a pair. This is the
+correction without which the script could never pass: the fixed publisher retires the
+markers it flushes, and the daemon publishes once at startup, so a marker created before
+`daemon --start` is already gone when the measurement window opens.
+
+**E3 — bounded poll before reading the dirty count.**
+
+Before (lines 21-22):
+```
+for i in $(seq 1 20); do F=$(count_flushes); [ "$F" -gt "$B0" ] && break; sleep 0.5; done
+D=$(sqlite3 .beads/beads.db "SELECT COUNT(*) FROM dirty_issues"); echo "flushes=$((F-B0)) dirty_after_flush=$D"
+```
+After (lines 22-23):
+```
+for i in $(seq 1 20); do D=$(sqlite3 .beads/beads.db "SELECT COUNT(*) FROM dirty_issues"); [ "$D" = 0 ] && break; sleep 0.5; done   # E3: let the publish finish before reading
+echo "flushes=$((F-B0)) dirty_after_flush=$D"
+```
+`Flushing …` is logged before `exportToJSONLWithStore` runs (`cmd/bd/daemon_sync.go:563-564`),
+so the flush-count loop broke mid-publish. Only the reading instant moved. The assertion on
+the next line, `test "$((F-B0))" = 1; test "$D" = 0`, is byte-identical to before.
+
+**E4 — literal log path, and the meaningless `$?` echo dropped.**
+
+`LOG=$(ls -1 .beads/daemon-*.log 2>/dev/null | tail -1) || LOG=.beads/daemon.log` became the
+literal `LOG=.beads/daemon.log` (shown under E1 above). The old form worked only because
+`pipefail` is set thirteen lines earlier — an invisible dependency.
+
+And, after the same-bytes `info` call:
+```
+ "$BD" --no-daemon --db "$S/.beads/beads.db" --no-auto-import info --json >/dev/null
+-echo "same_bytes_info_exit=$?"
+ printf '%s\n' '{"id":"t-zzz9",...}' >> .beads/issues.jsonl
+```
+That echo always printed 0 under `set -e`; the real assertion is `set -e` itself.
+
+Unchanged: the `count_flushes` helper, the EXIT trap, the `mktemp -d` scratch, all five
+assertions (one flush, dirty 0, no second flush, same-bytes freshness, divergence caught),
+and the bounded-polling style.
+
+### Run 1 — fixed binary (`BD=/tmp/bd.new`, `bd version 0.34.0 (f31496d65)`)
+
+Full log: `work/w2_stale-race/artifacts/e2e_v6_new.log`
+
+```
+⚠ Creating issue without description.
+  Issues without descriptions lack context for future work.
+  Consider adding --description="Why this issue exists and what needs to be done"
+Starting bd daemon (interval: 1s, auto-commit: false, auto-push: false, auto-pull: false)
+Daemon started (PID 1444559)
+✓ Updated issue: t-dnv
+dirty_after_update=1
+flushes=1 dirty_after_flush=0
+flushes_after_second_touch=1
+divergence_caught=yes
+Error: Database out of sync with JSONL. Run 'bd sync --import-only' to fix.
+E2E_PASS
+SCRATCH_DIR=/tmp/tmp.O8XOAT9DjC (leave for cleanup)
+exit=0
+```
+
+`E2E_PASS`, exit 0. One flush, marker retired, no second flush over 10 s, the same-bytes
+`info` exits 0 (no out-of-sync false positive), and a genuinely appended line is still caught.
+
+### Run 2 — pre-fix binary (`BD=/home/ben/.local/bin/bd.cd33f0f3.bak`, `cd33f0f3`)
+
+Variant written to `/tmp/e2e_v6_old.sh`, not committed. It differs from the tracked script
+in the `BD=` line only (verified by `diff` with line 3 elided). The rollback binary itself
+was read and executed, never modified.
+
+Full log: `work/w2_stale-race/artifacts/e2e_v6_old.log`
+
+```
+⚠ Creating issue without description.
+  Issues without descriptions lack context for future work.
+  Consider adding --description="Why this issue exists and what needs to be done"
+Starting bd daemon (interval: 1s, auto-commit: false, auto-push: false, auto-pull: false)
+Daemon started (PID 1453025)
+✓ Updated issue: t-25c
+dirty_after_update=1
+flushes=1 dirty_after_flush=1
+SCRATCH_DIR=/tmp/tmp.BXpb6b8OsJ (leave for cleanup)
+exit=1
+```
+
+FAILS at `test "$D" = 0` with `flushes=1 dirty_after_flush=1`, after the same 10 s bounded
+wait — the stranded marker the fix removes. No `E2E_PASS`. This matches `rca_e2e_v1.md` §4.4
+exactly, so the gate discriminates: green on the fix, red on the pre-fix binary.
+
+### No production code changed
+
+```
+$ git diff --stat -- cmd/ internal/
+$ git diff --cached --stat -- cmd/ internal/
+(both empty)
+```
+
+The only working-tree modification from this round is `work/w2_stale-race/e2e_scratch.sh`,
+plus the two new artifact logs.
+
+### Housekeeping
+
+Two scratch daemons were started, both by the script itself inside its own `mktemp -d`
+directory, and both stopped by the script's EXIT trap: PID 1444559 (`/tmp/tmp.O8XOAT9DjC`,
+run 1) and PID 1453025 (`/tmp/tmp.BXpb6b8OsJ`, run 2). Verified afterwards by recorded PID —
+`ps -p` reports both gone — and `pgrep -af '[b]d daemon'` shows zero daemons under `/tmp`.
+No daemon outside those two scratch directories was touched. Nothing installed; nothing
+written to `~/.local/bin`. Scratch repos left in place for inspection.

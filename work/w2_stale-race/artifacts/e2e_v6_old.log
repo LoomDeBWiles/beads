@@ -1,0 +1,10 @@
+⚠ Creating issue without description.
+  Issues without descriptions lack context for future work.
+  Consider adding --description="Why this issue exists and what needs to be done"
+Starting bd daemon (interval: 1s, auto-commit: false, auto-push: false, auto-pull: false)
+Daemon started (PID 1453025)
+✓ Updated issue: t-25c
+dirty_after_update=1
+flushes=1 dirty_after_flush=1
+SCRATCH_DIR=/tmp/tmp.BXpb6b8OsJ (leave for trash.sh)
+exit=1
