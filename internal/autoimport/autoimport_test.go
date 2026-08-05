@@ -727,3 +727,41 @@ func TestAutoImportIfNewer_RewriteDuringImport(t *testing.T) {
 		t.Error("stale = false after a rewrite landed mid-import, want true")
 	}
 }
+
+// TestAutoImportIfNewer_PendingHashIsFresh pins the state between a
+// publication's rename and its promote: the file holds bytes the database
+// itself just exported, recorded under jsonl_pending_hash but not yet under
+// jsonl_content_hash. A reader that compares against the committed hash alone
+// calls that content new and re-imports the database's own export.
+func TestAutoImportIfNewer_PendingHashIsFresh(t *testing.T) {
+	dbPath, jsonlPath := stalenessRepo(t)
+	published := `{"id":"test-pending-fresh","title":"Published but not yet promoted","status":"open","priority":1,"issue_type":"task"}` + "\n"
+	writeJSONL(t, jsonlPath, published, time.Time{})
+
+	store := memory.New("")
+	ctx := context.Background()
+
+	// Mid-publication state: pending records the file's bytes, committed still
+	// holds the hash of the content the file had before the rename.
+	if err := store.SetMetadata(ctx, "jsonl_pending_hash", jsonlpub.HashBytes([]byte(published))); err != nil {
+		t.Fatalf("failed to set pending hash: %v", err)
+	}
+	if err := store.SetMetadata(ctx, "jsonl_content_hash", jsonlpub.HashBytes([]byte("previous content\n"))); err != nil {
+		t.Fatalf("failed to set committed hash: %v", err)
+	}
+
+	notify := &testNotifier{}
+	importCalled := false
+	importFunc := func(ctx context.Context, issues []*types.Issue) (int, int, map[string]string, error) {
+		importCalled = true
+		return len(issues), 0, nil, nil
+	}
+
+	if err := AutoImportIfNewer(ctx, store, dbPath, notify, importFunc, nil); err != nil {
+		t.Fatalf("AutoImportIfNewer failed: %v", err)
+	}
+
+	if importCalled {
+		t.Error("AutoImportIfNewer re-imported content the database had already published (file matched jsonl_pending_hash)")
+	}
+}

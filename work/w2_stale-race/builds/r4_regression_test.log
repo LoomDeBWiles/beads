@@ -1,0 +1,4 @@
+=== RUN   TestAutoImportIfNewer_PendingHashIsFresh
+--- PASS: TestAutoImportIfNewer_PendingHashIsFresh (0.00s)
+PASS
+ok  	github.com/steveyegge/beads/internal/autoimport	0.002s

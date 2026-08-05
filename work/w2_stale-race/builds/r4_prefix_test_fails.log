@@ -1,0 +1,6 @@
+=== RUN   TestAutoImportIfNewer_PendingHashIsFresh
+    autoimport_test.go:765: AutoImportIfNewer re-imported content the database had already published (file matched jsonl_pending_hash)
+--- FAIL: TestAutoImportIfNewer_PendingHashIsFresh (0.00s)
+FAIL
+FAIL	github.com/steveyegge/beads/internal/autoimport	0.002s
+FAIL

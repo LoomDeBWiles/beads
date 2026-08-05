@@ -279,3 +279,155 @@ shipped method is `GetDirtyIssueSnapshots` (`internal/jsonlpub/store.go`,
 192. Renamed. Note: the review said "two occurrences"; the file contained one, at line 68.
 `grep -rn "SnapshotDirtyIssues" work/w2_stale-race/builds/build.md` now returns nothing, and
 line 68 reads `GetDirtyIssueSnapshots`. No other content in this report was touched.
+
+## Round 4 (freshness-authority sweep)
+
+### What changed and where
+
+One source change: `internal/autoimport/autoimport.go`, inside `AutoImportIfNewer`
+(the function `internal/rpc/server_export_import_auto.go:358` calls, i.e. the RPC/daemon
+auto-import path).
+
+Before, the function decided freshness itself: it hashed the bytes it had just read, read
+`jsonl_content_hash` with a hand-rolled fallback to `last_import_hash` (bd-39o), and
+skipped the import only on an exact match with the committed key. That comparison is blind
+to `jsonl_pending_hash` — the key a publication writes *before* its rename and promotes to
+the committed key *after*. Between those two steps, and after a crash between them, the
+file on disk holds bytes the database itself just exported but only `pending` records
+them, so this reader called its own export "new" and re-imported it.
+
+After, the decision goes through the publish protocol, mapped exactly as
+`cmd/bd/autoflush.go` maps it (Round 3):
+
+```go
+status, err := jsonlpub.ContentState(ctx, store, jsonlPath, "")
+if err != nil {
+        notify.Debugf("content state read failed (%v), treating as first import", err)
+        status = jsonlpub.StatusNoMetadata
+}
+switch status {
+case jsonlpub.StatusFresh:
+        notify.Debugf("auto-import skipped, JSONL content already recorded")
+        recordImport(ctx, store, jsonlPath, currentHash, notify)
+        return nil
+case jsonlpub.StatusNoFile:
+        notify.Debugf("auto-import skipped, JSONL disappeared during check")
+        return nil
+}
+notify.Debugf("auto-import triggered (content %s)", status)
+```
+
+Preserved deliberately:
+
+- **The `recordImport` on the unchanged-content path.** `StatusFresh` is the tri-state's
+  name for the old `currentHash == lastHash` branch, and it still calls
+  `recordImport(..., currentHash, ...)` with the same comment: re-recording refreshes
+  `last_import_time`, so a change that only moved the mtime (a `git pull` that rewrote
+  identical bytes, a `touch`) stops looking new.
+- **The bd-39o migration fallback.** It was not deleted, it moved to where it belongs:
+  `jsonlpub.readCommitted` reads `jsonl_content_hash` and falls back to `last_import_hash`.
+  A database that only ever wrote the legacy key still reads Fresh.
+- **The parsed-bytes hash rule (R3-1).** `currentHash := jsonlpub.HashBytes(jsonlData)` is
+  still computed from the bytes this call read and will parse, and is what both
+  `recordImport` calls record. Nothing re-hashes the file.
+- **Everything below the decision**: merge-conflict check, parse, `importFunc`,
+  `showRemapping`, the record-before-callback ordering, the `changed`/`onChanged` block,
+  the `recordImport` helper (already on `jsonlpub.RecordImport`), and `CheckStaleness`.
+
+Error direction matches `autoflush.go`: a `ContentState` error maps to `StatusNoMetadata`
+("treat as first import"), never to a silent skip, so unreadable metadata recovers by
+importing rather than by going quiet.
+
+Second change: one regression test appended to `internal/autoimport/autoimport_test.go`
+(`TestAutoImportIfNewer_PendingHashIsFresh`). It writes a JSONL file, sets
+`jsonl_pending_hash` to that file's hash and `jsonl_content_hash` to the hash of different
+content, calls `AutoImportIfNewer`, and fails if `importFunc` ran.
+
+### Regression test: fails pre-fix, passes post-fix
+
+Pre-fix proof was taken by temporarily restoring the old single-key comparison with the
+Edit tool (no `git checkout`, no shell overwrite of a tracked file), running the test, then
+restoring the fixed block verbatim. Full output in
+`work/w2_stale-race/builds/r4_prefix_test_fails.log` (exit 1):
+
+```
+=== RUN   TestAutoImportIfNewer_PendingHashIsFresh
+    autoimport_test.go:765: AutoImportIfNewer re-imported content the database had already published (file matched jsonl_pending_hash)
+--- FAIL: TestAutoImportIfNewer_PendingHashIsFresh (0.00s)
+```
+
+Post-fix, `work/w2_stale-race/builds/r4_regression_test.log`:
+
+```
+--- PASS: TestAutoImportIfNewer_PendingHashIsFresh (0.00s)
+ok  	github.com/steveyegge/beads/internal/autoimport	0.002s
+```
+
+After restoring the fix, `go build ./...` and `go vet ./internal/autoimport/` were clean.
+
+### Gate 1 — targeted packages
+
+`go test ./cmd/bd/ ./internal/autoimport/ ./internal/rpc/ ./internal/jsonlpub/ ./internal/storage/sqlite/ -count=1`,
+exit 0. Full output in `work/w2_stale-race/builds/r4_gate1.log`:
+
+```
+ok  	github.com/steveyegge/beads/cmd/bd	23.075s
+ok  	github.com/steveyegge/beads/internal/autoimport	0.006s
+ok  	github.com/steveyegge/beads/internal/rpc	4.755s
+ok  	github.com/steveyegge/beads/internal/jsonlpub	0.068s
+ok  	github.com/steveyegge/beads/internal/storage/sqlite	27.439s
+```
+
+### Gate 2 — full suite vs baseline
+
+`go test ./... -count=1 -json` into `work/w2_stale-race/artifacts/post3.json` (stderr in
+`post3_stderr.txt`, exit status in `post3_status.txt`), normalized by the existing
+`artifacts/normalize_failures.py` into `artifacts/post3_failures.txt`, then compared.
+Full output in `work/w2_stale-race/builds/r4_gate2.log`:
+
+```
+=== post3_status.txt === 1
+=== post3_failures.txt ===
+github.com/steveyegge/beads/cmd/bd/doctor/fix::TestMergeDriverWithLockedConfig_E2E
+github.com/steveyegge/beads/cmd/bd/doctor/fix::TestMergeDriverWithLockedConfig_E2E/handles_read-only_git_config_file
+=== comm -13 baseline post3 ===
+=== end (empty above = no new failures) ===
+```
+
+`comm -13` printed nothing: no new failures. The two failures present are the same
+pre-existing environmental ones in `artifacts/baseline_failures.txt` (the test makes a git
+config read-only and expects the next write to fail; on this host, running as a user who
+can still write it, it does not).
+
+### Class closure
+
+`grep -rn 'jsonl_content_hash\|last_import_hash' --include=*.go .`, run from the repo root,
+excluding `_test.go` files and `internal/jsonlpub/`, leaves six sites. None is a freshness
+decision:
+
+| site | what it is | why it is not a freshness decision |
+|---|---|---|
+| `internal/importer/importer.go:69` | doc comment ("The caller is responsible for ... setting metadata (e.g., last_import_hash)") | prose, no code |
+| `cmd/bd/import_shared.go:196` | doc comment, same sentence | prose, no code |
+| `cmd/bd/autoflush.go:108` | comment in the Round 3 fix explaining why the key is not read directly | prose, no code |
+| `internal/autoimport/autoimport.go:90,92` | comment in this round's fix, same explanation | prose, no code |
+| `cmd/bd/daemon_event_loop.go:242-243` | daemon health check: `if _, err := store.GetMetadata(ctx, "jsonl_content_hash"); err != nil { if _, err := store.GetMetadata(ctx, "last_import_hash"); err != nil { log... } }` | it discards both values and only inspects `err`. Nothing is compared to a file hash and no import/export/skip follows; the failure branch only logs "metadata read failed" and continues. It asks "is metadata readable", not "is the file fresh". Untouched. |
+| `cmd/bd/daemon_sync.go:247,252,253,257,280,281` | `updateExportMetadata`, a metadata **writer** for multi-repo suffixed keys (`hashKey := "jsonl_content_hash"` then `hashKey += ":" + keySuffix`) plus its doc comments | it only ever calls `SetMetadata`; it reads no recorded hash and decides nothing. It is reached solely from `performExport` for `getMultiRepoJSONLPaths()`, which is `nil` without a multi-repo config, so single-repo publishing never touches it. Plan v5 preserves multi-repo metadata byte-identical, so it stays exactly as it is. Untouched. |
+
+No other freshness decision on these keys remains outside tests and `internal/jsonlpub`.
+
+### Divergences and observations
+
+No divergence from the dispatch: one source file changed, one test added, nothing else.
+Two things noticed and deliberately not changed:
+
+1. **Pre-existing gofmt violation in the touched file.** `gofmt -l` flags
+   `internal/autoimport/autoimport.go`, but the entire diff is a trailing-whitespace line
+   inside `showRemapping` (line 185), which predates this work and is nowhere near the
+   change. Out of scope; left alone rather than mixed into this commit.
+2. **A narrow race that the preserved `StatusFresh` `recordImport` keeps.** Between the
+   `os.ReadFile` and the `ContentState` call, another writer could replace the file. On the
+   Fresh path the code then records `currentHash`, the hash of the bytes it read, which by
+   then describes content no longer on disk. This is the behavior the dispatch asked to
+   preserve, and it self-heals: the next reader sees the new file hashing to neither
+   recorded key, reads `StatusDiverged`, and imports. Recorded as an observation, not fixed.

@@ -1,0 +1,7 @@
+=== post3_status.txt ===
+1
+=== post3_failures.txt ===
+github.com/steveyegge/beads/cmd/bd/doctor/fix::TestMergeDriverWithLockedConfig_E2E
+github.com/steveyegge/beads/cmd/bd/doctor/fix::TestMergeDriverWithLockedConfig_E2E/handles_read-only_git_config_file
+=== comm -13 baseline post3 ===
+=== end (empty above = no new failures) ===

@@ -79,27 +79,41 @@ func AutoImportIfNewer(ctx context.Context, store storage.Storage, dbPath string
 		return nil
 	}
 
+	// Hash of the bytes this path actually read and will parse; it is what gets
+	// recorded at the end, so a rewrite landing during the import stays visible
+	// to the next reader instead of being blessed by a re-hash.
 	currentHash := jsonlpub.HashBytes(jsonlData)
 
-	// Try new key first, fall back to old key for migration (bd-39o)
-	lastHash, err := store.GetMetadata(ctx, "jsonl_content_hash")
-	if err != nil || lastHash == "" {
-		lastHash, err = store.GetMetadata(ctx, "last_import_hash")
-		if err != nil {
-			notify.Debugf("metadata read failed (%v), treating as first import", err)
-			lastHash = ""
-		}
+	// Freshness is the publish protocol's question, not a single-key comparison.
+	// A file can hash to the committed key or to the pending key a publication
+	// wrote before its rename, and both mean the database already holds these
+	// bytes; reading jsonl_content_hash alone is blind to pending and re-imports
+	// the database's own just-exported content. The bd-39o migration fallback to
+	// last_import_hash lives inside the protocol's committed-key read.
+	status, err := jsonlpub.ContentState(ctx, store, jsonlPath, "")
+	if err != nil {
+		// Metadata (or file hash) error: treat as first import rather than
+		// skipping, so auto-import recovers from unreadable metadata.
+		notify.Debugf("content state read failed (%v), treating as first import", err)
+		status = jsonlpub.StatusNoMetadata
 	}
-
-	if currentHash == lastHash {
-		notify.Debugf("auto-import skipped, JSONL unchanged (hash match)")
+	switch status {
+	case jsonlpub.StatusFresh:
+		notify.Debugf("auto-import skipped, JSONL content already recorded")
 		// Content already imported, but recording it again refreshes the import
 		// timestamp so a mtime-only change (git pull, touch) stops looking new.
 		recordImport(ctx, store, jsonlPath, currentHash, notify)
 		return nil
+	case jsonlpub.StatusNoFile:
+		// The file was removed between the read above and this check. Importing
+		// bytes that no longer exist would record content for a missing file.
+		notify.Debugf("auto-import skipped, JSONL disappeared during check")
+		return nil
 	}
 
-	notify.Debugf("auto-import triggered (hash changed)")
+	// StatusDiverged (content nobody recorded) and StatusNoMetadata (first
+	// import) both mean: import.
+	notify.Debugf("auto-import triggered (content %s)", status)
 
 	if err := checkForMergeConflicts(jsonlData, jsonlPath); err != nil {
 		notify.Errorf("%v", err)
