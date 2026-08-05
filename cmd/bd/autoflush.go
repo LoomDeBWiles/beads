@@ -97,32 +97,38 @@ func autoImportIfNewer() {
 		return
 	}
 
-	// Compute current JSONL hash
-	hasher := sha256.New()
-	hasher.Write(jsonlData)
-	currentHash := hex.EncodeToString(hasher.Sum(nil))
+	// Hash of the bytes this path actually read and will parse. It is what gets
+	// recorded at the end: re-hashing the file after the import would bless a
+	// rewrite that landed in between and hide it from the next import.
+	currentHash := jsonlpub.HashBytes(jsonlData)
 
-	// Get content hash from DB metadata (try new key first, fall back to old for migration - bd-39o)
+	// Freshness is the publish protocol's question, not a single-key comparison.
+	// A file can hash to the committed key or to the pending key a publication
+	// wrote before its rename, and both mean the database already holds these
+	// bytes; reading jsonl_content_hash alone is blind to pending and re-imports
+	// the database's own just-exported content.
 	ctx := rootCtx
-	lastHash, err := store.GetMetadata(ctx, "jsonl_content_hash")
-	if err != nil || lastHash == "" {
-		lastHash, err = store.GetMetadata(ctx, "last_import_hash")
-		if err != nil {
-			// Metadata error - treat as first import rather than skipping (bd-663)
-			// This allows auto-import to recover from corrupt/missing metadata
-			debug.Logf("metadata read failed (%v), treating as first import", err)
-			lastHash = ""
-		}
+	status, err := jsonlpub.ContentState(ctx, store, jsonlPath, "")
+	if err != nil {
+		// Metadata (or file hash) error - treat as first import rather than
+		// skipping (bd-663), so auto-import recovers from corrupt metadata.
+		debug.Logf("content state read failed (%v), treating as first import", err)
+		status = jsonlpub.StatusNoMetadata
 	}
-
-	// Compare hashes
-	if currentHash == lastHash {
-		// Content unchanged, skip import
-		debug.Logf("auto-import skipped, JSONL unchanged (hash match)")
+	switch status {
+	case jsonlpub.StatusFresh:
+		debug.Logf("auto-import skipped, JSONL content already recorded")
+		return
+	case jsonlpub.StatusNoFile:
+		// The file was removed between the read above and this check. Importing
+		// bytes that no longer exist would record content for a missing file.
+		debug.Logf("auto-import skipped, JSONL disappeared during check")
 		return
 	}
 
-	debug.Logf("auto-import triggered (hash changed)")
+	// StatusDiverged (content nobody recorded) and StatusNoMetadata (first
+	// import) both mean: import.
+	debug.Logf("auto-import triggered (content %s)", status)
 
 	// Check for Git merge conflict markers (bd-270)
 	// Only match if they appear as standalone lines (not embedded in JSON strings)
@@ -254,17 +260,13 @@ func autoImportIfNewer() {
 		}
 	}
 
-	// Store new hash after successful import (renamed from last_import_hash - bd-39o)
-	if err := store.SetMetadata(ctx, "jsonl_content_hash", currentHash); err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: failed to update jsonl_content_hash after import: %v\n", err)
+	// Record the content this import parsed, under the publish lock: an
+	// unlocked write of the committed key can race a concurrent promote and
+	// leave it describing bytes the file no longer holds. RecordImport also
+	// retires a pending hash and stamps last_import_time.
+	if err := jsonlpub.RecordImport(ctx, store, jsonlPath, currentHash, jsonlpub.Options{}); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to record imported JSONL content: %v\n", err)
 		fmt.Fprintf(os.Stderr, "This may cause auto-import to retry the same import on next operation.\n")
-	}
-
-	// Store import timestamp (bd-159: for staleness detection)
-	// Use RFC3339Nano for nanosecond precision to avoid race with file mtime (fixes #399)
-	importTime := time.Now().Format(time.RFC3339Nano)
-	if err := store.SetMetadata(ctx, "last_import_time", importTime); err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: failed to update last_import_time after import: %v\n", err)
 	}
 }
 

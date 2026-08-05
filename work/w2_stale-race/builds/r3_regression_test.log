@@ -1,0 +1,8 @@
+=== RUN   TestAutoImportIfNewer_NoAutoImportFlag
+--- PASS: TestAutoImportIfNewer_NoAutoImportFlag (0.12s)
+=== RUN   TestAutoImportIfNewer_PendingHashIsFresh
+--- PASS: TestAutoImportIfNewer_PendingHashIsFresh (0.10s)
+=== RUN   TestAutoImportIfNewer
+--- PASS: TestAutoImportIfNewer (0.16s)
+PASS
+ok  	github.com/steveyegge/beads/cmd/bd	0.379s

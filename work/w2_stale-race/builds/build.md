@@ -65,7 +65,7 @@ New tests added:
   failpoint (temp written, pending recorded, renamed, promoted, both keys, crashed pending), the
   lock-free fast path vs the under-lock recheck against a concurrent publish, `RecordImport`
   clearing a crashed pending key, legacy `last_import_hash` fallback, and `IsCanonicalTarget`.
-- `internal/storage/sqlite/dirty_snapshot_test.go` — `SnapshotDirtyIssues` /
+- `internal/storage/sqlite/dirty_snapshot_test.go` — `GetDirtyIssueSnapshots` /
   `ClearDirtyIssuesIfUnchanged` round-trip, and the mid-export re-mark case: a row dirtied again
   while the export ran is still dirty after the conditional clear.
 - `internal/autoimport/autoimport_test.go` — `TestAutoImportIfNewer_RewriteDuringImport`: a rewrite
@@ -162,3 +162,120 @@ All are same-scope and carry no data risk; each is recorded here per the dispatc
       message was unreachable. The test now asserts the divergence refusal first (data safety
       preserved: error returned, file untouched), then `RecordImport`s the file so the guard passes
       and the original empty-database message assertion still runs.
+
+## Round 3 (final-review fixes)
+
+Two accepted findings from `final_review_v1.md`, nothing else. Both gates green.
+
+### F1 (med) — `cmd/bd/autoflush.go` auto-import ran on the pre-protocol contract
+
+**What it did before.** `autoImportIfNewer` decided "is the file newer than what I hold?"
+by reading `jsonl_content_hash` itself (old :107, with the `last_import_hash` migration
+fallback) and comparing it to the hash of the bytes it had just read. It knew nothing about
+`jsonl_pending_hash`, the key a publication writes *before* it renames the temp file into
+place. So in the window between a publish's rename and its promote — or after a crash there —
+the file on disk matches only pending, this comparison called it new, and the CLI re-imported
+the database's own just-exported content. It then wrote the committed key back with a bare
+`SetMetadata` (old :258) outside the publish lock, which can interleave with a daemon promote
+and leave committed describing the pre-import file while the file holds newer bytes: the
+`StatusDiverged` that prints "Database out of sync with JSONL" on a healthy repo.
+This path runs in `PersistentPreRun` for nearly every command (`cmd/bd/main.go:790,793`) and
+in direct mode (`cmd/bd/direct_mode.go:105`), so it is the most-executed reader in the tree.
+
+**What changed.**
+
+- `cmd/bd/autoflush.go:103` — the hand-rolled `sha256`/`hex` hash of the read bytes is now
+  `jsonlpub.HashBytes(jsonlData)`. Same value, one hashing authority. This is the hash the
+  path carries to the record at the end: the bytes it actually parsed, never a re-hash of the
+  file (R3-1).
+- `cmd/bd/autoflush.go:105-131` — the single-key comparison is replaced by
+  `jsonlpub.ContentState(ctx, store, jsonlPath, "")`. Mapping, per the plan's caller-specific
+  rules: `StatusFresh` (file hashes to committed **or** pending) → skip, which is the defect
+  fix; `StatusDiverged` (bytes nobody recorded) → import; `StatusNoMetadata` (nothing ever
+  recorded) → import, the first-import case; `StatusNoFile` → skip, the file was removed
+  between this function's `os.ReadFile` above and the state check, and recording content for
+  an absent file would be a lie. The bd-663 recovery is preserved and mapped onto the
+  tri-state: a `ContentState` error (metadata or file-hash read failure) logs and falls
+  through as `StatusNoMetadata`, i.e. "treat as first import", exactly the old behavior and
+  the same direction of error (import rather than silently skip).
+- `cmd/bd/autoflush.go:263-272` — the old `:258-268` tail (bare `SetMetadata` of
+  `jsonl_content_hash` + `last_import_time`) is replaced by
+  `jsonlpub.RecordImport(ctx, store, jsonlPath, currentHash, jsonlpub.Options{})`. That takes
+  the publish lock, commits the parsed-bytes hash, retires any pending hash, and stamps
+  `last_import_time` in RFC3339Nano — so the racing-promote half of the defect is gone too.
+
+**Behaviors deliberately preserved** (not part of the defect, verified still in place):
+the merge-conflict-marker check (:137-155, still runs before parsing, unchanged);
+the ID-remapping decision (:255-263 — `markDirtyAndScheduleFullExport` when
+`result.IDMapping` is non-empty, `markDirtyAndScheduleFlush` otherwise); the
+`ClearAllExportHashes` pre-import call; every stderr message on the parse/import failure
+paths. Ordering is unchanged apart from the freshness check now consulting the protocol.
+
+**Regression test** — `cmd/bd/autoimport_test.go:120`
+`TestAutoImportIfNewer_PendingHashIsFresh`: writes a JSONL holding one issue, records that
+file's hash under `jsonl_pending_hash` and a *different* hash under `jsonl_content_hash`
+(the exact mid-publication state), then calls `autoImportIfNewer()` and asserts the issue was
+not imported. It fails on the pre-fix tree with the intended message
+(`work/w2_stale-race/builds/r3_prefix_test_fails.log`) and passes after
+(`work/w2_stale-race/builds/r3_regression_test.log`).
+
+**Gate 1** — `go test ./cmd/bd/ ./internal/autoimport/ ./internal/rpc/ ./internal/jsonlpub/
+./internal/storage/sqlite/ -count=1`, log `work/w2_stale-race/builds/r3_gate1.log`, status 0:
+
+```
+ok  github.com/steveyegge/beads/cmd/bd                  48.837s
+ok  github.com/steveyegge/beads/internal/autoimport      0.006s
+ok  github.com/steveyegge/beads/internal/rpc            10.466s
+ok  github.com/steveyegge/beads/internal/jsonlpub        0.121s
+ok  github.com/steveyegge/beads/internal/storage/sqlite 59.456s
+```
+
+**Gate 2** — full-suite comparison, run exactly as the plan's Verification specifies:
+`go test ./... -count=1 -json` → `artifacts/post2.json` (stderr `post2_stderr.txt`, status
+`post2_status.txt` = 1), `artifacts/normalize_failures.py` → `artifacts/post2_failures.txt`,
+then `comm -13 artifacts/baseline_failures.txt artifacts/post2_failures.txt`. Log
+`work/w2_stale-race/builds/r3_gate2.log`:
+
+```
+=== post2_failures.txt ===
+github.com/steveyegge/beads/cmd/bd/doctor/fix::TestMergeDriverWithLockedConfig_E2E
+github.com/steveyegge/beads/cmd/bd/doctor/fix::TestMergeDriverWithLockedConfig_E2E/handles_read-only_git_config_file
+=== comm -13 baseline post2 ===
+=== end (empty above = no new failures) ===
+```
+
+`comm -13` printed nothing: the only failures are the two pre-existing environmental ones
+already in the baseline.
+
+**Divergences from the dispatch: none.** Nothing outside `cmd/bd/autoflush.go` and its test
+needed to change; `go build ./...` and `go vet ./cmd/bd/` are clean.
+
+Two consequences of the prescribed fix worth recording, neither a change of scope:
+
+1. `RecordImport` also calls `SetJSONLFileHash`, which this path never did. That is a
+   correction, not drift: `autoImportIfNewer` clears `export_hashes` before importing but
+   used to leave `jsonl_file_hash` describing the pre-import file, which
+   `validateJSONLIntegrity` (`autoflush.go:332`) would later read as a mismatch and warn
+   about. It now matches the other import paths (`internal/autoimport` records through the
+   same function).
+2. `jsonlpub.Options{}` is passed with no `Warnf`, as the dispatch specifies, so the
+   publisher's best-effort promote/pending warnings are silent on this path. The one failure
+   that matters — `RecordImport` returning an error — still prints the original two-line
+   stderr warning.
+
+**One observation, outside this dispatch's scope, not acted on:**
+`internal/autoimport.AutoImportIfNewer` (`internal/autoimport/autoimport.go:84-97`) still
+makes its *freshness* decision with the same direct `jsonl_content_hash` read (its metadata
+*tails* were converted to `RecordImport` in the last commit, which is what the plan's line 177
+required of it). It is therefore blind to pending in the same way, though its blast radius is
+smaller: it re-imports content the database already holds rather than corrupting the record,
+because its write side is now `RecordImport`. Flagging it, changing nothing.
+
+### F2 (low) — nonexistent method name in this report
+
+`work/w2_stale-race/builds/build.md:68` named the storage method `SnapshotDirtyIssues`. The
+shipped method is `GetDirtyIssueSnapshots` (`internal/jsonlpub/store.go`,
+`internal/storage/sqlite/dirty.go`), which is also the name the plan uses at lines 179 and
+192. Renamed. Note: the review said "two occurrences"; the file contained one, at line 68.
+`grep -rn "SnapshotDirtyIssues" work/w2_stale-race/builds/build.md` now returns nothing, and
+line 68 reads `GetDirtyIssueSnapshots`. No other content in this report was touched.

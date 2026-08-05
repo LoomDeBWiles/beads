@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/steveyegge/beads/internal/beads"
+	"github.com/steveyegge/beads/internal/jsonlpub"
 	"github.com/steveyegge/beads/internal/storage/sqlite"
 	"github.com/steveyegge/beads/internal/types"
 )
@@ -108,6 +109,91 @@ func TestAutoImportIfNewer_NoAutoImportFlag(t *testing.T) {
 	}
 	if imported != nil {
 		t.Error("autoImportIfNewer() imported despite noAutoImport=true - bd-4t7 fix failed")
+	}
+}
+
+// TestAutoImportIfNewer_PendingHashIsFresh pins the state between a publication's
+// rename and its promote: the file holds bytes the database itself just exported,
+// recorded under jsonl_pending_hash but not yet under jsonl_content_hash. A reader
+// that compares against the committed hash alone calls that content new and
+// re-imports the database's own export.
+func TestAutoImportIfNewer_PendingHashIsFresh(t *testing.T) {
+	ctx := context.Background()
+	tmpDir := t.TempDir()
+	beadsDir := filepath.Join(tmpDir, ".beads")
+	if err := os.MkdirAll(beadsDir, 0755); err != nil {
+		t.Fatalf("Failed to create beads dir: %v", err)
+	}
+
+	testDBPath := filepath.Join(beadsDir, "bd.db")
+	jsonlPath := filepath.Join(beadsDir, "issues.jsonl")
+
+	testStore, err := sqlite.New(ctx, testDBPath)
+	if err != nil {
+		t.Fatalf("Failed to create store: %v", err)
+	}
+	defer testStore.Close()
+
+	if err := testStore.SetConfig(ctx, "issue_prefix", "test"); err != nil {
+		t.Fatalf("Failed to set prefix: %v", err)
+	}
+
+	jsonlIssue := &types.Issue{
+		ID:        "test-pending-fresh",
+		Title:     "Published but not yet promoted",
+		Status:    types.StatusOpen,
+		Priority:  1,
+		IssueType: types.TypeTask,
+	}
+	line, err := json.Marshal(jsonlIssue)
+	if err != nil {
+		t.Fatalf("Failed to encode issue: %v", err)
+	}
+	content := append(line, '\n')
+	if err := os.WriteFile(jsonlPath, content, 0644); err != nil {
+		t.Fatalf("Failed to write JSONL: %v", err)
+	}
+
+	// Mid-publication state: pending records the file's bytes, committed still
+	// holds the hash of the content the file had before the rename.
+	if err := testStore.SetMetadata(ctx, "jsonl_pending_hash", jsonlpub.HashBytes(content)); err != nil {
+		t.Fatalf("Failed to set pending hash: %v", err)
+	}
+	if err := testStore.SetMetadata(ctx, "jsonl_content_hash", jsonlpub.HashBytes([]byte("previous content\n"))); err != nil {
+		t.Fatalf("Failed to set committed hash: %v", err)
+	}
+
+	oldNoAutoImport := noAutoImport
+	oldAutoImportEnabled := autoImportEnabled
+	oldStore := store
+	oldDbPath := dbPath
+	oldRootCtx := rootCtx
+	oldStoreActive := storeActive
+
+	noAutoImport = false
+	autoImportEnabled = true
+	store = testStore
+	dbPath = testDBPath
+	rootCtx = ctx
+	storeActive = true
+
+	defer func() {
+		noAutoImport = oldNoAutoImport
+		autoImportEnabled = oldAutoImportEnabled
+		store = oldStore
+		dbPath = oldDbPath
+		rootCtx = oldRootCtx
+		storeActive = oldStoreActive
+	}()
+
+	autoImportIfNewer()
+
+	imported, err := testStore.GetIssue(ctx, "test-pending-fresh")
+	if err != nil {
+		t.Fatalf("Failed to check for issue: %v", err)
+	}
+	if imported != nil {
+		t.Error("autoImportIfNewer() re-imported content the database had already published (file matched jsonl_pending_hash)")
 	}
 }
 

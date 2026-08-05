@@ -1,0 +1,6 @@
+ok  	github.com/steveyegge/beads/cmd/bd	48.837s
+ok  	github.com/steveyegge/beads/internal/autoimport	0.006s
+ok  	github.com/steveyegge/beads/internal/rpc	10.466s
+ok  	github.com/steveyegge/beads/internal/jsonlpub	0.121s
+ok  	github.com/steveyegge/beads/internal/storage/sqlite	59.456s
+status=0
