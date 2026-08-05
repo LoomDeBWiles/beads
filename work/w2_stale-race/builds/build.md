@@ -536,3 +536,113 @@ destroyed pending record) deterministically, and asserts exactly what the dispat
 
 Round 4's observation 1 still stands: `gofmt -l` flags `internal/autoimport/autoimport.go` for a
 pre-existing trailing-whitespace line in `showRemapping`, unrelated to this change and left alone.
+
+## Round 6 (regression test strengthened)
+
+Applies accepted finding F1 from `final_review_v3.md`. Only
+`TestAutoImportIfNewer_FreshPathRecordsNothing` in
+`internal/autoimport/autoimport_test.go` changed. No production code, no other test:
+`git diff --stat` is `internal/autoimport/autoimport_test.go | 58 +++++, 28 ---`, and
+`git diff internal/autoimport/autoimport.go` is empty.
+
+### Retraction of Round 5's "no seam exists" claim
+
+Round 5's Divergence section said there is no deterministic seam to make the file's bytes
+differ from the bytes the caller read, because "between `os.ReadFile` (line 76) and
+`HashFile` (the first statement of `jsonlpub.sampleState`) the only code is the pure
+`HashBytes` call". That is wrong and is withdrawn. The window that matters is not before
+`HashFile` but after it: `sampleState`
+(`internal/jsonlpub/jsonlpub.go:244-260`) hashes the file at :245 and only then reads
+metadata — `readCommitted` at :253, the pending `GetMetadata` at :257. A store wrapper
+whose `GetMetadata` rewrites the file therefore fires strictly inside the check, with no
+goroutine and no timing dependency. Round 5's substitution was unnecessary, and the test it
+produced pinned the implementation rule ("the Fresh branch writes nothing") instead of the
+harm rule ("never commit a hash for content the database did not parse").
+
+### The new fixture's mechanism
+
+`swapOnFirstRead` embeds `storage.Storage` and overrides `GetMetadata` so the very first
+metadata read — whoever makes it — replaces the JSONL file's bytes exactly once, then
+delegates. `AutoImportIfNewer` makes no metadata call before `jsonlpub.ContentState`, so
+that first read is `readCommitted`'s, inside the first `sampleState`.
+
+Fixture state: the file holds bytes `read`; the wrapper swaps in bytes `published`;
+`jsonl_pending_hash` = hash(`published`); `jsonl_content_hash` = hash of an older
+`"previous content\n"`. hash(`read`) matches neither key.
+
+The resulting call ordering, all on one goroutine:
+
+1. `AutoImportIfNewer` reads the file (`read`) and computes `currentHash` = hash(`read`).
+2. `ContentState` → `sampleState`: `HashFile` still sees `read`. `readCommitted` fires the
+   swap; the file on disk is now `published`. hash(`read`) matches neither committed nor
+   pending, so this sample is Diverged — provisional, exactly as the protocol intends.
+3. `ContentState` takes the publish lock and re-samples. `HashFile` now sees `published`,
+   which matches the pending key: **Fresh**. Because `published` differs from the committed
+   key, `contentStateLocked` promotes it — committed becomes hash(`published`), pending is
+   cleared. The database's record and the file now agree.
+4. `AutoImportIfNewer` receives `StatusFresh` and takes the Fresh branch holding
+   `currentHash` = hash(`read`) — a hash of content that is neither on disk nor recorded
+   anywhere.
+
+The test asserts the swap actually fired (`store.swapped`) so the fixture cannot silently
+stop exercising the window, and then asserts the post-condition the finding names:
+`jsonlpub.ContentState(...)` still returns `StatusFresh`.
+
+### Pre-fix failure
+
+The deleted `recordImport(ctx, store, jsonlPath, currentHash, notify)` call was restored on
+the Fresh branch with the Edit tool (never `git checkout`), the test run, then the fixed code
+restored verbatim — `git diff internal/autoimport/autoimport.go` confirms it is byte-identical
+to `1e2128ae6`. Full output, `builds/r6.prefix_test.log`:
+
+```
+=== RUN   TestAutoImportIfNewer_FreshPathRecordsNothing
+    autoimport_test.go:849: ContentState = diverged after a Fresh auto-import, want fresh: the Fresh branch recorded a hash for bytes it never parsed, so a healthy repository now reports being out of sync with its JSONL
+--- FAIL: TestAutoImportIfNewer_FreshPathRecordsNothing (0.01s)
+FAIL	github.com/steveyegge/beads/internal/autoimport	0.010s
+FAIL
+```
+
+`diverged`, not merely a changed metadata value. That is the state behind
+`cmd/bd/staleness.go:48`'s "database is out of sync with JSONL" and behind `Publish`'s
+`ErrDiverged`: the pre-fix line overwrote the just-promoted committed hash with hash(`read`)
+and cleared pending, leaving the on-disk `published` bytes matching no recorded key. Post-fix
+the branch records nothing, the promote from step 3 stands, and the same assertion passes:
+
+```
+=== RUN   TestAutoImportIfNewer_FreshPathRecordsNothing
+--- PASS: TestAutoImportIfNewer_FreshPathRecordsNothing (0.00s)
+PASS
+ok  	github.com/steveyegge/beads/internal/autoimport	0.002s
+```
+
+The test now also permits a legitimate future implementation that promotes a lingering
+pending hash on the fresh path, since it constrains the resulting content state rather than
+which keys were touched.
+
+### Gates
+
+Gate 1 — `go test ./internal/autoimport/ ./internal/jsonlpub/ ./cmd/bd/ -count=1`
+(`builds/r6.gate1.log`), exit 0:
+
+```
+ok  	github.com/steveyegge/beads/internal/autoimport	0.006s
+ok  	github.com/steveyegge/beads/internal/jsonlpub	0.065s
+ok  	github.com/steveyegge/beads/cmd/bd	17.344s
+```
+
+Gate 2 — full suite into `artifacts/post5.json` (stderr `post5_stderr.txt`, 0 bytes; status
+`post5_status.txt` = 1), normalized by `artifacts/normalize_failures.py` into
+`artifacts/post5_failures.txt` (`builds/r6.gate2.log`):
+
+```
+github.com/steveyegge/beads/cmd/bd/doctor/fix::TestMergeDriverWithLockedConfig_E2E
+github.com/steveyegge/beads/cmd/bd/doctor/fix::TestMergeDriverWithLockedConfig_E2E/handles_read-only_git_config_file
+
+$ comm -13 work/w2_stale-race/artifacts/baseline_failures.txt work/w2_stale-race/artifacts/post5_failures.txt
+(no output)
+```
+
+The same two pre-existing environmental failures as the baseline, no new ones.
+
+`gofmt -l internal/autoimport/autoimport_test.go` is clean.

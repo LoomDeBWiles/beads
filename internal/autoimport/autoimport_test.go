@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/steveyegge/beads/internal/jsonlpub"
+	"github.com/steveyegge/beads/internal/storage"
 	"github.com/steveyegge/beads/internal/storage/memory"
 	"github.com/steveyegge/beads/internal/types"
 )
@@ -766,32 +767,62 @@ func TestAutoImportIfNewer_PendingHashIsFresh(t *testing.T) {
 	}
 }
 
-// TestAutoImportIfNewer_FreshPathRecordsNothing pins the rule that the Fresh
-// branch parses nothing and must therefore record nothing. The hash the branch
-// held describes the bytes os.ReadFile returned, while the Fresh verdict comes
-// from the publish protocol's own re-read of the file, so the two can describe
-// different content and writing the first as if it were the second commits a
-// hash for content the database neither holds nor has on disk.
+// swapOnFirstRead is a store whose first metadata read replaces the JSONL
+// file's bytes. jsonlpub.sampleState hashes the file before it reads either
+// metadata key, so this lands strictly inside the window between the hash the
+// caller computed from its own os.ReadFile and the hash the publish protocol
+// decides freshness with: a deterministic stand-in for a publication that
+// renames a new file into place mid-check, driven by call ordering rather than
+// by a goroutine racing the read.
+type swapOnFirstRead struct {
+	storage.Storage
+	jsonlPath string
+	newBytes  string
+	swapped   bool
+	swapErr   error
+}
+
+func (s *swapOnFirstRead) GetMetadata(ctx context.Context, key string) (string, error) {
+	if !s.swapped {
+		s.swapped = true
+		if err := os.WriteFile(s.jsonlPath, []byte(s.newBytes), 0o644); err != nil {
+			s.swapErr = err
+		}
+	}
+	return s.Storage.GetMetadata(ctx, key)
+}
+
+// TestAutoImportIfNewer_FreshPathRecordsNothing pins the harm rule: never
+// commit a hash for content the database did not parse.
 //
-// The state here is a publication between its rename and its promote: the file
-// holds the published bytes, recorded as pending, and the committed key still
-// names the previous content. Recording on this path would overwrite the
-// committed key and clear the pending one, destroying the record that describes
-// what is actually on disk.
+// The fixture replaces the file between the caller's os.ReadFile and the
+// protocol's own re-read, so the Fresh verdict describes bytes the caller never
+// held. The hash the branch carries (of the bytes it read) then matches neither
+// what is on disk nor anything the database recorded, and committing it turns a
+// healthy repository into a diverged one: exactly the "database is out of sync
+// with JSONL" message this work item exists to eliminate. The post-condition
+// asserted is therefore the user-visible one, ContentState still Fresh, not the
+// implementation detail of which keys the branch happens to touch.
 func TestAutoImportIfNewer_FreshPathRecordsNothing(t *testing.T) {
 	dbPath, jsonlPath := stalenessRepo(t)
-	published := `{"id":"test-fresh-no-record","title":"Published","status":"open","priority":1,"issue_type":"task"}` + "\n"
-	writeJSONL(t, jsonlPath, published, time.Time{})
 
-	store := memory.New("")
+	// What the caller reads and hashes.
+	read := `{"id":"test-fresh-read","title":"Bytes the caller read","status":"open","priority":1,"issue_type":"task"}` + "\n"
+	// What a publication renames into place while the check is running.
+	published := `{"id":"test-fresh-published","title":"Bytes published mid-check","status":"open","priority":1,"issue_type":"task"}` + "\n"
+	writeJSONL(t, jsonlPath, read, time.Time{})
+
 	ctx := context.Background()
+	store := &swapOnFirstRead{Storage: memory.New(""), jsonlPath: jsonlPath, newBytes: published}
 
-	pendingHash := jsonlpub.HashBytes([]byte(published))
-	committedHash := jsonlpub.HashBytes([]byte("previous content\n"))
-	if err := store.SetMetadata(ctx, "jsonl_pending_hash", pendingHash); err != nil {
+	// Mid-publication metadata: pending records the bytes being published, the
+	// committed key still names the content from before that publication. The
+	// bytes the caller read match neither, so only the protocol's re-read of the
+	// swapped-in file can reach Fresh.
+	if err := store.SetMetadata(ctx, "jsonl_pending_hash", jsonlpub.HashBytes([]byte(published))); err != nil {
 		t.Fatalf("failed to set pending hash: %v", err)
 	}
-	if err := store.SetMetadata(ctx, "jsonl_content_hash", committedHash); err != nil {
+	if err := store.SetMetadata(ctx, "jsonl_content_hash", jsonlpub.HashBytes([]byte("previous content\n"))); err != nil {
 		t.Fatalf("failed to set committed hash: %v", err)
 	}
 
@@ -803,20 +834,19 @@ func TestAutoImportIfNewer_FreshPathRecordsNothing(t *testing.T) {
 	if err := AutoImportIfNewer(ctx, store, dbPath, &testNotifier{}, importFunc, nil); err != nil {
 		t.Fatalf("AutoImportIfNewer failed: %v", err)
 	}
-
-	gotCommitted, err := store.GetMetadata(ctx, "jsonl_content_hash")
-	if err != nil {
-		t.Fatalf("failed to read committed hash: %v", err)
+	if !store.swapped {
+		t.Fatal("the store's metadata was never read, so the file swap never fired; fixture is not exercising the window")
 	}
-	if gotCommitted != committedHash {
-		t.Errorf("jsonl_content_hash = %q, want it untouched at %q", gotCommitted, committedHash)
+	if store.swapErr != nil {
+		t.Fatalf("failed to swap the JSONL file: %v", store.swapErr)
 	}
 
-	gotPending, err := store.GetMetadata(ctx, "jsonl_pending_hash")
+	status, err := jsonlpub.ContentState(ctx, store, jsonlPath, "")
 	if err != nil {
-		t.Fatalf("failed to read pending hash: %v", err)
+		t.Fatalf("ContentState failed: %v", err)
 	}
-	if gotPending != pendingHash {
-		t.Errorf("jsonl_pending_hash = %q, want it untouched at %q", gotPending, pendingHash)
+	if status != jsonlpub.StatusFresh {
+		t.Errorf("ContentState = %v after a Fresh auto-import, want %v: the Fresh branch recorded a hash for bytes it never parsed, so a healthy repository now reports being out of sync with its JSONL",
+			status, jsonlpub.StatusFresh)
 	}
 }
