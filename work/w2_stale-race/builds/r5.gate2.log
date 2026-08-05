@@ -1,0 +1,6 @@
+=== post4_failures.txt ===
+github.com/steveyegge/beads/cmd/bd/doctor/fix::TestMergeDriverWithLockedConfig_E2E
+github.com/steveyegge/beads/cmd/bd/doctor/fix::TestMergeDriverWithLockedConfig_E2E/handles_read-only_git_config_file
+=== comm -13 baseline post4 ===
+=== end (empty above means no new failures) ===
+stderr bytes: 0

@@ -99,10 +99,11 @@ func AutoImportIfNewer(ctx context.Context, store storage.Storage, dbPath string
 	}
 	switch status {
 	case jsonlpub.StatusFresh:
+		// Nothing was parsed here, so there is nothing to record: currentHash
+		// covers the bytes read above, while the Fresh verdict came from the
+		// protocol's own re-read of the file, and writing one as if it were the
+		// other would commit a hash for content the database never took in.
 		notify.Debugf("auto-import skipped, JSONL content already recorded")
-		// Content already imported, but recording it again refreshes the import
-		// timestamp so a mtime-only change (git pull, touch) stops looking new.
-		recordImport(ctx, store, jsonlPath, currentHash, notify)
 		return nil
 	case jsonlpub.StatusNoFile:
 		// The file was removed between the read above and this check. Importing

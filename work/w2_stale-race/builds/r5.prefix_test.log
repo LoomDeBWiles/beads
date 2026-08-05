@@ -1,0 +1,7 @@
+=== RUN   TestAutoImportIfNewer_FreshPathRecordsNothing
+    autoimport_test.go:812: jsonl_content_hash = "4dd9b95375ba29104a4aceb1f24c0f9df9fffe9626f067ff0b319fba221a458e", want it untouched at "9c2afbc4c5429488078adc5690171236f92209bca41dc1f3880fd3837326aa75"
+    autoimport_test.go:820: jsonl_pending_hash = "", want it untouched at "4dd9b95375ba29104a4aceb1f24c0f9df9fffe9626f067ff0b319fba221a458e"
+--- FAIL: TestAutoImportIfNewer_FreshPathRecordsNothing (0.00s)
+FAIL
+FAIL	github.com/steveyegge/beads/internal/autoimport	0.001s
+FAIL

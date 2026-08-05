@@ -431,3 +431,108 @@ Two things noticed and deliberately not changed:
    then describes content no longer on disk. This is the behavior the dispatch asked to
    preserve, and it self-heals: the next reader sees the new file hashing to neither
    recorded key, reads `StatusDiverged`, and imports. Recorded as an observation, not fixed.
+
+## Round 5 (Fresh-path record removal)
+
+Applies accepted finding F1 from `final_review_v2.md`. Round 4's dispatch told me to keep
+the `recordImport` call on the `StatusFresh` path; that instruction was wrong and this
+round removes it. Round 4's observation 2 above ("self-heals") is retracted: the healing
+only happens on the *next* `AutoImportIfNewer`, while `CheckStaleness`/`ensureDatabaseFresh`
+and `jsonlpub.Publish` read the poisoned committed key first and fail loudly in between.
+
+### What changed
+
+**`internal/autoimport/autoimport.go`, the `StatusFresh` branch (was line 101-106).** Deleted
+the `recordImport(ctx, store, jsonlPath, currentHash, notify)` call and the comment above it
+that claimed the record "refreshes the import timestamp so a mtime-only change stops looking
+new". The branch now logs and returns, matching `cmd/bd/autoflush.go`'s Fresh branch. The
+replacement comment states the rule: this path parses nothing, `currentHash` covers the bytes
+`os.ReadFile` returned while the Fresh verdict came from the protocol's own re-read
+(`jsonlpub.sampleState` → `HashFile`), so recording one as the other commits a hash for
+content the database never took in and `clearPending` destroys the record describing what is
+actually on disk.
+
+Nothing else changed: `StatusNoFile`, `StatusDiverged`, `StatusNoMetadata`, the error-direction
+mapping, and the post-import `recordImport` (now line 141) are untouched.
+
+### `last_import_time` grep
+
+`grep -rn "last_import_time\|LastImportTime\|lastImportTime" --include=*.go .` returns 19 hits.
+Non-test hits are exactly four, and none is a read:
+
+| site | what it is |
+|---|---|
+| `internal/jsonlpub/jsonlpub.go:45` | the key constant `importTimeKeyBase` |
+| `cmd/bd/daemon_sync.go:282` | `timeKey := "last_import_time"` in `updateExportMetadata`, a multi-repo `SetMetadata` writer |
+| `cmd/bd/daemon_sync.go:252,253` | comments listing the keys |
+| `cmd/bd/autoflush.go:266` | comment ("...retires a pending hash and stamps last_import_time") |
+
+The remaining 15 are `_test.go` files that *set* the key as fixture state (`autoimport/symlink_test.go`,
+`autoimport/autoimport_test.go`, `cmd/bd/git_sync_test.go`) or assert the multi-repo writer wrote it
+(`cmd/bd/daemon_sync_test.go:358-363,606,627`). No non-test code reads the timestamp, so removing the
+refresh changes no decision anywhere.
+
+No existing test asserted the deleted recording behavior; nothing was rewritten to make the gates pass.
+
+### Regression test
+
+Added `TestAutoImportIfNewer_FreshPathRecordsNothing` (`internal/autoimport/autoimport_test.go`).
+It sets up a publication caught between its rename and its promote: the file holds the published
+bytes, `jsonl_pending_hash` records them, and `jsonl_content_hash` still names the previous
+content. `ContentState` returns Fresh from the pending key, and the test asserts both metadata
+keys are byte-identical afterwards (and that no import ran).
+
+Pre-fix (old branch restored with the Edit tool, never `git checkout`) — `work/w2_stale-race/builds/r5.prefix_test.log`:
+
+```
+=== RUN   TestAutoImportIfNewer_FreshPathRecordsNothing
+    autoimport_test.go:812: jsonl_content_hash = "4dd9b953...221a458e", want it untouched at "9c2afbc4...7326aa75"
+    autoimport_test.go:820: jsonl_pending_hash = "", want it untouched at "4dd9b953...221a458e"
+--- FAIL: TestAutoImportIfNewer_FreshPathRecordsNothing (0.00s)
+FAIL	github.com/steveyegge/beads/internal/autoimport	0.001s
+```
+
+Both halves of the defect show: the committed key is overwritten with the hash of bytes this
+call never parsed, and the pending record that described the real on-disk content is destroyed.
+Post-fix: `--- PASS`.
+
+### Gates
+
+Gate 1 — `go test ./cmd/bd/ ./internal/autoimport/ ./internal/rpc/ ./internal/jsonlpub/ ./internal/storage/sqlite/ -count=1`
+(`builds/r5.gate1.log`), exit 0:
+
+```
+ok  	github.com/steveyegge/beads/cmd/bd	21.945s
+ok  	github.com/steveyegge/beads/internal/autoimport	0.005s
+ok  	github.com/steveyegge/beads/internal/rpc	4.099s
+ok  	github.com/steveyegge/beads/internal/jsonlpub	0.063s
+ok  	github.com/steveyegge/beads/internal/storage/sqlite	23.268s
+```
+
+Gate 2 — full suite into `artifacts/post4.json` (stderr `post4_stderr.txt`, 0 bytes; status
+`post4_status.txt` = 1), normalized to `artifacts/post4_failures.txt` (`builds/r5.gate2.log`):
+
+```
+github.com/steveyegge/beads/cmd/bd/doctor/fix::TestMergeDriverWithLockedConfig_E2E
+github.com/steveyegge/beads/cmd/bd/doctor/fix::TestMergeDriverWithLockedConfig_E2E/handles_read-only_git_config_file
+
+$ comm -13 work/w2_stale-race/artifacts/baseline_failures.txt work/w2_stale-race/artifacts/post4_failures.txt
+(no output)
+```
+
+Same two pre-existing environmental failures as the baseline, no new ones.
+
+### Divergence
+
+**One, in how the regression test reaches the Fresh state.** The dispatch asked for a test where
+the file's bytes differ from the bytes the caller read. There is no seam to inject that
+deterministically: between `os.ReadFile` (line 76) and `HashFile` (the first statement of
+`jsonlpub.sampleState`) the only code is the pure `HashBytes` call, so no store wrapper,
+notifier, or callback can rewrite the file in that window, and a goroutine racing it would be
+flaky. The test instead reaches Fresh through the pending key, which produces the identical
+observable defect (a committed key overwritten with a hash this call did not parse, plus a
+destroyed pending record) deterministically, and asserts exactly what the dispatch specified:
+`jsonl_content_hash` and `jsonl_pending_hash` both untouched.
+
+Round 4's observation 1 still stands: `gofmt -l` flags `internal/autoimport/autoimport.go` for a
+pre-existing trailing-whitespace line in `showRemapping`, unrelated to this change and left alone.

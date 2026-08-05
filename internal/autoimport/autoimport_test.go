@@ -765,3 +765,58 @@ func TestAutoImportIfNewer_PendingHashIsFresh(t *testing.T) {
 		t.Error("AutoImportIfNewer re-imported content the database had already published (file matched jsonl_pending_hash)")
 	}
 }
+
+// TestAutoImportIfNewer_FreshPathRecordsNothing pins the rule that the Fresh
+// branch parses nothing and must therefore record nothing. The hash the branch
+// held describes the bytes os.ReadFile returned, while the Fresh verdict comes
+// from the publish protocol's own re-read of the file, so the two can describe
+// different content and writing the first as if it were the second commits a
+// hash for content the database neither holds nor has on disk.
+//
+// The state here is a publication between its rename and its promote: the file
+// holds the published bytes, recorded as pending, and the committed key still
+// names the previous content. Recording on this path would overwrite the
+// committed key and clear the pending one, destroying the record that describes
+// what is actually on disk.
+func TestAutoImportIfNewer_FreshPathRecordsNothing(t *testing.T) {
+	dbPath, jsonlPath := stalenessRepo(t)
+	published := `{"id":"test-fresh-no-record","title":"Published","status":"open","priority":1,"issue_type":"task"}` + "\n"
+	writeJSONL(t, jsonlPath, published, time.Time{})
+
+	store := memory.New("")
+	ctx := context.Background()
+
+	pendingHash := jsonlpub.HashBytes([]byte(published))
+	committedHash := jsonlpub.HashBytes([]byte("previous content\n"))
+	if err := store.SetMetadata(ctx, "jsonl_pending_hash", pendingHash); err != nil {
+		t.Fatalf("failed to set pending hash: %v", err)
+	}
+	if err := store.SetMetadata(ctx, "jsonl_content_hash", committedHash); err != nil {
+		t.Fatalf("failed to set committed hash: %v", err)
+	}
+
+	importFunc := func(ctx context.Context, issues []*types.Issue) (int, int, map[string]string, error) {
+		t.Error("AutoImportIfNewer imported content the publish protocol called fresh")
+		return 0, 0, nil, nil
+	}
+
+	if err := AutoImportIfNewer(ctx, store, dbPath, &testNotifier{}, importFunc, nil); err != nil {
+		t.Fatalf("AutoImportIfNewer failed: %v", err)
+	}
+
+	gotCommitted, err := store.GetMetadata(ctx, "jsonl_content_hash")
+	if err != nil {
+		t.Fatalf("failed to read committed hash: %v", err)
+	}
+	if gotCommitted != committedHash {
+		t.Errorf("jsonl_content_hash = %q, want it untouched at %q", gotCommitted, committedHash)
+	}
+
+	gotPending, err := store.GetMetadata(ctx, "jsonl_pending_hash")
+	if err != nil {
+		t.Fatalf("failed to read pending hash: %v", err)
+	}
+	if gotPending != pendingHash {
+		t.Errorf("jsonl_pending_hash = %q, want it untouched at %q", gotPending, pendingHash)
+	}
+}
