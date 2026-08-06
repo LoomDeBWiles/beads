@@ -1,0 +1,5 @@
+work/*/manager_log.md
+
+[generated]
+.beads/*.jsonl
+.beads/metadata.json
