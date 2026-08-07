@@ -50,7 +50,7 @@ Storage layer:
 | `internal/storage/storage.go` | `Storage` interface — all backend operations |
 | `internal/storage/sqlite/sqlite.go` | SQLite backend entry point |
 | `internal/storage/sqlite/store.go` | SQLiteStorage struct, constructor |
-| `internal/storage/sqlite/migrations.go` | Schema migration runner (26 migrations) |
+| `internal/storage/sqlite/migrations.go` | Schema migration runner (27 migrations) |
 | `internal/storage/sqlite/claim.go` | `ClaimIssue` — claim decision ladder + write, inside one `BEGIN IMMEDIATE` transaction |
 | `internal/types/types.go` | Core types: Issue, Dependency, Status, IssueType |
 | `internal/rpc/protocol.go` | RPC request/response format (JSON over Unix socket) |
