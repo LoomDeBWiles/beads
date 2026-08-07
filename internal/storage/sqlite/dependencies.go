@@ -249,7 +249,7 @@ func (s *SQLiteStorage) GetDependenciesWithMetadata(ctx context.Context, issueID
 		       i.status, i.priority, i.issue_type, i.assignee, i.estimated_minutes,
 		       i.created_at, i.updated_at, i.closed_at, i.external_ref, i.source_repo,
 		       i.deleted_at, i.deleted_by, i.delete_reason, i.original_type,
-		       i.sender, i.ephemeral, i.pinned, i.is_template,
+		       i.sender, i.ephemeral, i.pinned, i.is_template, i.claim_expires_at,
 		       d.type
 		FROM issues i
 		JOIN dependencies d ON i.id = d.depends_on_id
@@ -271,7 +271,7 @@ func (s *SQLiteStorage) GetDependentsWithMetadata(ctx context.Context, issueID s
 		       i.status, i.priority, i.issue_type, i.assignee, i.estimated_minutes,
 		       i.created_at, i.updated_at, i.closed_at, i.external_ref, i.source_repo,
 		       i.deleted_at, i.deleted_by, i.delete_reason, i.original_type,
-		       i.sender, i.ephemeral, i.pinned, i.is_template,
+		       i.sender, i.ephemeral, i.pinned, i.is_template, i.claim_expires_at,
 		       d.type
 		FROM issues i
 		JOIN dependencies d ON i.id = d.issue_id
@@ -827,6 +827,8 @@ func (s *SQLiteStorage) scanIssues(ctx context.Context, rows *sql.Rows) ([]*type
 		var pinned sql.NullInt64
 		// Template field (beads-1ra)
 		var isTemplate sql.NullInt64
+		// Owner lease, claim_expires_at (bd-ok4pr)
+		var claimExpiresAt sql.NullTime
 
 		err := rows.Scan(
 			&issue.ID, &contentHash, &issue.Title, &issue.Description, &issue.Design,
@@ -834,7 +836,7 @@ func (s *SQLiteStorage) scanIssues(ctx context.Context, rows *sql.Rows) ([]*type
 			&issue.Priority, &issue.IssueType, &assignee, &estimatedMinutes,
 			&issue.CreatedAt, &issue.UpdatedAt, &closedAt, &externalRef, &sourceRepo, &closeReason,
 			&deletedAt, &deletedBy, &deleteReason, &originalType,
-			&sender, &wisp, &pinned, &isTemplate,
+			&sender, &wisp, &pinned, &isTemplate, &claimExpiresAt,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan issue: %w", err)
@@ -887,6 +889,10 @@ func (s *SQLiteStorage) scanIssues(ctx context.Context, rows *sql.Rows) ([]*type
 		if isTemplate.Valid && isTemplate.Int64 != 0 {
 			issue.IsTemplate = true
 		}
+		// claim_expires_at is NULL on an unclaimed issue (bd-ok4pr)
+		if claimExpiresAt.Valid {
+			issue.ClaimExpiresAt = &claimExpiresAt.Time
+		}
 
 		issues = append(issues, &issue)
 		issueIDs = append(issueIDs, issue.ID)
@@ -930,6 +936,8 @@ func (s *SQLiteStorage) scanIssuesWithDependencyType(ctx context.Context, rows *
 		var pinned sql.NullInt64
 		// Template field (beads-1ra)
 		var isTemplate sql.NullInt64
+		// Owner lease, claim_expires_at (bd-ok4pr)
+		var claimExpiresAt sql.NullTime
 		var depType types.DependencyType
 
 		err := rows.Scan(
@@ -938,7 +946,7 @@ func (s *SQLiteStorage) scanIssuesWithDependencyType(ctx context.Context, rows *
 			&issue.Priority, &issue.IssueType, &assignee, &estimatedMinutes,
 			&issue.CreatedAt, &issue.UpdatedAt, &closedAt, &externalRef, &sourceRepo,
 			&deletedAt, &deletedBy, &deleteReason, &originalType,
-			&sender, &wisp, &pinned, &isTemplate,
+			&sender, &wisp, &pinned, &isTemplate, &claimExpiresAt,
 			&depType,
 		)
 		if err != nil {
@@ -988,6 +996,10 @@ func (s *SQLiteStorage) scanIssuesWithDependencyType(ctx context.Context, rows *
 		// Template field (beads-1ra)
 		if isTemplate.Valid && isTemplate.Int64 != 0 {
 			issue.IsTemplate = true
+		}
+		// claim_expires_at is NULL on an unclaimed issue (bd-ok4pr)
+		if claimExpiresAt.Valid {
+			issue.ClaimExpiresAt = &claimExpiresAt.Time
 		}
 
 		// Fetch labels for this issue

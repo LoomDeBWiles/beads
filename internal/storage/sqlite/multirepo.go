@@ -302,8 +302,8 @@ func (s *SQLiteStorage) upsertIssueInTx(ctx context.Context, tx *sql.Tx, issue *
 				status, priority, issue_type, assignee, estimated_minutes,
 				created_at, updated_at, closed_at, external_ref, source_repo, close_reason,
 				deleted_at, deleted_by, delete_reason, original_type,
-				sender, ephemeral, pinned, is_template
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+				sender, ephemeral, pinned, is_template, claim_expires_at
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		`,
 			issue.ID, issue.ContentHash, issue.Title, issue.Description, issue.Design,
 			issue.AcceptanceCriteria, issue.Notes, issue.Status,
@@ -311,7 +311,8 @@ func (s *SQLiteStorage) upsertIssueInTx(ctx context.Context, tx *sql.Tx, issue *
 			issue.EstimatedMinutes, issue.CreatedAt, issue.UpdatedAt,
 			issue.ClosedAt, issue.ExternalRef, issue.SourceRepo, issue.CloseReason,
 			issue.DeletedAt, issue.DeletedBy, issue.DeleteReason, issue.OriginalType,
-			issue.Sender, wisp, pinned, isTemplate,
+			// claim_expires_at: the source's owner lease travels with the copy (bd-ok4pr)
+			issue.Sender, wisp, pinned, isTemplate, issue.ClaimExpiresAt,
 		)
 		if err != nil {
 			return fmt.Errorf("failed to insert issue: %w", err)
@@ -335,7 +336,8 @@ func (s *SQLiteStorage) upsertIssueInTx(ctx context.Context, tx *sql.Tx, issue *
 					issue_type = ?, assignee = ?, estimated_minutes = ?,
 					updated_at = ?, closed_at = ?, external_ref = ?, source_repo = ?,
 					deleted_at = ?, deleted_by = ?, delete_reason = ?, original_type = ?,
-					sender = ?, ephemeral = ?, pinned = ?, is_template = ?
+					sender = ?, ephemeral = ?, pinned = ?, is_template = ?,
+					claim_expires_at = ?
 				WHERE id = ?
 			`,
 				issue.ContentHash, issue.Title, issue.Description, issue.Design,
@@ -343,7 +345,10 @@ func (s *SQLiteStorage) upsertIssueInTx(ctx context.Context, tx *sql.Tx, issue *
 				issue.IssueType, issue.Assignee, issue.EstimatedMinutes,
 				issue.UpdatedAt, issue.ClosedAt, issue.ExternalRef, issue.SourceRepo,
 				issue.DeletedAt, issue.DeletedBy, issue.DeleteReason, issue.OriginalType,
-				issue.Sender, wisp, pinned, isTemplate,
+				// claim_expires_at must be overwritten here too: this branch also rewrites
+				// status and assignee, and keeping the target's stale lease would leave an
+				// in_progress row no one can ever steal (bd-ok4pr)
+				issue.Sender, wisp, pinned, isTemplate, issue.ClaimExpiresAt,
 				issue.ID,
 			)
 			if err != nil {

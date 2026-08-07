@@ -1704,7 +1704,7 @@ func (s *SQLiteStorage) SearchIssues(ctx context.Context, query string, filter t
 		       status, priority, issue_type, assignee, estimated_minutes,
 		       created_at, updated_at, closed_at, external_ref, source_repo, close_reason,
 		       deleted_at, deleted_by, delete_reason, original_type,
-		       sender, ephemeral, pinned, is_template
+		       sender, ephemeral, pinned, is_template, claim_expires_at
 		FROM issues
 		%s
 		ORDER BY priority ASC, created_at DESC

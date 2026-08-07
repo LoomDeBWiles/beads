@@ -111,7 +111,7 @@ func (s *SQLiteStorage) GetReadyWork(ctx context.Context, filter types.WorkFilte
 		i.status, i.priority, i.issue_type, i.assignee, i.estimated_minutes,
 		i.created_at, i.updated_at, i.closed_at, i.external_ref, i.source_repo, i.close_reason,
 		i.deleted_at, i.deleted_by, i.delete_reason, i.original_type,
-		i.sender, i.ephemeral, i.pinned, i.is_template
+		i.sender, i.ephemeral, i.pinned, i.is_template, i.claim_expires_at
 		FROM issues i
 		WHERE %s
 		AND NOT EXISTS (
@@ -247,7 +247,7 @@ func (s *SQLiteStorage) GetStaleIssues(ctx context.Context, filter types.StaleFi
 			created_at, updated_at, closed_at, external_ref, source_repo,
 			compaction_level, compacted_at, compacted_at_commit, original_size, close_reason,
 			deleted_at, deleted_by, delete_reason, original_type,
-			sender, ephemeral, pinned, is_template
+			sender, ephemeral, pinned, is_template, claim_expires_at
 		FROM issues
 		WHERE status != 'closed'
 		  AND datetime(updated_at) < datetime('now', '-' || ? || ' days')
@@ -300,6 +300,8 @@ func (s *SQLiteStorage) GetStaleIssues(ctx context.Context, filter types.StaleFi
 		var pinned sql.NullInt64
 		// Template field (beads-1ra)
 		var isTemplate sql.NullInt64
+		// Owner lease, claim_expires_at (bd-ok4pr)
+		var claimExpiresAt sql.NullTime
 
 		err := rows.Scan(
 			&issue.ID, &contentHash, &issue.Title, &issue.Description, &issue.Design,
@@ -308,7 +310,7 @@ func (s *SQLiteStorage) GetStaleIssues(ctx context.Context, filter types.StaleFi
 			&issue.CreatedAt, &issue.UpdatedAt, &closedAt, &externalRef, &sourceRepo,
 			&compactionLevel, &compactedAt, &compactedAtCommit, &originalSize, &closeReason,
 			&deletedAt, &deletedBy, &deleteReason, &originalType,
-			&sender, &ephemeral, &pinned, &isTemplate,
+			&sender, &ephemeral, &pinned, &isTemplate, &claimExpiresAt,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan stale issue: %w", err)
@@ -372,6 +374,10 @@ func (s *SQLiteStorage) GetStaleIssues(ctx context.Context, filter types.StaleFi
 		// Template field (beads-1ra)
 		if isTemplate.Valid && isTemplate.Int64 != 0 {
 			issue.IsTemplate = true
+		}
+		// claim_expires_at is NULL on an unclaimed issue (bd-ok4pr)
+		if claimExpiresAt.Valid {
+			issue.ClaimExpiresAt = &claimExpiresAt.Time
 		}
 
 		issues = append(issues, &issue)
