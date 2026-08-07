@@ -101,16 +101,22 @@ func TestClaimFlagsTruncatesSubSecondRemainder(t *testing.T) {
 		t.Fatalf("lease = %v, want 90s (the value both routes must send)", lease)
 	}
 	args := claimRPCArgs("bd-1", "alice", lease)
-	if args.LeaseSeconds == nil || time.Duration(*args.LeaseSeconds)*time.Second != *lease {
-		t.Errorf("the RPC route sends %v seconds, the direct route sends %v", args.LeaseSeconds, *lease)
+	if args.LeaseSeconds == nil {
+		t.Fatal("the RPC route sends no lease at all, want 90 seconds")
+	}
+	if *args.LeaseSeconds != 90 {
+		t.Errorf("the RPC route sends %d seconds, want the same 90 the direct route uses", *args.LeaseSeconds)
 	}
 }
 
 func TestClaimRPCArgsCarryLeaseSeconds(t *testing.T) {
 	lease := 90 * time.Second
 	args := claimRPCArgs("bd-1", "alice", &lease)
-	if args.LeaseSeconds == nil || *args.LeaseSeconds != 90 {
-		t.Errorf("LeaseSeconds = %v, want 90", args.LeaseSeconds)
+	if args.LeaseSeconds == nil {
+		t.Fatal("LeaseSeconds = nil, want 90")
+	}
+	if *args.LeaseSeconds != 90 {
+		t.Errorf("LeaseSeconds = %d, want 90", *args.LeaseSeconds)
 	}
 
 	noLease := claimRPCArgs("bd-1", "alice", nil)
@@ -224,9 +230,25 @@ func TestClaimCommandIsRegistered(t *testing.T) {
 
 var (
 	claimBinaryOnce sync.Once
+	claimBinaryDir  string
 	claimBinaryPath string
 	claimBinaryErr  error
 )
+
+// TestMain removes the directory claimTestBinary builds into. The binary is 33 MB
+// and the build directory is created outside the test's TempDir (it must outlive the
+// first test that needs it), so without this every `go test ./cmd/bd/` run would
+// leak 33 MB into the system temp directory. The removal runs after m.Run() returns,
+// so it happens whether the tests pass or fail.
+func TestMain(m *testing.M) {
+	code := m.Run()
+	if claimBinaryDir != "" {
+		if err := os.RemoveAll(claimBinaryDir); err != nil {
+			fmt.Fprintf(os.Stderr, "removing the claim test binary directory %s: %v\n", claimBinaryDir, err)
+		}
+	}
+	os.Exit(code)
+}
 
 // claimTestBinary builds bd once per test run. It deliberately does not reuse a
 // prebuilt binary from the repo root: a stale one would assert the contract of code
@@ -239,6 +261,7 @@ func claimTestBinary(t *testing.T) string {
 			claimBinaryErr = err
 			return
 		}
+		claimBinaryDir = dir
 		claimBinaryPath = filepath.Join(dir, "bd")
 		if out, err := exec.Command("go", "build", "-o", claimBinaryPath, ".").CombinedOutput(); err != nil {
 			claimBinaryErr = fmt.Errorf("%v\n%s", err, out)
@@ -352,8 +375,11 @@ func TestClaimExitCodesInDirectMode(t *testing.T) {
 	}
 
 	denied := claim(id, "--assignee", "bob")
-	if denied.exit != claimDeniedExit {
-		t.Fatalf("a rival of a live holder should exit %d:\n%s", claimDeniedExit, denied)
+	// The literal 3 is the contract: it is what lets a shell caller tell a lost race
+	// from a broken command. Comparing against claimDeniedExit would assert nothing,
+	// since that constant is the code under test.
+	if denied.exit != 3 {
+		t.Fatalf("a rival of a live holder should exit 3 (claimDeniedExit), got %d:\n%s", denied.exit, denied)
 	}
 	for _, want := range []string{"deny_reason=held", "held by alice"} {
 		if !strings.Contains(denied.stderr, want) {
@@ -378,7 +404,10 @@ func TestClaimExitCodesInDaemonMode(t *testing.T) {
 		t.Skip("the claim end-to-end tests drive a Unix-socket daemon and POSIX exit codes")
 	}
 	bin := claimTestBinary(t)
-	env := []string{"BEADS_NO_DAEMON=0"}
+	// BD_VERBOSE makes every fallback reason print. Only the auto-start timeout warns
+	// unconditionally (daemon_autostart.go:309); the connect-failed and health-failed
+	// fallbacks go through emitVerboseWarning, which main.go:739 gates on BD_VERBOSE.
+	env := []string{"BEADS_NO_DAEMON=0", "BD_VERBOSE=1"}
 	repo := newClaimTestRepo(t, bin)
 
 	if res := runBDBinary(t, bin, repo, env, "daemon", "--start", "--local"); res.exit != 0 {
@@ -393,9 +422,10 @@ func TestClaimExitCodesInDaemonMode(t *testing.T) {
 	id := newClaimTestIssue(t, bin, repo, env, "Issue to claim via the daemon")
 	claim := func(args ...string) bdResult {
 		res := runBDBinary(t, bin, repo, env, append([]string{"claim"}, args...)...)
-		// bd falls back to the direct path with a "Running in direct mode" warning
-		// whenever the daemon is unreachable, so without this check a broken
-		// handleClaim would pass every assertion below by re-running direct mode.
+		// Every fallback message says "direct mode", so this fails fast when bd gives
+		// up on the daemon and re-runs the direct path, which would let a broken
+		// handleClaim pass the assertions below. The daemon's own operation counters
+		// (assertDaemonServedClaims) are the primary proof that the RPC route ran.
 		if strings.Contains(res.stderr, "direct mode") {
 			t.Fatalf("the claim fell back to direct mode, so it proves nothing about the RPC handler:\n%s", res)
 		}
@@ -411,8 +441,10 @@ func TestClaimExitCodesInDaemonMode(t *testing.T) {
 	}
 
 	denied := claim(id, "--assignee", "bob")
-	if denied.exit != claimDeniedExit {
-		t.Fatalf("a rival of a live holder should exit %d:\n%s", claimDeniedExit, denied)
+	// Literal 3, for the same reason as the direct-mode test: the RPC route must
+	// carry the same exit code out to the shell, and claimDeniedExit cannot prove it.
+	if denied.exit != 3 {
+		t.Fatalf("a rival of a live holder should exit 3 (claimDeniedExit), got %d:\n%s", denied.exit, denied)
 	}
 	if !strings.Contains(denied.stderr, "deny_reason=held") {
 		t.Errorf("the denial should say deny_reason=held:\n%s", denied)
@@ -444,8 +476,11 @@ func assertDaemonServedClaims(t *testing.T, repo string) {
 	if err != nil {
 		t.Fatalf("reading daemon metrics: %v", err)
 	}
+	// The literal "claim" is the wire name (rpc.OpClaim). Matching on the constant
+	// would make this loop find the counters under whatever name the code happens to
+	// use, so a renamed op would still look covered.
 	for _, op := range metrics.Operations {
-		if op.Operation != rpc.OpClaim {
+		if op.Operation != "claim" {
 			continue
 		}
 		if op.SuccessCount < 2 {
@@ -456,7 +491,7 @@ func assertDaemonServedClaims(t *testing.T, repo string) {
 		}
 		return
 	}
-	t.Fatalf("the daemon recorded no %q operation, so the claims never reached it", rpc.OpClaim)
+	t.Fatal(`the daemon recorded no "claim" operation, so the claims never reached it`)
 }
 
 // connectClaimTestDaemon dials the workspace daemon directly. TryConnect reports an
