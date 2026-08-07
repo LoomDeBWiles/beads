@@ -1,7 +1,6 @@
 package migrations
 
 import (
-	"database/sql"
 	"fmt"
 )
 
@@ -14,7 +13,7 @@ import (
 //   - idx_labels_label_issue: Covering index for label lookups (bd-jke6)
 //   - idx_dependencies_issue_type: For blocked issues queries (bd-8x3w)
 //   - idx_events_issue_type: For close reason queries (bd-lk39)
-func MigrateAdditionalIndexes(db *sql.DB) error {
+func MigrateAdditionalIndexes(db DB) error {
 	indexes := []struct {
 		name string
 		sql  string

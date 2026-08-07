@@ -1,11 +1,10 @@
 package migrations
 
 import (
-	"database/sql"
 	"fmt"
 )
 
-func MigrateSnapshotsTable(db *sql.DB) error {
+func MigrateSnapshotsTable(db DB) error {
 	var tableExists bool
 	err := db.QueryRow(`
 		SELECT COUNT(*) > 0

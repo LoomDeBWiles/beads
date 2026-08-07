@@ -1,14 +1,13 @@
 package migrations
 
 import (
-	"database/sql"
 	"fmt"
 )
 
 // MigrateIsTemplateColumn adds the is_template column to the issues table.
 // Template issues (molecules) are read-only templates that should be filtered
 // from work views by default (beads-1ra).
-func MigrateIsTemplateColumn(db *sql.DB) error {
+func MigrateIsTemplateColumn(db DB) error {
 	// Check if column already exists
 	var columnExists bool
 	err := db.QueryRow(`

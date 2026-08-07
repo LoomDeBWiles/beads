@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -904,5 +905,175 @@ func TestMigrationLedgerRecordsEveryMigration(t *testing.T) {
 	}
 	if got := countApplied(); got != len(migrationsList) {
 		t.Fatalf("second pass changed the ledger: expected %d records, got %d", len(migrationsList), got)
+	}
+}
+
+// restoreEdgeColumns puts the four deprecated edge columns back on the issues
+// table. That is the shape of a legacy store, and the only shape in which
+// migration 022 does any work at all: with the columns already gone it returns
+// immediately.
+func restoreEdgeColumns(t *testing.T, db *sql.DB) {
+	t.Helper()
+
+	for _, name := range []string{"replies_to", "relates_to", "duplicate_of", "superseded_by"} {
+		if _, err := db.Exec(`ALTER TABLE issues ADD COLUMN ` + name + ` TEXT`); err != nil {
+			t.Fatalf("failed to restore %s column: %v", name, err)
+		}
+	}
+}
+
+// issuesIndexNames reads the names of the indexes the issues table currently has.
+func issuesIndexNames(t *testing.T, db *sql.DB) []string {
+	t.Helper()
+
+	rows, err := db.Query(`SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'issues'`)
+	if err != nil {
+		t.Fatalf("failed to read issues indexes: %v", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var names []string
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			t.Fatalf("failed to scan index name: %v", err)
+		}
+		names = append(names, name)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatalf("failed to read issues indexes: %v", err)
+	}
+	return names
+}
+
+// TestDropEdgeColumnsRebuildKeepsLaterColumns calls MigrateDropEdgeColumns
+// directly, against a table that still carries the four edge columns. This is
+// the only way to reach the rebuild: once the ledger has recorded 022, a
+// RunMigrations pass skips it, so a reopen test proves nothing about the 022
+// code itself (bd-ok4pr.1.9 finding 1). On the legacy stores where 022 genuinely
+// runs, the rebuild must carry across the columns added after it was written and
+// leave the surviving indexes standing.
+func TestDropEdgeColumnsRebuildKeepsLaterColumns(t *testing.T) {
+	db := newMigratedDB(t)
+	restoreEdgeColumns(t, db)
+
+	if _, err := db.Exec(`CREATE INDEX idx_probe_survivor ON issues(source_repo)`); err != nil {
+		t.Fatalf("failed to create surviving index: %v", err)
+	}
+	if _, err := db.Exec(`CREATE INDEX idx_probe_edge ON issues(replies_to)`); err != nil {
+		t.Fatalf("failed to create edge index: %v", err)
+	}
+
+	// pinned and claim_expires_at are added by migrations 023 and 027, both of
+	// which run after 022: they are exactly the columns the frozen column list
+	// used to drop on the floor.
+	_, err := db.Exec(`INSERT INTO issues (id, title, pinned, claim_expires_at, replies_to)
+		VALUES ('rebuild-probe', 'probe', 1, '2031-02-03T04:05:06Z', 'bd-parent')`)
+	if err != nil {
+		t.Fatalf("failed to insert probe issue: %v", err)
+	}
+
+	if err := migrations.MigrateDropEdgeColumns(db); err != nil {
+		t.Fatalf("rebuild failed: %v", err)
+	}
+
+	columns := issuesColumnNames(t, db)
+	for _, gone := range []string{"replies_to", "relates_to", "duplicate_of", "superseded_by"} {
+		if slices.Contains(columns, gone) {
+			t.Errorf("edge column %s survived the rebuild", gone)
+		}
+	}
+
+	var pinned int
+	var claimExpiresAt string
+	err = db.QueryRow(`SELECT pinned, claim_expires_at FROM issues WHERE id = 'rebuild-probe'`).
+		Scan(&pinned, &claimExpiresAt)
+	if err != nil {
+		t.Fatalf("failed to read probe issue after rebuild: %v", err)
+	}
+	if pinned != 1 {
+		t.Errorf("pinned lost its value in the rebuild: want 1, got %d", pinned)
+	}
+	if claimExpiresAt != "2031-02-03T04:05:06Z" {
+		t.Errorf("claim_expires_at lost its value in the rebuild: got %q", claimExpiresAt)
+	}
+
+	indexes := issuesIndexNames(t, db)
+	if !slices.Contains(indexes, "idx_probe_survivor") {
+		t.Errorf("the rebuild lost an index that does not mention a dropped column: %v", indexes)
+	}
+	if slices.Contains(indexes, "idx_probe_edge") {
+		t.Errorf("an index on a dropped column survived the rebuild: %v", indexes)
+	}
+}
+
+// TestDropEdgeColumnsQuotesIdentifiers drives the same rebuild over a column
+// whose name is a SQL keyword. Every identifier in the rebuild comes from the
+// live schema, so any of them may need quoting; unquoted, `order` turns the
+// ALTER and the INSERT into a syntax error that fails the migration on every
+// single open, leaving the store permanently unopenable (bd-ok4pr.1.9 finding 2).
+func TestDropEdgeColumnsQuotesIdentifiers(t *testing.T) {
+	db := newMigratedDB(t)
+	restoreEdgeColumns(t, db)
+
+	if _, err := db.Exec(`ALTER TABLE issues ADD COLUMN "order" TEXT`); err != nil {
+		t.Fatalf("failed to add keyword-named column: %v", err)
+	}
+	_, err := db.Exec(`INSERT INTO issues (id, title, "order") VALUES ('quote-probe', 'probe', 'seventh')`)
+	if err != nil {
+		t.Fatalf("failed to insert probe issue: %v", err)
+	}
+
+	if err := migrations.MigrateDropEdgeColumns(db); err != nil {
+		t.Fatalf("rebuild failed on a column whose name needs quoting: %v", err)
+	}
+
+	var order string
+	if err := db.QueryRow(`SELECT "order" FROM issues WHERE id = 'quote-probe'`).Scan(&order); err != nil {
+		t.Fatalf("failed to read keyword-named column after rebuild: %v", err)
+	}
+	if order != "seventh" {
+		t.Errorf("keyword-named column lost its value in the rebuild: got %q", order)
+	}
+}
+
+// TestOpenHealsDroppedColumn exercises New's schema-probe retry path in
+// store.go. The ledger makes a plain retry a no-op, so the retry can only heal a
+// store whose column went missing if the ledger is cleared first
+// (bd-ok4pr.1.9 finding 3).
+func TestOpenHealsDroppedColumn(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "heal.db")
+
+	store, err := New(ctx, path)
+	if err != nil {
+		t.Fatalf("failed to create store: %v", err)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatalf("failed to close store: %v", err)
+	}
+
+	// Schema drift as the reviewer reproduced it: a column a migration owns,
+	// gone from a store that the ledger says is fully migrated.
+	raw, err := sql.Open("sqlite3", path)
+	if err != nil {
+		t.Fatalf("failed to reopen database directly: %v", err)
+	}
+	if _, err := raw.Exec(`ALTER TABLE issues DROP COLUMN pinned`); err != nil {
+		_ = raw.Close()
+		t.Fatalf("failed to drop pinned column: %v", err)
+	}
+	if err := raw.Close(); err != nil {
+		t.Fatalf("failed to close direct connection: %v", err)
+	}
+
+	healed, err := New(ctx, path)
+	if err != nil {
+		t.Fatalf("store with a dropped column no longer opens: %v", err)
+	}
+	defer func() { _ = healed.Close() }()
+
+	if columns := issuesColumnNames(t, healed.db); !slices.Contains(columns, "pinned") {
+		t.Errorf("open did not restore the dropped pinned column: %v", columns)
 	}
 }

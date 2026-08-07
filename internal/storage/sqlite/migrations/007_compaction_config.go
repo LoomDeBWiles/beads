@@ -1,11 +1,10 @@
 package migrations
 
 import (
-	"database/sql"
 	"fmt"
 )
 
-func MigrateCompactionConfig(db *sql.DB) error {
+func MigrateCompactionConfig(db DB) error {
 	_, err := db.Exec(`
 		INSERT OR IGNORE INTO config (key, value) VALUES
 			('compaction_enabled', 'false'),

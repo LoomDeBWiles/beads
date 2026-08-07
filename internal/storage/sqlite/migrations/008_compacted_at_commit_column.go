@@ -1,11 +1,10 @@
 package migrations
 
 import (
-	"database/sql"
 	"fmt"
 )
 
-func MigrateCompactedAtCommitColumn(db *sql.DB) error {
+func MigrateCompactedAtCommitColumn(db DB) error {
 	var columnExists bool
 	err := db.QueryRow(`
 		SELECT COUNT(*) > 0

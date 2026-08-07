@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+
+	"github.com/steveyegge/beads/internal/storage/sqlite/migrations"
 )
 
 // Snapshot captures database state before migrations for validation
@@ -20,7 +22,7 @@ type Snapshot struct {
 type MigrationInvariant struct {
 	Name        string
 	Description string
-	Check       func(*sql.DB, *Snapshot) error
+	Check       func(migrations.DB, *Snapshot) error
 }
 
 // invariants is the list of all invariants checked after migrations
@@ -43,7 +45,7 @@ var invariants = []MigrationInvariant{
 }
 
 // captureSnapshot takes a snapshot of the database state before migrations
-func captureSnapshot(db *sql.DB) (*Snapshot, error) {
+func captureSnapshot(db migrations.DB) (*Snapshot, error) {
 	snapshot := &Snapshot{}
 
 	// Count issues
@@ -87,7 +89,7 @@ func captureSnapshot(db *sql.DB) (*Snapshot, error) {
 }
 
 // verifyInvariants checks all migration invariants and returns error if any fail
-func verifyInvariants(db *sql.DB, snapshot *Snapshot) error {
+func verifyInvariants(db migrations.DB, snapshot *Snapshot) error {
 	var failures []string
 
 	for _, invariant := range invariants {
@@ -105,7 +107,7 @@ func verifyInvariants(db *sql.DB, snapshot *Snapshot) error {
 
 // checkRequiredConfig ensures required config keys exist (would have caught GH #201)
 // Only enforces issue_prefix requirement if there are issues in the database
-func checkRequiredConfig(db *sql.DB, snapshot *Snapshot) error {
+func checkRequiredConfig(db migrations.DB, snapshot *Snapshot) error {
 	// Check current issue count (not snapshot, since migrations may add/remove issues)
 	var currentCount int
 	err := db.QueryRow("SELECT COUNT(*) FROM issues").Scan(&currentCount)
@@ -132,7 +134,7 @@ func checkRequiredConfig(db *sql.DB, snapshot *Snapshot) error {
 }
 
 // checkForeignKeys ensures no orphaned dependencies or labels exist
-func checkForeignKeys(db *sql.DB, snapshot *Snapshot) error {
+func checkForeignKeys(db migrations.DB, snapshot *Snapshot) error {
 	// Check for orphaned dependencies (issue_id not in issues)
 	var orphanedDepsIssue int
 	err := db.QueryRow(`
@@ -179,7 +181,7 @@ func checkForeignKeys(db *sql.DB, snapshot *Snapshot) error {
 }
 
 // checkIssueCount ensures issue count doesn't decrease unexpectedly
-func checkIssueCount(db *sql.DB, snapshot *Snapshot) error {
+func checkIssueCount(db migrations.DB, snapshot *Snapshot) error {
 	var currentCount int
 	err := db.QueryRow("SELECT COUNT(*) FROM issues").Scan(&currentCount)
 	if err != nil {

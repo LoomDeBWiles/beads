@@ -1,13 +1,12 @@
 package migrations
 
 import (
-	"database/sql"
 	"fmt"
 )
 
 // MigratePinnedColumn adds the pinned column to the issues table.
 // Pinned issues are persistent context markers that should not be treated as work items (bd-7h5).
-func MigratePinnedColumn(db *sql.DB) error {
+func MigratePinnedColumn(db DB) error {
 	// Check if column already exists
 	var columnExists bool
 	err := db.QueryRow(`

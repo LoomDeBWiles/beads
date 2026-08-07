@@ -5,7 +5,7 @@ import (
 	"fmt"
 )
 
-func MigrateCompositeIndexes(db *sql.DB) error {
+func MigrateCompositeIndexes(db DB) error {
 	var indexName string
 	err := db.QueryRow(`
 		SELECT name FROM sqlite_master

@@ -843,9 +843,14 @@ func handleInspect() {
 		missingConfig = append(missingConfig, "issue_prefix")
 	}
 
-	// Get registered migrations (all migrations are idempotent and run on every open)
+	// Get every registered migration, and the ledger saying which of them this
+	// database has already had applied. A migration runs once per database, not
+	// on every open, so the two lists differ on any store older than the newest
+	// migration.
 	registeredMigrations := sqlite.ListMigrations()
-	
+	appliedMigrations, appliedErr := sqlite.AppliedMigrations(store.UnderlyingDB())
+
+
 	// Build invariants list
 	invariantNames := sqlite.GetInvariantNames()
 
@@ -862,10 +867,14 @@ func handleInspect() {
 	if schemaVersion != Version {
 		warnings = append(warnings, fmt.Sprintf("schema version mismatch (current: %s, expected: %s)", schemaVersion, Version))
 	}
+	if appliedErr != nil {
+		warnings = append(warnings, fmt.Sprintf("could not read the applied-migration ledger: %v", appliedErr))
+	}
 
 	// Output result
 	result := map[string]interface{}{
 		"registered_migrations": registeredMigrations,
+		"applied_migrations":    appliedMigrations,
 		"current_state": map[string]interface{}{
 			"schema_version": schemaVersion,
 			"issue_count":    issueCount,
@@ -886,7 +895,12 @@ func handleInspect() {
 		fmt.Printf("Schema Version: %s\n", schemaVersion)
 		fmt.Printf("Issue Count: %d\n", issueCount)
 		fmt.Printf("Registered Migrations: %d\n", len(registeredMigrations))
-		
+		fmt.Printf("Applied Migrations: %d\n", len(appliedMigrations))
+		for _, m := range appliedMigrations {
+			fmt.Printf("  ✓ %s (%s)\n", m.Name, m.AppliedAt)
+		}
+
+
 		if len(warnings) > 0 {
 			fmt.Println("\nWarnings:")
 			for _, w := range warnings {

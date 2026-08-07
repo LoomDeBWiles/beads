@@ -1,12 +1,11 @@
 package migrations
 
 import (
-	"database/sql"
 	"errors"
 	"fmt"
 )
 
-func MigrateExternalRefColumn(db *sql.DB) (retErr error) {
+func MigrateExternalRefColumn(db DB) (retErr error) {
 	var columnExists bool
 	rows, err := db.Query("PRAGMA table_info(issues)")
 	if err != nil {

@@ -1,7 +1,6 @@
 package migrations
 
 import (
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"time"
@@ -18,7 +17,7 @@ import (
 //
 // This migration is idempotent: it uses INSERT OR IGNORE to skip
 // edges that already exist (from Phase 2 dual-write).
-func MigrateEdgeFields(db *sql.DB) error {
+func MigrateEdgeFields(db DB) error {
 	now := time.Now()
 
 	// Migrate replies_to fields to replies-to edges

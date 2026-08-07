@@ -1,7 +1,6 @@
 package migrations
 
 import (
-	"database/sql"
 	"fmt"
 	"log"
 )
@@ -19,7 +18,7 @@ import (
 // - Delete the orphans if they're no longer needed
 // - Convert them to top-level issues by renaming them
 // - Restore the missing parent issues
-func MigrateOrphanDetection(db *sql.DB) error {
+func MigrateOrphanDetection(db DB) error {
 	// Query for orphaned children:
 	// - Must end with .N where N is 1-4 digits (covers child numbers 0-9999)
 	// - Parent (everything before the last .N) must not exist in issues table

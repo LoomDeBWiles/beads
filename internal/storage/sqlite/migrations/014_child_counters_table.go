@@ -5,7 +5,7 @@ import (
 	"fmt"
 )
 
-func MigrateChildCountersTable(db *sql.DB) error {
+func MigrateChildCountersTable(db DB) error {
 	var tableName string
 	err := db.QueryRow(`
 		SELECT name FROM sqlite_master

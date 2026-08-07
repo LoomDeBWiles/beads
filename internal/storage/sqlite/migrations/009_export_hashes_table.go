@@ -5,7 +5,7 @@ import (
 	"fmt"
 )
 
-func MigrateExportHashesTable(db *sql.DB) error {
+func MigrateExportHashesTable(db DB) error {
 	var tableName string
 	err := db.QueryRow(`
 		SELECT name FROM sqlite_master

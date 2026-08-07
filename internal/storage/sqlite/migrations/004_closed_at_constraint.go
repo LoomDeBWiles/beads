@@ -1,11 +1,10 @@
 package migrations
 
 import (
-	"database/sql"
 	"fmt"
 )
 
-func MigrateClosedAtConstraint(db *sql.DB) error {
+func MigrateClosedAtConstraint(db DB) error {
 	var count int
 	err := db.QueryRow(`
 		SELECT COUNT(*)

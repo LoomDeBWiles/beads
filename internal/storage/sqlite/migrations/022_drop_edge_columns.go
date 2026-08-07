@@ -46,20 +46,6 @@ const canonicalIssuesColumns = `
 	CHECK ((status = 'closed') = (closed_at IS NOT NULL))
 `
 
-// canonicalIssuesColumnNames is the set of column names declared by
-// canonicalIssuesColumns, used to tell known columns from ones a later
-// migration added.
-var canonicalIssuesColumnNames = map[string]bool{
-	"id": true, "content_hash": true, "title": true, "description": true,
-	"design": true, "acceptance_criteria": true, "notes": true, "status": true,
-	"priority": true, "issue_type": true, "assignee": true, "estimated_minutes": true,
-	"created_at": true, "updated_at": true, "closed_at": true, "external_ref": true,
-	"source_repo": true, "compaction_level": true, "compacted_at": true,
-	"compacted_at_commit": true, "original_size": true, "deleted_at": true,
-	"deleted_by": true, "delete_reason": true, "original_type": true,
-	"sender": true, "ephemeral": true, "close_reason": true,
-}
-
 // issuesColumn describes one column of the live issues table.
 type issuesColumn struct {
 	name       string
@@ -68,14 +54,14 @@ type issuesColumn struct {
 	defaultSQL sql.NullString
 }
 
-// liveIssuesColumns reads the issues table's columns in declaration order from
-// the database itself. Reading the live schema, rather than trusting a list
-// written when this migration was, is what keeps the rebuild from dropping
-// columns added after it (bd-ok4pr.1.8).
-func liveIssuesColumns(db *sql.DB) ([]issuesColumn, error) {
-	rows, err := db.Query(`SELECT name, type, "notnull", dflt_value FROM pragma_table_info('issues') ORDER BY cid`)
+// tableColumns reads a table's columns in declaration order from the database
+// itself. Reading the live schema, rather than trusting a list written when
+// this migration was, is what keeps the rebuild from dropping columns added
+// after it (bd-ok4pr.1.8).
+func tableColumns(db DB, table string) ([]issuesColumn, error) {
+	rows, err := db.Query(`SELECT name, type, "notnull", dflt_value FROM pragma_table_info(?) ORDER BY cid`, table)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read issues columns: %w", err)
+		return nil, fmt.Errorf("failed to read %s columns: %w", table, err)
 	}
 	defer func() { _ = rows.Close() }()
 
@@ -83,14 +69,23 @@ func liveIssuesColumns(db *sql.DB) ([]issuesColumn, error) {
 	for rows.Next() {
 		var c issuesColumn
 		if err := rows.Scan(&c.name, &c.declType, &c.notNull, &c.defaultSQL); err != nil {
-			return nil, fmt.Errorf("failed to scan issues column: %w", err)
+			return nil, fmt.Errorf("failed to scan %s column: %w", table, err)
 		}
 		cols = append(cols, c)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("failed to read issues columns: %w", err)
+		return nil, fmt.Errorf("failed to read %s columns: %w", table, err)
 	}
 	return cols, nil
+}
+
+// quoteIdent renders a column name as a SQL identifier. Names come from the
+// live schema, so they can be anything a user or a future migration declared -
+// `order`, a name with a space, a quote. Left bare, such a name turns the
+// rebuild into a syntax error inside the migration transaction, which leaves
+// the store unopenable on every later invocation (bd-ok4pr.1.9).
+func quoteIdent(name string) string {
+	return `"` + strings.ReplaceAll(name, `"`, `""`) + `"`
 }
 
 // addColumnClause renders an ALTER TABLE ADD COLUMN body for a column carried
@@ -98,7 +93,7 @@ func liveIssuesColumns(db *sql.DB) ([]issuesColumn, error) {
 // to an existing table in SQLite, so the constraint is relaxed rather than
 // losing the column; the data itself is copied either way.
 func addColumnClause(c issuesColumn) string {
-	clause := c.name
+	clause := quoteIdent(c.name)
 	if c.declType != "" {
 		clause += " " + c.declType
 	}
@@ -117,9 +112,9 @@ func addColumnClause(c issuesColumn) string {
 func copyExpr(name string) string {
 	switch name {
 	case "source_repo", "close_reason":
-		return fmt.Sprintf("COALESCE(%s, '')", name)
+		return fmt.Sprintf("COALESCE(%s, '')", quoteIdent(name))
 	default:
-		return name
+		return quoteIdent(name)
 	}
 }
 
@@ -127,7 +122,7 @@ func copyExpr(name string) string {
 // table that do not mention a column being dropped. DROP TABLE takes the
 // table's indexes with it, so they are replayed after the rebuild instead of
 // being silently lost.
-func survivingIssuesIndexes(db *sql.DB) ([]string, error) {
+func survivingIssuesIndexes(db DB) ([]string, error) {
 	rows, err := db.Query(`SELECT sql FROM sqlite_master WHERE type = 'index' AND tbl_name = 'issues' AND sql IS NOT NULL`)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read issues indexes: %w", err)
@@ -174,8 +169,8 @@ func mentionsEdgeColumn(stmt string) bool {
 //
 // SQLite doesn't support DROP COLUMN directly in older versions, so we
 // recreate the table without the deprecated columns.
-func MigrateDropEdgeColumns(db *sql.DB) error {
-	liveColumns, err := liveIssuesColumns(db)
+func MigrateDropEdgeColumns(db DB) error {
+	liveColumns, err := tableColumns(db, "issues")
 	if err != nil {
 		return err
 	}
@@ -248,8 +243,21 @@ func MigrateDropEdgeColumns(db *sql.DB) error {
 		return fmt.Errorf("failed to create new issues table: %w", err)
 	}
 
+	// Which columns the new table already declares is asked of the table that
+	// was just created, not of a second hand-maintained list beside the DDL -
+	// two lists that must agree is the defect class this migration exists to
+	// remove (bd-ok4pr.1.9).
+	declared, err := tableColumns(db, "issues_new")
+	if err != nil {
+		return err
+	}
+	alreadyDeclared := make(map[string]bool, len(declared))
+	for _, col := range declared {
+		alreadyDeclared[col.name] = true
+	}
+
 	for _, col := range carried {
-		if canonicalIssuesColumnNames[col.name] {
+		if alreadyDeclared[col.name] {
 			continue
 		}
 		_, err = db.Exec(`ALTER TABLE issues_new ADD COLUMN ` + addColumnClause(col))
@@ -263,7 +271,7 @@ func MigrateDropEdgeColumns(db *sql.DB) error {
 	names := make([]string, len(carried))
 	exprs := make([]string, len(carried))
 	for i, col := range carried {
-		names[i] = col.name
+		names[i] = quoteIdent(col.name)
 		exprs[i] = copyExpr(col.name)
 	}
 	_, err = db.Exec(fmt.Sprintf(

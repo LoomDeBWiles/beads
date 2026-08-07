@@ -1,7 +1,6 @@
 package migrations
 
 import (
-	"database/sql"
 	"fmt"
 )
 
@@ -14,7 +13,7 @@ import (
 // - Edge metadata without schema changes (extensibility)
 // - O(1) thread queries for Reddit-style conversations
 // - HOP knowledge graph foundation
-func MigrateEdgeConsolidation(db *sql.DB) error {
+func MigrateEdgeConsolidation(db DB) error {
 	columns := []struct {
 		name       string
 		definition string

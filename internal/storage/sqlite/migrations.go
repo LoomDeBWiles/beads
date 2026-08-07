@@ -2,6 +2,7 @@
 package sqlite
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 
@@ -11,7 +12,7 @@ import (
 // Migration represents a single database migration
 type Migration struct {
 	Name string
-	Func func(*sql.DB) error
+	Func func(migrations.DB) error
 }
 
 // migrations is the ordered list of all migrations to run
@@ -104,9 +105,64 @@ func getMigrationDescription(name string) string {
 	return "Unknown migration"
 }
 
+// migrationConn adapts a single pooled connection to the handle migrations
+// take. The whole pass runs on this one connection, so BEGIN EXCLUSIVE, every
+// migration, every ledger row and the invariant checks are all the same
+// transaction rather than whichever connections the pool happened to hand out.
+type migrationConn struct {
+	ctx  context.Context
+	conn *sql.Conn
+}
+
+func (c migrationConn) Exec(query string, args ...any) (sql.Result, error) {
+	return c.conn.ExecContext(c.ctx, query, args...)
+}
+
+func (c migrationConn) Query(query string, args ...any) (*sql.Rows, error) {
+	return c.conn.QueryContext(c.ctx, query, args...)
+}
+
+func (c migrationConn) QueryRow(query string, args ...any) *sql.Row {
+	return c.conn.QueryRowContext(c.ctx, query, args...)
+}
+
+func (c migrationConn) Prepare(query string) (*sql.Stmt, error) {
+	return c.conn.PrepareContext(c.ctx, query)
+}
+
+// AppliedMigration is one row of the schema_migrations ledger.
+type AppliedMigration struct {
+	Name      string `json:"name"`
+	AppliedAt string `json:"applied_at"`
+}
+
+// AppliedMigrations returns the ledger rows of migrations already applied to
+// this database, oldest first. A database opened by a bd older than the ledger
+// has no such table and reports none.
+func AppliedMigrations(db *sql.DB) ([]AppliedMigration, error) {
+	rows, err := db.Query(`SELECT name, applied_at FROM schema_migrations ORDER BY applied_at, name`)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read applied migrations: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	applied := []AppliedMigration{}
+	for rows.Next() {
+		var m AppliedMigration
+		if err := rows.Scan(&m.Name, &m.AppliedAt); err != nil {
+			return nil, fmt.Errorf("failed to scan applied migration: %w", err)
+		}
+		applied = append(applied, m)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to read applied migrations: %w", err)
+	}
+	return applied, nil
+}
+
 // appliedMigrations returns the set of migration names already recorded in the
 // ledger.
-func appliedMigrations(db *sql.DB) (map[string]bool, error) {
+func appliedMigrations(db migrations.DB) (map[string]bool, error) {
 	rows, err := db.Query(`SELECT name FROM schema_migrations`)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read applied migrations: %w", err)
@@ -127,10 +183,11 @@ func appliedMigrations(db *sql.DB) (map[string]bool, error) {
 	return applied, nil
 }
 
-// recordMigration marks a migration as applied. It runs inside the same
-// EXCLUSIVE transaction as the migration itself, so a failure anywhere in the
-// pass rolls the record back with the work it describes.
-func recordMigration(db *sql.DB, name string) error {
+// recordMigration marks a migration as applied. It is handed the same
+// connection the migration ran on, which is what makes it part of that
+// migration's EXCLUSIVE transaction: a failure anywhere in the pass rolls the
+// record back with the work it describes.
+func recordMigration(db migrations.DB, name string) error {
 	_, err := db.Exec(`INSERT OR IGNORE INTO schema_migrations (name) VALUES (?)`, name)
 	if err != nil {
 		return fmt.Errorf("failed to record migration %s: %w", name, err)
@@ -147,22 +204,36 @@ func recordMigration(db *sql.DB, name string) error {
 // transaction. Re-running everything on every open, as this used to do, was not
 // merely wasteful: migrations 019 and 022 form a cycle whose every turn rebuilt
 // the issues table and blanked the columns added after 022 (bd-ok4pr.1.8).
-func RunMigrations(db *sql.DB) error {
+//
+// The whole pass runs on one connection taken from the pool. PRAGMA
+// foreign_keys, the EXCLUSIVE transaction and the ledger writes are all
+// connection-scoped, so spreading them over a pool would let a ledger row
+// autocommit outside the transaction its migration later rolls back, skipping
+// that migration forever (bd-ok4pr.1.9).
+func RunMigrations(sqlDB *sql.DB) error {
+	ctx := context.Background()
+	conn, err := sqlDB.Conn(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to acquire migration connection: %w", err)
+	}
+	defer func() { _ = conn.Close() }()
+	db := migrationConn{ctx: ctx, conn: conn}
+
 	// Disable foreign keys BEFORE starting the transaction.
 	// PRAGMA foreign_keys must be called when no transaction is active (SQLite limitation).
 	// Some migrations (022, 025) drop/recreate tables and need foreign keys off
 	// to prevent ON DELETE CASCADE from deleting related data.
-	_, err := db.Exec("PRAGMA foreign_keys = OFF")
-	if err != nil {
+	if _, err := db.Exec("PRAGMA foreign_keys = OFF"); err != nil {
 		return fmt.Errorf("failed to disable foreign keys for migrations: %w", err)
 	}
+	// Restore it before the connection goes back to the pool, or every later
+	// user of that connection runs without foreign keys.
 	defer func() { _, _ = db.Exec("PRAGMA foreign_keys = ON") }()
 
 	// Acquire EXCLUSIVE lock to serialize migrations across processes.
 	// Without this, parallel processes can race on check-then-modify operations
 	// (e.g., checking if a column exists then adding it), causing "duplicate column" errors.
-	_, err = db.Exec("BEGIN EXCLUSIVE")
-	if err != nil {
+	if _, err := db.Exec("BEGIN EXCLUSIVE"); err != nil {
 		return fmt.Errorf("failed to acquire exclusive lock for migrations: %w", err)
 	}
 

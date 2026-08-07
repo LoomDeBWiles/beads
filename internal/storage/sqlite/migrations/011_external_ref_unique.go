@@ -1,12 +1,11 @@
 package migrations
 
 import (
-	"database/sql"
 	"fmt"
 	"strings"
 )
 
-func MigrateExternalRefUnique(db *sql.DB) error {
+func MigrateExternalRefUnique(db DB) error {
 	var hasConstraint bool
 	err := db.QueryRow(`
 		SELECT COUNT(*) > 0
@@ -39,7 +38,7 @@ func MigrateExternalRefUnique(db *sql.DB) error {
 	return nil
 }
 
-func findExternalRefDuplicates(db *sql.DB) (map[string][]string, error) {
+func findExternalRefDuplicates(db DB) (map[string][]string, error) {
 	rows, err := db.Query(`
 		SELECT external_ref, GROUP_CONCAT(id, ',') as ids
 		FROM issues

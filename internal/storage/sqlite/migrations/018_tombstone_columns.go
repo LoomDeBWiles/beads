@@ -1,7 +1,6 @@
 package migrations
 
 import (
-	"database/sql"
 	"fmt"
 )
 
@@ -11,7 +10,7 @@ import (
 // - deleted_by: who deleted the issue
 // - delete_reason: why the issue was deleted
 // - original_type: the issue type before deletion (for tombstones)
-func MigrateTombstoneColumns(db *sql.DB) error {
+func MigrateTombstoneColumns(db DB) error {
 	columns := []struct {
 		name         string
 		definition   string

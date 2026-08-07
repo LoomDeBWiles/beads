@@ -162,7 +162,16 @@ func NewWithTimeout(ctx context.Context, path string, busyTimeout time.Duration)
 	// Verify schema compatibility after migrations (bd-ckvw)
 	// First attempt
 	if err := verifySchemaCompatibility(db); err != nil {
-		// Schema probe failed - retry migrations once
+		// Schema probe failed - retry migrations once.
+		// The ledger makes that retry a no-op unless the record of the
+		// migrations owning the drifted schema is cleared first, so drop the
+		// ledger: the next pass then runs every migration and re-records it,
+		// exactly as a store that never had a ledger does. That is what keeps
+		// Open able to heal a store whose column was dropped underneath it
+		// (bd-ok4pr.1.9).
+		if _, resetErr := db.Exec(`DROP TABLE IF EXISTS schema_migrations`); resetErr != nil {
+			return nil, fmt.Errorf("failed to clear migration ledger after schema probe failure: %w (original: %w)", resetErr, err)
+		}
 		if retryErr := RunMigrations(db); retryErr != nil {
 			return nil, fmt.Errorf("migration retry failed after schema probe failure: %w (original: %w)", retryErr, err)
 		}

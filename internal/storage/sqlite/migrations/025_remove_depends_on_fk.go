@@ -1,13 +1,12 @@
 package migrations
 
 import (
-	"database/sql"
 )
 
 // MigrateRemoveDependsOnFK removes the FOREIGN KEY constraint on depends_on_id
 // to allow external dependencies (external:<project>:<capability>).
 // See bd-zmmy for design context.
-func MigrateRemoveDependsOnFK(db *sql.DB) error {
+func MigrateRemoveDependsOnFK(db DB) error {
 	// NOTE: Foreign keys are disabled in RunMigrations() before the EXCLUSIVE transaction starts.
 	// This prevents ON DELETE CASCADE from deleting data when we drop/recreate the dependencies table.
 

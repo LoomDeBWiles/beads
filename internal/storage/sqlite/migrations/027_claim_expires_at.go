@@ -1,14 +1,13 @@
 package migrations
 
 import (
-	"database/sql"
 	"fmt"
 )
 
 // MigrateClaimExpiresAtColumn adds the claim_expires_at column to the issues table.
 // The column stores the expiry of an owner lease taken by `bd claim`; NULL means the
 // claim never expires, which preserves the pre-lease behaviour of human claims (bd-ok4pr).
-func MigrateClaimExpiresAtColumn(db *sql.DB) error {
+func MigrateClaimExpiresAtColumn(db DB) error {
 	// Check if column already exists
 	var columnExists bool
 	err := db.QueryRow(`

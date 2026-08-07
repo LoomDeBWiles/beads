@@ -1,7 +1,6 @@
 package migrations
 
 import (
-	"database/sql"
 	"fmt"
 )
 
@@ -13,7 +12,7 @@ import (
 // - relates_to: JSON array of issue IDs for knowledge graph edges
 // - duplicate_of: canonical issue ID (this is a duplicate)
 // - superseded_by: replacement issue ID (this is obsolete)
-func MigrateMessagingFields(db *sql.DB) error {
+func MigrateMessagingFields(db DB) error {
 	columns := []struct {
 		name       string
 		definition string

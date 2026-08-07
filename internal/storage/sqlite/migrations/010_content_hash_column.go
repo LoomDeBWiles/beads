@@ -7,7 +7,7 @@ import (
 	"github.com/steveyegge/beads/internal/types"
 )
 
-func MigrateContentHashColumn(db *sql.DB) error {
+func MigrateContentHashColumn(db DB) error {
 	var colName string
 	err := db.QueryRow(`
 		SELECT name FROM pragma_table_info('issues')

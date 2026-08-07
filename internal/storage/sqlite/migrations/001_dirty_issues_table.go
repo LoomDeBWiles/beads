@@ -5,7 +5,7 @@ import (
 	"fmt"
 )
 
-func MigrateDirtyIssuesTable(db *sql.DB) error {
+func MigrateDirtyIssuesTable(db DB) error {
 	var tableName string
 	err := db.QueryRow(`
 		SELECT name FROM sqlite_master

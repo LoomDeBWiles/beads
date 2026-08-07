@@ -1,13 +1,12 @@
 package migrations
 
 import (
-	"database/sql"
 	"fmt"
 )
 
 // MigrateCloseReasonColumn adds the close_reason column to the issues table.
 // This column stores the reason provided when closing an issue.
-func MigrateCloseReasonColumn(db *sql.DB) error {
+func MigrateCloseReasonColumn(db DB) error {
 	var columnExists bool
 	err := db.QueryRow(`
 		SELECT COUNT(*) > 0
