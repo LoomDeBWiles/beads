@@ -422,10 +422,13 @@ func TestClaimExitCodesInDaemonMode(t *testing.T) {
 	id := newClaimTestIssue(t, bin, repo, env, "Issue to claim via the daemon")
 	claim := func(args ...string) bdResult {
 		res := runBDBinary(t, bin, repo, env, append([]string{"claim"}, args...)...)
-		// Every fallback message says "direct mode", so this fails fast when bd gives
-		// up on the daemon and re-runs the direct path, which would let a broken
-		// handleClaim pass the assertions below. The daemon's own operation counters
-		// (assertDaemonServedClaims) are the primary proof that the RPC route ran.
+		// The daemon's own operation counters (assertDaemonServedClaims) are the
+		// primary proof that the RPC route ran. This stderr check is a fast
+		// secondary signal: the fallback reasons reachable here all print "direct
+		// mode", so it catches bd giving up on the daemon and re-running the direct
+		// path, which would let a broken handleClaim pass the assertions below.
+		// It is not exhaustive - emitVerboseWarning returns silently for
+		// FallbackWorktreeSafety and FallbackFlagNoDaemon.
 		if strings.Contains(res.stderr, "direct mode") {
 			t.Fatalf("the claim fell back to direct mode, so it proves nothing about the RPC handler:\n%s", res)
 		}

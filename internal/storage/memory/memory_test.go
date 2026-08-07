@@ -1452,7 +1452,7 @@ func TestUpdateIssueClaimExpiresAtValueTypes(t *testing.T) {
 	}
 }
 
-// TestUpdateIssueRejectedLeaveIssueUntouched pins the rejection as a whole-call
+// TestUpdateIssueRejectedLeavesIssueUntouched pins the rejection as a whole-call
 // no-op. Go randomizes map iteration order, so a rejection raised while applying
 // keys would keep whichever keys ran first while skipping the dirty mark and the
 // event row: a half-updated issue with no audit trail. Every other key in the same

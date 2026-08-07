@@ -409,12 +409,15 @@ func TestExportCommand(t *testing.T) {
 
 // TestClaimRoundTrip locks the owner lease into the JSONL round trip (bd-ok4pr).
 //
-// Three import paths, because they carry the field through different code:
-// a fresh store goes through insertIssue and picks the lease up from the INSERT
-// column list, while a store that already holds the issue goes through the
-// importer's explicit update maps, which drop silently anything they do not
-// name. The renewal case is the only one where the checkFieldChanged
-// comparator decides whether the update runs at all.
+// Four import paths, because they carry the field through different code:
+// a fresh store goes through the batch insertIssues and picks the lease up from
+// the INSERT column list, while a store that already holds the issue goes
+// through the importer's explicit update maps, which drop silently anything
+// they do not name. The renewal case is the only one where the checkFieldChanged
+// comparator decides whether the update runs at all. The rename collision adds
+// a third writer: handleRename merges the incoming fields into the twin that
+// already holds the content under another ID, and the unrelated issue squatting
+// on the incoming ID must come through untouched, lease included.
 func TestClaimRoundTrip(t *testing.T) {
 	ctx := context.Background()
 
