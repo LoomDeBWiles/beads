@@ -26,6 +26,7 @@ const (
 	OpLabelRemove     = "label_remove"
 	OpCommentList     = "comment_list"
 	OpCommentAdd      = "comment_add"
+	OpClaim           = "claim"
 	OpBatch           = "batch"
 	OpResolveID       = "resolve_id"
 
@@ -108,6 +109,14 @@ type UpdateArgs struct {
 	SupersededBy *string `json:"superseded_by,omitempty"` // Replacement issue ID if obsolete
 	// Pinned field (bd-iea)
 	Pinned *bool `json:"pinned,omitempty"` // If true, issue is a persistent context marker
+}
+
+// ClaimArgs represents arguments for the claim operation (bd-ok4pr).
+// LeaseSeconds is nil when the caller passed no --lease, meaning the claim never expires.
+type ClaimArgs struct {
+	ID           string `json:"id"`
+	Assignee     string `json:"assignee"`
+	LeaseSeconds *int64 `json:"lease_seconds,omitempty"`
 }
 
 // CloseArgs represents arguments for the close operation

@@ -298,6 +298,13 @@ func (c *Client) Update(args *UpdateArgs) (*Response, error) {
 	return c.Execute(OpUpdate, args)
 }
 
+// Claim atomically takes ownership of an issue via the daemon (bd-ok4pr).
+// A denial is a successful call whose outcome is "denied", not an error: only a
+// not-found, closed or tombstoned issue, invalid args or a DB failure error out.
+func (c *Client) Claim(args *ClaimArgs) (*Response, error) {
+	return c.Execute(OpClaim, args)
+}
+
 // CloseIssue marks an issue as closed via the daemon.
 func (c *Client) CloseIssue(args *CloseArgs) (*Response, error) {
 	return c.Execute(OpClose, args)

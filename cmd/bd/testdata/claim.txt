@@ -1,0 +1,94 @@
+# Test bd claim: the exit-code contract in both direct and daemon mode.
+# 0 = claimed/renewed, 3 = denied (deny_reason says retry vs skip), 1 = error.
+bd init --prefix test
+
+bd create 'Issue to claim'
+cp stdout issue.txt
+exec sh -c 'grep -oE "test-[a-z0-9]+" issue.txt > direct_id.txt'
+
+# --- Direct mode (--no-daemon) ---
+
+# Claiming an open issue wins.
+exec sh -c 'bd --no-daemon claim $(cat direct_id.txt) --assignee alice; echo exit=$?'
+stdout 'Claimed issue'
+stdout 'exit=0'
+
+# The holder claiming again renews instead of stealing from itself.
+exec sh -c 'bd --no-daemon claim $(cat direct_id.txt) --assignee alice --lease 45m; echo exit=$?'
+stdout 'Renewed issue'
+stdout 'exit=0'
+
+# A rival loses: exit 3, deny_reason=held, so a shell caller retries later.
+exec sh -c 'bd --no-daemon claim $(cat direct_id.txt) --assignee bob 2>err.txt; echo exit=$?'
+stdout 'exit=3'
+grep 'deny_reason=held' err.txt
+grep 'held by alice' err.txt
+
+# --json emits the outcome object on a denial too.
+exec sh -c 'bd --no-daemon claim $(cat direct_id.txt) --assignee bob --json 2>/dev/null; echo exit=$?'
+stdout '"outcome": "denied"'
+stdout '"deny_reason": "held"'
+stdout 'exit=3'
+
+# A non-claimable status also exits 3, but deny_reason=status tells the caller to skip.
+exec sh -c 'bd --no-daemon update $(cat direct_id.txt) --status blocked'
+exec sh -c 'bd --no-daemon claim $(cat direct_id.txt) --assignee bob 2>err.txt; echo exit=$?'
+stdout 'exit=3'
+grep 'deny_reason=status' err.txt
+grep 'status blocked' err.txt
+
+# An empty --assignee is a usage error, not a claim: two empty claimants would both win.
+exec sh -c 'bd --no-daemon claim $(cat direct_id.txt) --assignee "" 2>err.txt; echo exit=$?'
+stdout 'exit=1'
+grep 'assignee' err.txt
+
+# A missing --assignee is the same usage error.
+exec sh -c 'bd --no-daemon claim $(cat direct_id.txt) 2>err.txt; echo exit=$?'
+stdout 'exit=1'
+
+# An unknown issue is an error, not a denial.
+exec sh -c 'bd --no-daemon claim test-nosuch --assignee alice 2>err.txt; echo exit=$?'
+stdout 'exit=1'
+
+# A closed issue is an error too: there is nothing to wait for.
+exec sh -c 'bd --no-daemon close $(cat direct_id.txt) --reason done'
+exec sh -c 'bd --no-daemon claim $(cat direct_id.txt) --assignee bob 2>err.txt; echo exit=$?'
+stdout 'exit=1'
+grep 'closed' err.txt
+
+# --- Daemon mode: same outcomes through the RPC op ---
+
+bd daemon --start --local
+bd daemon --status
+stdout 'running'
+
+bd create 'Issue to claim via daemon'
+cp stdout daemon_issue.txt
+exec sh -c 'grep -oE "test-[a-z0-9]+" daemon_issue.txt > daemon_id.txt'
+
+exec sh -c 'bd claim $(cat daemon_id.txt) --assignee alice; echo exit=$?'
+stdout 'Claimed issue'
+stdout 'exit=0'
+
+exec sh -c 'bd claim $(cat daemon_id.txt) --assignee alice; echo exit=$?'
+stdout 'Renewed issue'
+stdout 'exit=0'
+
+exec sh -c 'bd claim $(cat daemon_id.txt) --assignee bob 2>err.txt; echo exit=$?'
+stdout 'exit=3'
+grep 'deny_reason=held' err.txt
+
+exec sh -c 'bd update $(cat daemon_id.txt) --status blocked'
+exec sh -c 'bd claim $(cat daemon_id.txt) --assignee bob 2>err.txt; echo exit=$?'
+stdout 'exit=3'
+grep 'deny_reason=status' err.txt
+
+exec sh -c 'bd claim $(cat daemon_id.txt) --assignee "" 2>err.txt; echo exit=$?'
+stdout 'exit=1'
+
+exec sh -c 'bd close $(cat daemon_id.txt) --reason done'
+exec sh -c 'bd claim $(cat daemon_id.txt) --assignee bob 2>err.txt; echo exit=$?'
+stdout 'exit=1'
+grep 'closed' err.txt
+
+bd daemon --stop

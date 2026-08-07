@@ -164,6 +164,9 @@ func init() {
 	rootCmd.AddGroup(&cobra.Group{ID: "maint", Title: "Maintenance:"})
 	rootCmd.AddGroup(&cobra.Group{ID: "advanced", Title: "Integrations & Advanced:"})
 
+	// The claim verb (bd-ok4pr) registers itself once its group exists.
+	registerClaimCmd()
+
 	// Custom help function with semantic coloring (Tufte-inspired)
 	// Note: Usage output (shown on errors) is not styled to avoid recursion issues
 	rootCmd.SetHelpFunc(colorizedHelpFunc)

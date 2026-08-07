@@ -484,6 +484,70 @@ func (s *Server) handleUpdate(req *Request) Response {
 	}
 }
 
+// handleClaim runs an atomic claim on behalf of the CLI (bd-ok4pr).
+//
+// A denial is reported as a successful response carrying a denied outcome, so the
+// client can map it to exit 3 and read DenyReason; errors are reserved for the
+// cases the CLI maps to exit 1 (not found, closed, tombstoned, invalid args, DB failure).
+func (s *Server) handleClaim(req *Request) Response {
+	var claimArgs ClaimArgs
+	if err := json.Unmarshal(req.Args, &claimArgs); err != nil {
+		return Response{
+			Success: false,
+			Error:   fmt.Sprintf("invalid %s args: %v", OpClaim, err),
+		}
+	}
+
+	store := s.storage
+	if store == nil {
+		return Response{
+			Success: false,
+			Error:   "storage not available (global daemon deprecated - use local daemon instead with 'bd daemon' in your project)",
+		}
+	}
+
+	// Reject an empty assignee here as well as in the CLI: an empty value would match
+	// the legacy unowned in_progress rung and let two claimants both win.
+	if strings.TrimSpace(claimArgs.Assignee) == "" {
+		return Response{
+			Success: false,
+			Error:   "claim requires a non-empty assignee",
+		}
+	}
+
+	var lease *time.Duration
+	if claimArgs.LeaseSeconds != nil {
+		d := time.Duration(*claimArgs.LeaseSeconds) * time.Second
+		lease = &d
+	}
+
+	ctx := s.reqCtx(req)
+	outcome, err := store.ClaimIssue(ctx, claimArgs.ID, claimArgs.Assignee, lease, s.reqActor(req))
+	if err != nil {
+		return Response{
+			Success: false,
+			Error:   err.Error(),
+		}
+	}
+
+	// A denial writes nothing, so there is no mutation to announce.
+	if outcome.Outcome != types.ClaimDenied {
+		s.emitMutation(MutationUpdate, claimArgs.ID)
+	}
+
+	data, err := json.Marshal(outcome)
+	if err != nil {
+		return Response{
+			Success: false,
+			Error:   fmt.Sprintf("failed to marshal claim outcome: %v", err),
+		}
+	}
+	return Response{
+		Success: true,
+		Data:    data,
+	}
+}
+
 func (s *Server) handleClose(req *Request) Response {
 	var closeArgs CloseArgs
 	if err := json.Unmarshal(req.Args, &closeArgs); err != nil {
