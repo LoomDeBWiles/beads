@@ -1451,3 +1451,84 @@ func TestUpdateIssueClaimExpiresAtValueTypes(t *testing.T) {
 		t.Errorf("error must name the field, got %q", err)
 	}
 }
+
+// TestUpdateIssueRejectedLeaveIssueUntouched pins the rejection as a whole-call
+// no-op. Go randomizes map iteration order, so a rejection raised while applying
+// keys would keep whichever keys ran first while skipping the dirty mark and the
+// event row: a half-updated issue with no audit trail. Every other key in the same
+// call, updated_at, the dirty set and the event log must all be exactly as they
+// were before the call.
+func TestUpdateIssueRejectedLeavesIssueUntouched(t *testing.T) {
+	store := setupTestMemory(t)
+	defer store.Close()
+
+	ctx := context.Background()
+	issue := newLeaseIssue(t, store, types.StatusInProgress, "agent-a")
+
+	if err := store.ClearDirtyIssuesByID(ctx, []string{issue.ID}); err != nil {
+		t.Fatalf("ClearDirtyIssuesByID failed: %v", err)
+	}
+	before, err := store.GetIssue(ctx, issue.ID)
+	if err != nil {
+		t.Fatalf("GetIssue failed: %v", err)
+	}
+	eventsBefore, err := store.GetEvents(ctx, issue.ID, 0)
+	if err != nil {
+		t.Fatalf("GetEvents failed: %v", err)
+	}
+
+	// Every key here is individually valid; only the lease value is not. Map order
+	// is random, so run the call enough times that any surviving mid-loop return
+	// would have applied at least one of the others.
+	for attempt := 0; attempt < 50; attempt++ {
+		err := store.UpdateIssue(ctx, issue.ID, map[string]interface{}{
+			"title":    "rejected title",
+			"notes":    "rejected notes",
+			"assignee": "agent-b",
+			"status":   string(types.StatusOpen),
+			// A string is not a time: the whole call must be refused.
+			"claim_expires_at": "2026-01-01",
+		}, "test-user")
+		if err == nil {
+			t.Fatalf("attempt %d: expected an error for a string claim_expires_at", attempt)
+		}
+	}
+
+	after, err := store.GetIssue(ctx, issue.ID)
+	if err != nil {
+		t.Fatalf("GetIssue failed: %v", err)
+	}
+	if after.Title != "Lease test issue" {
+		t.Errorf("title = %q, want %q", after.Title, "Lease test issue")
+	}
+	if after.Notes != "" {
+		t.Errorf("notes = %q, want empty", after.Notes)
+	}
+	if after.Assignee != "agent-a" {
+		t.Errorf("assignee = %q, want %q", after.Assignee, "agent-a")
+	}
+	if after.Status != types.StatusInProgress {
+		t.Errorf("status = %q, want %q", after.Status, types.StatusInProgress)
+	}
+	if !after.UpdatedAt.Equal(before.UpdatedAt) {
+		t.Errorf("updated_at = %v, want %v (unchanged)", after.UpdatedAt, before.UpdatedAt)
+	}
+
+	dirty, err := store.GetDirtyIssues(ctx)
+	if err != nil {
+		t.Fatalf("GetDirtyIssues failed: %v", err)
+	}
+	for _, id := range dirty {
+		if id == issue.ID {
+			t.Errorf("issue %s was marked dirty by a rejected update", issue.ID)
+		}
+	}
+
+	eventsAfter, err := store.GetEvents(ctx, issue.ID, 0)
+	if err != nil {
+		t.Fatalf("GetEvents failed: %v", err)
+	}
+	if len(eventsAfter) != len(eventsBefore) {
+		t.Errorf("event count = %d, want %d (no event for a rejected update)", len(eventsAfter), len(eventsBefore))
+	}
+}

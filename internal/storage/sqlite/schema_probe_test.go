@@ -3,6 +3,8 @@ package sqlite
 import (
 	"database/sql"
 	"errors"
+	"fmt"
+	"slices"
 	"strings"
 	"testing"
 
@@ -208,40 +210,101 @@ func TestVerifySchemaCompatibility_Incompatible(t *testing.T) {
 	}
 }
 
-// TestProbeSchema_DetectsDroppedClaimExpiresAt is the guard on the probe's own entry
-// for claim_expires_at: a store whose migration 027 never applied must fail startup
-// with a diagnosable error naming the column, not at the first read.
-func TestProbeSchema_DetectsDroppedClaimExpiresAt(t *testing.T) {
-	db, err := sql.Open("sqlite3", ":memory:")
+// TestProbeSchema_DetectsEveryDroppedIssuesColumn is the guard on every entry the
+// probe lists for the issues table, not just the one that most recently regressed.
+// Deleting a name from expectedSchema used to leave the package fully green, so a
+// store whose migration never applied would pass startup and then fail at the first
+// issue read. Dropping each column in turn and requiring a diagnosable startup error
+// that names it makes every column the probe lists self-protecting, including the
+// ones added later.
+func TestProbeSchema_DetectsEveryDroppedIssuesColumn(t *testing.T) {
+	probedColumns := expectedSchema["issues"]
+
+	// Anchor: the loop below proves nothing about a column the probe stopped
+	// listing, so pin by literal name the two whose absence this guard exists for.
+	for _, required := range []string{"claim_expires_at", "is_template"} {
+		if !slices.Contains(probedColumns, required) {
+			t.Errorf("probe no longer lists issues column %q; the drop loop cannot protect it", required)
+		}
+	}
+
+	for _, column := range probedColumns {
+		t.Run(column, func(t *testing.T) {
+			db, err := sql.Open("sqlite3", ":memory:")
+			if err != nil {
+				t.Fatalf("failed to open database: %v", err)
+			}
+			defer db.Close()
+
+			if _, err := db.Exec(schema); err != nil {
+				t.Fatalf("failed to initialize schema: %v", err)
+			}
+			if err := RunMigrations(db); err != nil {
+				t.Fatalf("failed to run migrations: %v", err)
+			}
+			if err := verifySchemaCompatibility(db); err != nil {
+				t.Fatalf("migrated schema should be compatible: %v", err)
+			}
+
+			rebuildIssuesWithout(t, db, column)
+
+			err = verifySchemaCompatibility(db)
+			if err == nil {
+				t.Fatalf("expected an incompatibility error after dropping %s", column)
+			}
+			if !errors.Is(err, ErrSchemaIncompatible) {
+				t.Errorf("expected ErrSchemaIncompatible, got %v", err)
+			}
+			if !strings.Contains(err.Error(), column) {
+				t.Errorf("error must name the missing column %s, got %q", column, err)
+			}
+		})
+	}
+}
+
+// rebuildIssuesWithout recreates the issues table with every column except one,
+// reproducing a database whose migration for that column never ran. ALTER TABLE
+// DROP COLUMN cannot do this for a third of the table (SQLite refuses on the primary
+// key and on any indexed column, is_template among them), so the table is rebuilt
+// from its own live column list instead. Only column names matter to the probe.
+func rebuildIssuesWithout(t *testing.T, db *sql.DB, omit string) {
+	t.Helper()
+
+	rows, err := db.Query(`SELECT name, type FROM pragma_table_info('issues')`)
 	if err != nil {
-		t.Fatalf("failed to open database: %v", err)
+		t.Fatalf("failed to read issues columns: %v", err)
 	}
-	defer db.Close()
+	defer rows.Close()
 
-	if _, err := db.Exec(schema); err != nil {
-		t.Fatalf("failed to initialize schema: %v", err)
+	var kept []string
+	found := false
+	for rows.Next() {
+		var name, columnType string
+		if err := rows.Scan(&name, &columnType); err != nil {
+			t.Fatalf("failed to scan column: %v", err)
+		}
+		if name == omit {
+			found = true
+			continue
+		}
+		if columnType == "" {
+			columnType = "TEXT"
+		}
+		kept = append(kept, fmt.Sprintf("%s %s", name, columnType))
 	}
-	if err := RunMigrations(db); err != nil {
-		t.Fatalf("failed to run migrations: %v", err)
+	if err := rows.Err(); err != nil {
+		t.Fatalf("failed to iterate issues columns: %v", err)
 	}
-	if err := verifySchemaCompatibility(db); err != nil {
-		t.Fatalf("migrated schema should be compatible: %v", err)
+	if !found {
+		t.Fatalf("column %s is not in the migrated issues table", omit)
 	}
 
-	// Reproduce the pre-migration-027 database exactly.
-	if _, err := db.Exec(`ALTER TABLE issues DROP COLUMN claim_expires_at`); err != nil {
-		t.Fatalf("failed to drop claim_expires_at: %v", err)
+	if _, err := db.Exec(`DROP TABLE issues`); err != nil {
+		t.Fatalf("failed to drop issues: %v", err)
 	}
-
-	err = verifySchemaCompatibility(db)
-	if err == nil {
-		t.Fatal("expected an incompatibility error after dropping claim_expires_at")
-	}
-	if !errors.Is(err, ErrSchemaIncompatible) {
-		t.Errorf("expected ErrSchemaIncompatible, got %v", err)
-	}
-	if !strings.Contains(err.Error(), "claim_expires_at") {
-		t.Errorf("error must name the missing column, got %q", err)
+	create := fmt.Sprintf("CREATE TABLE issues (%s)", strings.Join(kept, ", "))
+	if _, err := db.Exec(create); err != nil {
+		t.Fatalf("failed to recreate issues without %s: %v", omit, err)
 	}
 }
 

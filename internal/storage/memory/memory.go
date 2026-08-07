@@ -361,6 +361,32 @@ func (m *MemoryStorage) GetIssueByExternalRef(ctx context.Context, externalRef s
 	return &issueCopy, nil
 }
 
+// resolveClaimExpiry reads the owner lease out of an update map without writing
+// anything. Dropping the lease would leave the row in_progress with no expiry,
+// which nothing could ever steal. The SQLite path hands whatever the caller passed
+// straight to the driver, which accepts a time.Time by value as readily as a
+// pointer, so this backend must accept both and refuse anything else rather than
+// silently ignore it. Absent key and nil value both resolve to no lease; only the
+// key's presence in the map decides whether the resolved value is applied.
+func resolveClaimExpiry(updates map[string]interface{}) (*time.Time, error) {
+	value, ok := updates["claim_expires_at"]
+	if !ok {
+		return nil, nil
+	}
+
+	switch v := value.(type) {
+	case nil:
+		return nil, nil
+	case *time.Time:
+		return v, nil
+	case time.Time:
+		expiry := v
+		return &expiry, nil
+	default:
+		return nil, fmt.Errorf("claim_expires_at must be a time.Time, *time.Time or nil, got %T", value)
+	}
+}
+
 // UpdateIssue updates fields on an issue
 func (m *MemoryStorage) UpdateIssue(ctx context.Context, id string, updates map[string]interface{}, actor string) error {
 	m.mu.Lock()
@@ -369,6 +395,16 @@ func (m *MemoryStorage) UpdateIssue(ctx context.Context, id string, updates map[
 	issue, exists := m.issues[id]
 	if !exists {
 		return fmt.Errorf("issue %s not found", id)
+	}
+
+	// The owner lease (bd-ok4pr) is validated before anything is written. Go
+	// randomizes map iteration order, so rejecting the value from inside the apply
+	// loop below would leave whichever keys happened to come first already written,
+	// with no dirty mark and no event: a silently half-updated issue. A rejected
+	// update must change nothing at all.
+	leaseExpiry, err := resolveClaimExpiry(updates)
+	if err != nil {
+		return err
 	}
 
 	now := time.Now()
@@ -432,22 +468,7 @@ func (m *MemoryStorage) UpdateIssue(ctx context.Context, id string, updates map[
 				issue.Assignee = ""
 			}
 		case "claim_expires_at":
-			// The owner lease (bd-ok4pr). Dropping it here would leave the row
-			// in_progress with no expiry, which nothing could ever steal. The SQLite
-			// path hands whatever the caller passed straight to the driver, which
-			// accepts a time.Time by value as readily as a pointer, so this backend
-			// must accept both and refuse anything else rather than silently ignore it.
-			switch v := value.(type) {
-			case nil:
-				issue.ClaimExpiresAt = nil
-			case *time.Time:
-				issue.ClaimExpiresAt = v
-			case time.Time:
-				expiry := v
-				issue.ClaimExpiresAt = &expiry
-			default:
-				return fmt.Errorf("claim_expires_at must be a time.Time, *time.Time or nil, got %T", value)
-			}
+			issue.ClaimExpiresAt = leaseExpiry
 		case "external_ref":
 			// Update external ref index
 			oldRef := issue.ExternalRef
