@@ -248,3 +248,14 @@ WHERE i.status IN ('open', 'in_progress', 'blocked', 'deferred')
   AND blocker.status IN ('open', 'in_progress', 'blocked', 'deferred')
 GROUP BY i.id;
 `
+
+// schemaMigrationsDDL creates the applied-migration ledger. RunMigrations
+// records each migration here as it succeeds and skips the ones already
+// recorded, so a migration runs exactly once per database rather than on every
+// open (bd-ok4pr.1.8).
+const schemaMigrationsDDL = `
+CREATE TABLE IF NOT EXISTS schema_migrations (
+    name TEXT PRIMARY KEY,
+    applied_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+`

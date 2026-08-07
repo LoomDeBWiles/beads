@@ -53,7 +53,8 @@ type MigrationInfo struct {
 }
 
 // ListMigrations returns list of all registered migrations with descriptions
-// Note: This returns ALL registered migrations, not just pending ones (all are idempotent)
+// Note: This returns ALL registered migrations, not just pending ones. Which of
+// them are still pending for a given database is recorded in schema_migrations.
 func ListMigrations() []MigrationInfo {
 	result := make([]MigrationInfo, len(migrationsList))
 	for i, m := range migrationsList {
@@ -103,9 +104,49 @@ func getMigrationDescription(name string) string {
 	return "Unknown migration"
 }
 
-// RunMigrations executes all registered migrations in order with invariant checking.
+// appliedMigrations returns the set of migration names already recorded in the
+// ledger.
+func appliedMigrations(db *sql.DB) (map[string]bool, error) {
+	rows, err := db.Query(`SELECT name FROM schema_migrations`)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read applied migrations: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	applied := make(map[string]bool)
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return nil, fmt.Errorf("failed to scan applied migration: %w", err)
+		}
+		applied[name] = true
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to read applied migrations: %w", err)
+	}
+	return applied, nil
+}
+
+// recordMigration marks a migration as applied. It runs inside the same
+// EXCLUSIVE transaction as the migration itself, so a failure anywhere in the
+// pass rolls the record back with the work it describes.
+func recordMigration(db *sql.DB, name string) error {
+	_, err := db.Exec(`INSERT OR IGNORE INTO schema_migrations (name) VALUES (?)`, name)
+	if err != nil {
+		return fmt.Errorf("failed to record migration %s: %w", name, err)
+	}
+	return nil
+}
+
+// RunMigrations executes the registered migrations that this database has not
+// already had applied, in order, with invariant checking.
 // Uses EXCLUSIVE transaction to prevent race conditions when multiple processes
 // open the database simultaneously (GH#720).
+//
+// Each migration that succeeds is recorded in schema_migrations inside that same
+// transaction. Re-running everything on every open, as this used to do, was not
+// merely wasteful: migrations 019 and 022 form a cycle whose every turn rebuilt
+// the issues table and blanked the columns added after 022 (bd-ok4pr.1.8).
 func RunMigrations(db *sql.DB) error {
 	// Disable foreign keys BEFORE starting the transaction.
 	// PRAGMA foreign_keys must be called when no transaction is active (SQLite limitation).
@@ -133,14 +174,33 @@ func RunMigrations(db *sql.DB) error {
 		}
 	}()
 
+	if _, err := db.Exec(schemaMigrationsDDL); err != nil {
+		return fmt.Errorf("failed to create schema_migrations ledger: %w", err)
+	}
+
+	applied, err := appliedMigrations(db)
+	if err != nil {
+		return err
+	}
+
 	snapshot, err := captureSnapshot(db)
 	if err != nil {
 		return fmt.Errorf("failed to capture pre-migration snapshot: %w", err)
 	}
 
+	// A database with no ledger yet has every migration run against it and then
+	// every migration recorded - one pass identical to the pre-ledger behaviour,
+	// which is why it cannot leave a store in a state the old code would not
+	// also produce. From the next open onward, nothing re-runs.
 	for _, migration := range migrationsList {
+		if applied[migration.Name] {
+			continue
+		}
 		if err := migration.Func(db); err != nil {
 			return fmt.Errorf("migration %s failed: %w", migration.Name, err)
+		}
+		if err := recordMigration(db, migration.Name); err != nil {
+			return err
 		}
 	}
 

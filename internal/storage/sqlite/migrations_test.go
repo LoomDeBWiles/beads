@@ -3,6 +3,8 @@ package sqlite
 import (
 	"context"
 	"database/sql"
+	"fmt"
+	"slices"
 	"strings"
 	"testing"
 
@@ -708,4 +710,199 @@ func TestMigrateOrphanDetection(t *testing.T) {
 			}
 		}
 	})
+}
+
+// newMigratedDB returns an in-memory database with the schema applied and all
+// migrations run once, as a first process open would leave it.
+func newMigratedDB(t *testing.T) *sql.DB {
+	t.Helper()
+
+	db, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		t.Fatalf("failed to open database: %v", err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	db.SetMaxOpenConns(1)
+
+	if _, err := db.Exec(schema); err != nil {
+		t.Fatalf("failed to initialize schema: %v", err)
+	}
+	if err := RunMigrations(db); err != nil {
+		t.Fatalf("failed to run migrations: %v", err)
+	}
+	return db
+}
+
+// issuesColumnNames reads the live column names of the issues table. The test
+// deliberately asks the database rather than carrying a list of its own: a
+// hand-written list is exactly what let migration 022 forget three columns.
+func issuesColumnNames(t *testing.T, db *sql.DB) []string {
+	t.Helper()
+
+	rows, err := db.Query(`SELECT name FROM pragma_table_info('issues') ORDER BY cid`)
+	if err != nil {
+		t.Fatalf("failed to read issues columns: %v", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var names []string
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			t.Fatalf("failed to scan issues column: %v", err)
+		}
+		names = append(names, name)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatalf("failed to read issues columns: %v", err)
+	}
+	if len(names) == 0 {
+		t.Fatal("issues table reports no columns")
+	}
+	return names
+}
+
+// sentinelFor returns a distinguishable non-default value for a column.
+// Columns under a CHECK constraint get a value that satisfies it; the rest get
+// a value that could not have come from a default.
+func sentinelFor(name string, position int) any {
+	switch name {
+	case "id":
+		return "reopen-probe"
+	case "status":
+		return "closed"
+	case "closed_at":
+		return "2031-02-03T04:05:06Z"
+	case "priority":
+		return 3
+	case "ephemeral", "pinned", "is_template":
+		return 1
+	case "compaction_level", "original_size", "estimated_minutes":
+		return 700 + position
+	default:
+		return fmt.Sprintf("sentinel-%d-%s", position, name)
+	}
+}
+
+// readIssueRow reads one issue as a map of column name to normalised value.
+func readIssueRow(t *testing.T, db *sql.DB, id string, columns []string) map[string]string {
+	t.Helper()
+
+	targets := make([]any, len(columns))
+	holders := make([]any, len(columns))
+	for i := range columns {
+		targets[i] = &holders[i]
+	}
+
+	query := fmt.Sprintf(`SELECT %s FROM issues WHERE id = ?`, strings.Join(columns, ", "))
+	if err := db.QueryRow(query, id).Scan(targets...); err != nil {
+		t.Fatalf("failed to read issue %s: %v", id, err)
+	}
+
+	row := make(map[string]string, len(columns))
+	for i, name := range columns {
+		if raw, ok := holders[i].([]byte); ok {
+			row[name] = string(raw)
+			continue
+		}
+		row[name] = fmt.Sprintf("%v", holders[i])
+	}
+	return row
+}
+
+// TestIssueColumnsSurviveReopen guards the defect behind bd-ok4pr.1.8: every
+// column of the issues table must keep its value when the next process opens
+// the store and runs migrations again. Migration 022 used to rebuild the table
+// from a column list frozen when it was written, silently blanking pinned,
+// is_template and claim_expires_at on every single bd invocation.
+func TestIssueColumnsSurviveReopen(t *testing.T) {
+	db := newMigratedDB(t)
+	columns := issuesColumnNames(t, db)
+
+	assignments := make([]string, 0, len(columns))
+	values := make([]any, 0, len(columns))
+	for i, name := range columns {
+		assignments = append(assignments, name+" = ?")
+		values = append(values, sentinelFor(name, i))
+	}
+
+	// The post-migration invariants require a prefix once the store holds issues.
+	if _, err := db.Exec(`INSERT OR REPLACE INTO config (key, value) VALUES ('issue_prefix', 'bd')`); err != nil {
+		t.Fatalf("failed to set issue_prefix: %v", err)
+	}
+	if _, err := db.Exec(`INSERT INTO issues (id, title) VALUES ('reopen-probe', 'probe')`); err != nil {
+		t.Fatalf("failed to insert probe issue: %v", err)
+	}
+	update := fmt.Sprintf(`UPDATE issues SET %s WHERE id = 'reopen-probe'`, strings.Join(assignments, ", "))
+	if _, err := db.Exec(update, values...); err != nil {
+		t.Fatalf("failed to write sentinel values: %v", err)
+	}
+
+	// A trigger on issues survives an ALTER but not a rebuild, so it catches the
+	// pointless table recreation itself and not only the data it destroyed.
+	_, err := db.Exec(`CREATE TRIGGER trg_reopen_probe AFTER UPDATE ON issues BEGIN SELECT 1; END`)
+	if err != nil {
+		t.Fatalf("failed to create probe trigger: %v", err)
+	}
+
+	want := readIssueRow(t, db, "reopen-probe", columns)
+
+	// The next process opening the same store.
+	if err := RunMigrations(db); err != nil {
+		t.Fatalf("failed to re-run migrations: %v", err)
+	}
+
+	if got := issuesColumnNames(t, db); !slices.Equal(got, columns) {
+		t.Fatalf("issues columns changed across reopen:\nbefore: %v\nafter:  %v", columns, got)
+	}
+
+	got := readIssueRow(t, db, "reopen-probe", columns)
+	for _, name := range columns {
+		if got[name] != want[name] {
+			t.Errorf("column %s lost its value across reopen: want %q, got %q", name, want[name], got[name])
+		}
+	}
+
+	var triggerName string
+	err = db.QueryRow(`SELECT name FROM sqlite_master WHERE type = 'trigger' AND name = 'trg_reopen_probe'`).Scan(&triggerName)
+	if err != nil {
+		t.Fatalf("issues table was rebuilt on reopen: probe trigger is gone (%v)", err)
+	}
+}
+
+// TestMigrationLedgerRecordsEveryMigration checks the ledger that makes the
+// reopen a no-op: every registered migration is recorded once, and a second
+// pass adds nothing.
+func TestMigrationLedgerRecordsEveryMigration(t *testing.T) {
+	db := newMigratedDB(t)
+
+	countApplied := func() int {
+		t.Helper()
+		var n int
+		if err := db.QueryRow(`SELECT COUNT(*) FROM schema_migrations`).Scan(&n); err != nil {
+			t.Fatalf("failed to count applied migrations: %v", err)
+		}
+		return n
+	}
+
+	if got := countApplied(); got != len(migrationsList) {
+		t.Fatalf("expected %d recorded migrations, got %d", len(migrationsList), got)
+	}
+
+	applied, err := appliedMigrations(db)
+	if err != nil {
+		t.Fatalf("failed to read applied migrations: %v", err)
+	}
+	for _, migration := range migrationsList {
+		if !applied[migration.Name] {
+			t.Errorf("migration %s was not recorded", migration.Name)
+		}
+	}
+
+	if err := RunMigrations(db); err != nil {
+		t.Fatalf("failed to re-run migrations: %v", err)
+	}
+	if got := countApplied(); got != len(migrationsList) {
+		t.Fatalf("second pass changed the ledger: expected %d records, got %d", len(migrationsList), got)
+	}
 }

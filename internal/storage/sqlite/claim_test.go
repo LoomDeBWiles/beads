@@ -530,10 +530,15 @@ func TestClaimMigrationExistingStore(t *testing.T) {
 	open := newClaimIssue(t, store, types.StatusOpen, "")
 	held := newClaimIssue(t, store, types.StatusInProgress, holderA)
 
-	// Roll the schema back to its pre-027 shape. Migrations are idempotent and
-	// re-run at every open, so dropping the column is enough to replay 027.
+	// Roll the schema back to its pre-027 shape: drop the column and forget that
+	// 027 ever ran, which is what a genuine pre-027 store looks like. A migration
+	// runs once per database and is then recorded in the ledger (bd-ok4pr.1.8),
+	// so removing the record is what lets the reopen replay 027.
 	if _, err := store.db.ExecContext(ctx, `ALTER TABLE issues DROP COLUMN claim_expires_at`); err != nil {
 		t.Fatalf("failed to build the pre-027 schema: %v", err)
+	}
+	if _, err := store.db.ExecContext(ctx, `DELETE FROM schema_migrations WHERE name = 'claim_expires_at_column'`); err != nil {
+		t.Fatalf("failed to build the pre-027 ledger: %v", err)
 	}
 	if hasClaimExpiresAtColumn(t, store) {
 		t.Fatal("claim_expires_at still present; the pre-027 fixture was not built")
