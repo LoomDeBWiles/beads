@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -198,7 +199,7 @@ func TestMergeDependencies(t *testing.T) {
 			base: []Dependency{
 				{IssueID: "bd-1", DependsOnID: "bd-2", Type: "blocks", CreatedAt: "2024-01-01T00:00:00Z"},
 			},
-			left:     []Dependency{}, // Left removed it
+			left: []Dependency{}, // Left removed it
 			right: []Dependency{
 				{IssueID: "bd-1", DependsOnID: "bd-2", Type: "blocks", CreatedAt: "2024-01-01T00:00:00Z"},
 			},
@@ -856,7 +857,7 @@ func TestMerge3Way_Deletions(t *testing.T) {
 				RawLine:   `{"id":"bd-abc123","title":"Will be deleted","created_at":"2024-01-01T00:00:00Z","created_by":"user1"}`,
 			},
 		}
-		left := base     // Unchanged in left
+		left := base       // Unchanged in left
 		right := []Issue{} // Deleted in right
 
 		result, conflicts := merge3Way(base, left, right)
@@ -1298,10 +1299,10 @@ func TestIsTombstone(t *testing.T) {
 // TestMergeTombstones tests merging two tombstones
 func TestMergeTombstones(t *testing.T) {
 	tests := []struct {
-		name            string
-		leftDeletedAt   string
-		rightDeletedAt  string
-		expectedSide    string // "left" or "right"
+		name           string
+		leftDeletedAt  string
+		rightDeletedAt string
+		expectedSide   string // "left" or "right"
 	}{
 		{
 			name:           "left deleted later",
@@ -2390,4 +2391,179 @@ func TestMerge3Way_TombstoneVsLiveTimestampPrecisionMismatch(t *testing.T) {
 			t.Fatalf("expected 1 issue (no duplicates for same ID), got %d", len(result))
 		}
 	})
+}
+
+// TestMergeIssue_Claim covers the assignee/lease pair through the both-live
+// merge path: rival claims, a close racing a claim, and the pass-through case
+// where only an unrelated field changed.
+func TestMergeIssue_Claim(t *testing.T) {
+	base := Issue{
+		ID:        "bd-claim1",
+		Title:     "Claimable work",
+		Status:    "open",
+		Priority:  1,
+		CreatedAt: "2024-01-01T00:00:00Z",
+		UpdatedAt: "2024-01-01T00:00:00Z",
+		CreatedBy: "user1",
+	}
+
+	t.Run("both sides claim - latest updated_at wins as a pair", func(t *testing.T) {
+		left := base
+		left.Status = "in_progress"
+		left.Assignee = "agent-A"
+		left.ClaimExpiresAt = "2024-01-02T00:30:00Z"
+		left.UpdatedAt = "2024-01-02T00:00:00Z"
+
+		right := base
+		right.Status = "in_progress"
+		right.Assignee = "agent-B"
+		right.ClaimExpiresAt = "2024-01-03T00:45:00Z"
+		right.UpdatedAt = "2024-01-03T00:00:00Z"
+
+		merged, conflict := mergeIssue(base, left, right)
+		if conflict != "" {
+			t.Fatalf("unexpected conflict: %s", conflict)
+		}
+		if merged.Assignee != "agent-B" {
+			t.Errorf("assignee: expected 'agent-B' (later claim), got %q", merged.Assignee)
+		}
+		if merged.ClaimExpiresAt != "2024-01-03T00:45:00Z" {
+			t.Errorf("claim_expires_at: expected agent-B's lease, got %q", merged.ClaimExpiresAt)
+		}
+	})
+
+	t.Run("both sides claim - earlier claim loses both fields", func(t *testing.T) {
+		left := base
+		left.Status = "in_progress"
+		left.Assignee = "agent-A"
+		left.ClaimExpiresAt = "2024-01-05T00:30:00Z"
+		left.UpdatedAt = "2024-01-05T00:00:00Z"
+
+		right := base
+		right.Status = "in_progress"
+		right.Assignee = "agent-B"
+		right.ClaimExpiresAt = "2024-01-04T00:45:00Z"
+		right.UpdatedAt = "2024-01-04T00:00:00Z"
+
+		merged, _ := mergeIssue(base, left, right)
+		if merged.Assignee != "agent-A" {
+			t.Errorf("assignee: expected 'agent-A' (later claim), got %q", merged.Assignee)
+		}
+		if merged.ClaimExpiresAt != "2024-01-05T00:30:00Z" {
+			t.Errorf("claim_expires_at: expected agent-A's lease, got %q", merged.ClaimExpiresAt)
+		}
+	})
+
+	t.Run("close beats claim - lease cleared, assignee kept", func(t *testing.T) {
+		claimed := base
+		claimed.Status = "in_progress"
+		claimed.Assignee = "agent-A"
+		claimed.ClaimExpiresAt = "2024-01-02T00:30:00Z"
+		claimed.UpdatedAt = "2024-01-02T00:00:00Z"
+
+		// Left closes the issue: closing clears the lease but keeps the owner.
+		left := claimed
+		left.Status = "closed"
+		left.ClosedAt = "2024-01-03T00:00:00Z"
+		left.ClaimExpiresAt = ""
+		left.UpdatedAt = "2024-01-03T00:00:00Z"
+
+		// Right renews the claim instead.
+		right := claimed
+		right.ClaimExpiresAt = "2024-01-02T01:30:00Z"
+		right.UpdatedAt = "2024-01-02T01:00:00Z"
+
+		merged, _ := mergeIssue(claimed, left, right)
+		if merged.Status != "closed" {
+			t.Fatalf("status: expected 'closed', got %q", merged.Status)
+		}
+		if merged.Assignee != "agent-A" {
+			t.Errorf("assignee: expected 'agent-A' to survive the close, got %q", merged.Assignee)
+		}
+		if merged.ClaimExpiresAt != "" {
+			t.Errorf("claim_expires_at: expected cleared on a non-in_progress status, got %q", merged.ClaimExpiresAt)
+		}
+	})
+
+	t.Run("unrelated change passes the claim through", func(t *testing.T) {
+		claimed := base
+		claimed.Status = "in_progress"
+		claimed.Assignee = "agent-A"
+		claimed.ClaimExpiresAt = "2024-01-02T00:30:00Z"
+		claimed.UpdatedAt = "2024-01-02T00:00:00Z"
+
+		left := claimed
+		left.Title = "Retitled work"
+		left.UpdatedAt = "2024-01-02T02:00:00Z"
+
+		merged, _ := mergeIssue(claimed, left, claimed)
+		if merged.Title != "Retitled work" {
+			t.Errorf("title: expected 'Retitled work', got %q", merged.Title)
+		}
+		if merged.Assignee != "agent-A" {
+			t.Errorf("assignee: expected 'agent-A' to pass through, got %q", merged.Assignee)
+		}
+		if merged.ClaimExpiresAt != "2024-01-02T00:30:00Z" {
+			t.Errorf("claim_expires_at: expected the lease to pass through, got %q", merged.ClaimExpiresAt)
+		}
+	})
+}
+
+// TestMerge3Way_ClaimPassThrough proves the claim fields survive the rewrite
+// Merge3Way performs on every both-live row, not just on conflicting ones:
+// the merged row is re-marshaled from the Issue struct, so an unmodeled field
+// would silently vanish from the output file.
+func TestMerge3Way_ClaimPassThrough(t *testing.T) {
+	tmpDir := t.TempDir()
+	baseFile := filepath.Join(tmpDir, "base.jsonl")
+	leftFile := filepath.Join(tmpDir, "left.jsonl")
+	rightFile := filepath.Join(tmpDir, "right.jsonl")
+	outputFile := filepath.Join(tmpDir, "output.jsonl")
+
+	claimed := `{"id":"bd-lease","title":"Claimed work","status":"in_progress","priority":1,"created_at":"2024-01-01T00:00:00Z","updated_at":"2024-01-02T00:00:00Z","created_by":"user1","assignee":"agent-A","claim_expires_at":"2024-01-02T00:30:00Z"}` + "\n"
+	// Left touches only the title; the claim is untouched on both sides.
+	retitled := `{"id":"bd-lease","title":"Claimed work, retitled","status":"in_progress","priority":1,"created_at":"2024-01-01T00:00:00Z","updated_at":"2024-01-02T02:00:00Z","created_by":"user1","assignee":"agent-A","claim_expires_at":"2024-01-02T00:30:00Z"}` + "\n"
+
+	for path, data := range map[string]string{baseFile: claimed, leftFile: retitled, rightFile: claimed} {
+		if err := os.WriteFile(path, []byte(data), 0644); err != nil {
+			t.Fatalf("failed to write %s: %v", path, err)
+		}
+	}
+
+	if err := Merge3Way(outputFile, baseFile, leftFile, rightFile, false); err != nil {
+		t.Fatalf("merge failed: %v", err)
+	}
+
+	content, err := os.ReadFile(outputFile)
+	if err != nil {
+		t.Fatalf("failed to read output file: %v", err)
+	}
+	raw := string(content)
+
+	var merged Issue
+	lines := splitLines(raw)
+	if len(lines) == 0 || lines[0] == "" {
+		t.Fatalf("expected one merged row, got %q", raw)
+	}
+	if err := json.Unmarshal([]byte(lines[0]), &merged); err != nil {
+		t.Fatalf("failed to parse merged row: %v", err)
+	}
+
+	if merged.Title != "Claimed work, retitled" {
+		t.Errorf("title: expected 'Claimed work, retitled', got %q", merged.Title)
+	}
+	if merged.Assignee != "agent-A" {
+		t.Errorf("assignee: expected 'agent-A' in the rewritten row, got %q", merged.Assignee)
+	}
+	if merged.ClaimExpiresAt != "2024-01-02T00:30:00Z" {
+		t.Errorf("claim_expires_at: expected the lease in the rewritten row, got %q", merged.ClaimExpiresAt)
+	}
+	// Guard the wire names too: a renamed json tag would still round-trip
+	// through the struct above while breaking every other bd reader.
+	if !strings.Contains(raw, `"assignee":"agent-A"`) {
+		t.Errorf("output missing assignee field: %s", raw)
+	}
+	if !strings.Contains(raw, `"claim_expires_at":"2024-01-02T00:30:00Z"`) {
+		t.Errorf("output missing claim_expires_at field: %s", raw)
+	}
 }

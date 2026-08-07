@@ -39,19 +39,23 @@ import (
 
 // Issue represents a beads issue with all possible fields
 type Issue struct {
-	ID           string       `json:"id"`
-	Title        string       `json:"title,omitempty"`
-	Description  string       `json:"description,omitempty"`
-	Notes        string       `json:"notes,omitempty"`
-	Status       string       `json:"status,omitempty"`
-	Priority     int          `json:"priority"` // No omitempty: 0 is valid (P0/critical)
-	IssueType    string       `json:"issue_type,omitempty"`
-	CreatedAt    string       `json:"created_at,omitempty"`
-	UpdatedAt    string       `json:"updated_at,omitempty"`
-	ClosedAt     string       `json:"closed_at,omitempty"`
-	CreatedBy    string       `json:"created_by,omitempty"`
-	Dependencies []Dependency `json:"dependencies,omitempty"`
-	RawLine      string       `json:"-"` // Store original line for conflict output
+	ID          string `json:"id"`
+	Title       string `json:"title,omitempty"`
+	Description string `json:"description,omitempty"`
+	Notes       string `json:"notes,omitempty"`
+	Status      string `json:"status,omitempty"`
+	Priority    int    `json:"priority"` // No omitempty: 0 is valid (P0/critical)
+	IssueType   string `json:"issue_type,omitempty"`
+	CreatedAt   string `json:"created_at,omitempty"`
+	UpdatedAt   string `json:"updated_at,omitempty"`
+	ClosedAt    string `json:"closed_at,omitempty"`
+	CreatedBy   string `json:"created_by,omitempty"`
+	Assignee    string `json:"assignee,omitempty"`
+	// ClaimExpiresAt is the owner lease: it is only meaningful while the issue
+	// is in_progress, and it changes together with Assignee on every claim.
+	ClaimExpiresAt string       `json:"claim_expires_at,omitempty"`
+	Dependencies   []Dependency `json:"dependencies,omitempty"`
+	RawLine        string       `json:"-"` // Store original line for conflict output
 	// Tombstone fields (bd-0ih): inline soft-delete support for merge
 	DeletedAt    string `json:"deleted_at,omitempty"`    // When the issue was deleted
 	DeletedBy    string `json:"deleted_by,omitempty"`    // Who deleted the issue
@@ -242,6 +246,9 @@ func makeKey(issue Issue) IssueKey {
 
 // bd-ig5: Use constants from types package to avoid duplication
 const StatusTombstone = string(types.StatusTombstone)
+
+// StatusInProgress is the only status where an owner lease is meaningful.
+const StatusInProgress = string(types.StatusInProgress)
 
 // Alias TTL constants from types package for local use
 var (
@@ -575,6 +582,13 @@ func mergeIssue(base, left, right Issue) (Issue, string) {
 		result.ClosedAt = ""
 	}
 
+	// Merge the claim (assignee + lease) as one unit, then drop the lease
+	// unless the merged status still says the work is being done
+	result.Assignee, result.ClaimExpiresAt = mergeClaim(base, left, right)
+	if result.Status != StatusInProgress {
+		result.ClaimExpiresAt = ""
+	}
+
 	// Merge dependencies - proper 3-way merge where removals win (bd-ndye)
 	result.Dependencies = mergeDependencies(base.Dependencies, left.Dependencies, right.Dependencies)
 
@@ -658,6 +672,29 @@ func mergeFieldByUpdatedAt(base, left, right, leftUpdatedAt, rightUpdatedAt stri
 		return left
 	}
 	return right
+}
+
+// mergeClaim merges the assignee and its lease as a single unit: a claim writes
+// both fields together, so resolving them independently could produce one
+// holder's name with another holder's expiry. On a true conflict (both sides
+// claimed) the side with the latest updated_at wins, matching the store's
+// last-writer-wins view of a claim.
+func mergeClaim(base, left, right Issue) (assignee, claimExpiresAt string) {
+	leftChanged := base.Assignee != left.Assignee || base.ClaimExpiresAt != left.ClaimExpiresAt
+	rightChanged := base.Assignee != right.Assignee || base.ClaimExpiresAt != right.ClaimExpiresAt
+
+	switch {
+	case !leftChanged && rightChanged:
+		return right.Assignee, right.ClaimExpiresAt
+	case leftChanged && !rightChanged:
+		return left.Assignee, left.ClaimExpiresAt
+	case left.Assignee == right.Assignee && left.ClaimExpiresAt == right.ClaimExpiresAt:
+		return left.Assignee, left.ClaimExpiresAt
+	case isTimeAfter(left.UpdatedAt, right.UpdatedAt):
+		return left.Assignee, left.ClaimExpiresAt
+	default:
+		return right.Assignee, right.ClaimExpiresAt
+	}
 }
 
 // mergeNotes handles notes merging - on conflict, concatenate both sides
@@ -878,4 +915,3 @@ func mergeDependencies(base, left, right []Dependency) []Dependency {
 
 	return result
 }
-
