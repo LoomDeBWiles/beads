@@ -517,6 +517,14 @@ func (s *Server) handleClaim(req *Request) Response {
 
 	var lease *time.Duration
 	if claimArgs.LeaseSeconds != nil {
+		// Same floor the CLI enforces: a zero or negative lease would be written as
+		// an already-expired claim that the next rival steals immediately.
+		if *claimArgs.LeaseSeconds < 1 {
+			return Response{
+				Success: false,
+				Error:   "--lease must be at least 1s",
+			}
+		}
 		d := time.Duration(*claimArgs.LeaseSeconds) * time.Second
 		lease = &d
 	}

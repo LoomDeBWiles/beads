@@ -78,6 +78,10 @@ func claimFlags(cmd *cobra.Command) (string, *time.Duration, error) {
 	if lease < time.Second {
 		return "", nil, fmt.Errorf("--lease must be at least 1s")
 	}
+	// Truncate here rather than at the wire, so the direct path and the RPC path
+	// derive the same expiry: --lease 90s500ms must not mean 90.5s locally and 90s
+	// whenever a daemon happens to be running.
+	lease = lease.Truncate(time.Second)
 	return assignee, &lease, nil
 }
 
