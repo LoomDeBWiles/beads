@@ -3,6 +3,7 @@ package types
 
 import (
 	"crypto/sha256"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -548,6 +549,44 @@ type ClaimOutcome struct {
 	Holder       string          `json:"holder,omitempty"`
 	HolderExpiry *time.Time      `json:"holder_expiry,omitempty"`
 	Issue        *Issue          `json:"issue,omitempty"`
+}
+
+// ClaimEventValue is the audit payload recorded for a winning claim (bd-ok4pr).
+// It lives here rather than in a backend so every backend writes the same shape and
+// a claim is reconstructable from the audit trail whichever one produced it;
+// PreviousHolder is what makes a steal reconstructable after the fact.
+type ClaimEventValue struct {
+	Outcome        ClaimResult `json:"outcome"`
+	Assignee       string      `json:"assignee"`
+	Status         Status      `json:"status"`
+	PreviousHolder string      `json:"previous_holder,omitempty"`
+	ClaimExpiresAt *time.Time  `json:"claim_expires_at,omitempty"`
+}
+
+// RenderClaimEventValues renders the old and new audit values for a winning claim.
+// A payload that fails to marshal degrades to an identifying stub rather than
+// failing the claim itself.
+func RenderClaimEventValues(before, after *Issue, result ClaimResult) (oldValue, newValue string) {
+	value := ClaimEventValue{
+		Outcome:        result,
+		Assignee:       after.Assignee,
+		Status:         after.Status,
+		ClaimExpiresAt: after.ClaimExpiresAt,
+	}
+	// Only a steal displaces someone, so only a steal has a previous holder to name.
+	if result == ClaimStolen {
+		value.PreviousHolder = before.Assignee
+	}
+
+	oldData, err := json.Marshal(before)
+	if err != nil {
+		oldData = []byte(fmt.Sprintf(`{"id":%q}`, before.ID))
+	}
+	newData, err := json.Marshal(value)
+	if err != nil {
+		newData = []byte(`{}`)
+	}
+	return string(oldData), string(newData)
 }
 
 // BlockedIssue extends Issue with blocking information

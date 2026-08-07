@@ -2,6 +2,8 @@ package sqlite
 
 import (
 	"database/sql"
+	"errors"
+	"strings"
 	"testing"
 
 	_ "github.com/ncruces/go-sqlite3/driver"
@@ -203,5 +205,62 @@ func TestVerifySchemaCompatibility_Incompatible(t *testing.T) {
 	if err != nil && err != ErrSchemaIncompatible {
 		// Check that error wraps ErrSchemaIncompatible
 		t.Logf("got error: %v", err)
+	}
+}
+
+// TestProbeSchema_DetectsDroppedClaimExpiresAt is the guard on the probe's own entry
+// for claim_expires_at: a store whose migration 027 never applied must fail startup
+// with a diagnosable error naming the column, not at the first read.
+func TestProbeSchema_DetectsDroppedClaimExpiresAt(t *testing.T) {
+	db, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		t.Fatalf("failed to open database: %v", err)
+	}
+	defer db.Close()
+
+	if _, err := db.Exec(schema); err != nil {
+		t.Fatalf("failed to initialize schema: %v", err)
+	}
+	if err := RunMigrations(db); err != nil {
+		t.Fatalf("failed to run migrations: %v", err)
+	}
+	if err := verifySchemaCompatibility(db); err != nil {
+		t.Fatalf("migrated schema should be compatible: %v", err)
+	}
+
+	// Reproduce the pre-migration-027 database exactly.
+	if _, err := db.Exec(`ALTER TABLE issues DROP COLUMN claim_expires_at`); err != nil {
+		t.Fatalf("failed to drop claim_expires_at: %v", err)
+	}
+
+	err = verifySchemaCompatibility(db)
+	if err == nil {
+		t.Fatal("expected an incompatibility error after dropping claim_expires_at")
+	}
+	if !errors.Is(err, ErrSchemaIncompatible) {
+		t.Errorf("expected ErrSchemaIncompatible, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "claim_expires_at") {
+		t.Errorf("error must name the missing column, got %q", err)
+	}
+}
+
+// TestSchemaConstantCoversProbedIssueColumns stops the schema constant drifting away
+// from the probe. It runs NO migrations on purpose: RunMigrations repairs a fresh
+// database, so a column missing from the constant is invisible to every other test.
+func TestSchemaConstantCoversProbedIssueColumns(t *testing.T) {
+	db, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		t.Fatalf("failed to open database: %v", err)
+	}
+	defer db.Close()
+
+	if _, err := db.Exec(schema); err != nil {
+		t.Fatalf("failed to initialize schema: %v", err)
+	}
+
+	missing := findMissingColumns(db, "issues", expectedSchema["issues"])
+	if len(missing) > 0 {
+		t.Errorf("schema constant is missing probed issues columns: %s", strings.Join(missing, ", "))
 	}
 }

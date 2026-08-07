@@ -1390,15 +1390,64 @@ func lastEvent(t *testing.T, store *MemoryStorage, issueID string) *types.Event 
 	return events[len(events)-1]
 }
 
-func decodeClaimEvent(t *testing.T, event *types.Event) claimEventValue {
+func decodeClaimEvent(t *testing.T, event *types.Event) types.ClaimEventValue {
 	t.Helper()
 
 	if event.NewValue == nil {
 		t.Fatal("claim event has no new_value")
 	}
-	var payload claimEventValue
+	var payload types.ClaimEventValue
 	if err := json.Unmarshal([]byte(*event.NewValue), &payload); err != nil {
 		t.Fatalf("failed to decode claim payload %q: %v", *event.NewValue, err)
 	}
 	return payload
+}
+
+// TestUpdateIssueClaimExpiresAtValueTypes covers the value shapes a caller can put
+// in the update map. The SQLite path hands a bare time.Time straight to the driver,
+// which stores it; this backend must not silently drop the lease instead. An
+// unrecognized type is a caller bug and must be reported, never ignored.
+func TestUpdateIssueClaimExpiresAtValueTypes(t *testing.T) {
+	store := setupTestMemory(t)
+	defer store.Close()
+
+	ctx := context.Background()
+	issue := newLeaseIssue(t, store, types.StatusInProgress, "agent-a")
+	expiry := time.Now().Add(time.Hour).UTC().Truncate(time.Second)
+
+	// A time.Time BY VALUE, as the SQLite path admits.
+	if err := store.UpdateIssue(ctx, issue.ID, map[string]interface{}{"claim_expires_at": expiry}, "test-user"); err != nil {
+		t.Fatalf("UpdateIssue failed: %v", err)
+	}
+	got, err := store.GetIssue(ctx, issue.ID)
+	if err != nil {
+		t.Fatalf("GetIssue failed: %v", err)
+	}
+	if got.ClaimExpiresAt == nil {
+		t.Fatal("claim_expires_at was dropped for a time.Time value")
+	}
+	if !got.ClaimExpiresAt.Equal(expiry) {
+		t.Errorf("claim_expires_at = %v, want %v", got.ClaimExpiresAt, expiry)
+	}
+
+	// A typed nil pointer clears the lease.
+	if err := store.UpdateIssue(ctx, issue.ID, map[string]interface{}{"claim_expires_at": (*time.Time)(nil)}, "test-user"); err != nil {
+		t.Fatalf("UpdateIssue failed: %v", err)
+	}
+	got, err = store.GetIssue(ctx, issue.ID)
+	if err != nil {
+		t.Fatalf("GetIssue failed: %v", err)
+	}
+	if got.ClaimExpiresAt != nil {
+		t.Errorf("claim_expires_at = %v, want nil", got.ClaimExpiresAt)
+	}
+
+	// Anything else is an error, not a silent drop.
+	err = store.UpdateIssue(ctx, issue.ID, map[string]interface{}{"claim_expires_at": "2026-01-01"}, "test-user")
+	if err == nil {
+		t.Fatal("expected an error for an unrecognized claim_expires_at value type")
+	}
+	if !strings.Contains(err.Error(), "claim_expires_at") {
+		t.Errorf("error must name the field, got %q", err)
+	}
 }

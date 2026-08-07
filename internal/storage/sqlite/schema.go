@@ -23,6 +23,11 @@ CREATE TABLE IF NOT EXISTS issues (
     compacted_at DATETIME,
     compacted_at_commit TEXT,
     original_size INTEGER,
+    -- Owning repo, added late by migration 012 and mirrored here so a fresh
+    -- database matches the probe before any migration runs
+    source_repo TEXT DEFAULT '.',
+    -- Reason recorded on close, added late by migration 017 (same reason)
+    close_reason TEXT DEFAULT '',
     deleted_at DATETIME,
     deleted_by TEXT DEFAULT '',
     delete_reason TEXT DEFAULT '',

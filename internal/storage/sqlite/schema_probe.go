@@ -20,7 +20,7 @@ var expectedSchema = map[string][]string{
 		"compaction_level", "compacted_at", "compacted_at_commit", "original_size",
 		"source_repo", "close_reason",
 		"deleted_at", "deleted_by", "delete_reason", "original_type",
-		"sender", "ephemeral", "pinned", "claim_expires_at",
+		"sender", "ephemeral", "pinned", "is_template", "claim_expires_at",
 	},
 	"dependencies":         {"issue_id", "depends_on_id", "type", "created_at", "created_by", "metadata", "thread_id"},
 	"labels":               {"issue_id", "label"},

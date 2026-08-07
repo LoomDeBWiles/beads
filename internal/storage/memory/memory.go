@@ -6,7 +6,6 @@ package memory
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
@@ -434,11 +433,20 @@ func (m *MemoryStorage) UpdateIssue(ctx context.Context, id string, updates map[
 			}
 		case "claim_expires_at":
 			// The owner lease (bd-ok4pr). Dropping it here would leave the row
-			// in_progress with no expiry, which nothing could ever steal.
-			if v, ok := value.(*time.Time); ok {
-				issue.ClaimExpiresAt = v
-			} else if value == nil {
+			// in_progress with no expiry, which nothing could ever steal. The SQLite
+			// path hands whatever the caller passed straight to the driver, which
+			// accepts a time.Time by value as readily as a pointer, so this backend
+			// must accept both and refuse anything else rather than silently ignore it.
+			switch v := value.(type) {
+			case nil:
 				issue.ClaimExpiresAt = nil
+			case *time.Time:
+				issue.ClaimExpiresAt = v
+			case time.Time:
+				expiry := v
+				issue.ClaimExpiresAt = &expiry
+			default:
+				return fmt.Errorf("claim_expires_at must be a time.Time, *time.Time or nil, got %T", value)
 			}
 		case "external_ref":
 			// Update external ref index
@@ -489,42 +497,6 @@ func (m *MemoryStorage) CloseIssue(ctx context.Context, id string, reason string
 	return m.UpdateIssue(ctx, id, map[string]interface{}{
 		"status": string(types.StatusClosed),
 	}, actor)
-}
-
-// claimEventValue is the audit payload recorded for a winning claim. It is the same
-// shape the SQLite backend writes, so a claim is reconstructable from the audit trail
-// whichever backend produced it; PreviousHolder is what makes a steal reconstructable.
-type claimEventValue struct {
-	Outcome        types.ClaimResult `json:"outcome"`
-	Assignee       string            `json:"assignee"`
-	Status         types.Status      `json:"status"`
-	PreviousHolder string            `json:"previous_holder,omitempty"`
-	ClaimExpiresAt *time.Time        `json:"claim_expires_at,omitempty"`
-}
-
-// claimEventValues renders the old and new audit values for a winning claim.
-// A payload that fails to marshal degrades to an identifying stub rather than
-// failing the claim itself.
-func claimEventValues(before, after *types.Issue, result types.ClaimResult) (string, string) {
-	newValue := claimEventValue{
-		Outcome:        result,
-		Assignee:       after.Assignee,
-		Status:         after.Status,
-		ClaimExpiresAt: after.ClaimExpiresAt,
-	}
-	if result == types.ClaimStolen {
-		newValue.PreviousHolder = before.Assignee
-	}
-
-	oldData, err := json.Marshal(before)
-	if err != nil {
-		oldData = []byte(fmt.Sprintf(`{"id":%q}`, before.ID))
-	}
-	newData, err := json.Marshal(newValue)
-	if err != nil {
-		newData = []byte(`{}`)
-	}
-	return string(oldData), string(newData)
 }
 
 // ClaimIssue atomically takes ownership of an issue. See storage.Storage.ClaimIssue
@@ -597,7 +569,7 @@ func (m *MemoryStorage) ClaimIssue(ctx context.Context, id, assignee string, lea
 	if previousStatus != issue.Status {
 		eventType = types.EventStatusChanged
 	}
-	oldValue, newValue := claimEventValues(&before, issue, result)
+	oldValue, newValue := types.RenderClaimEventValues(&before, issue, result)
 	m.events[id] = append(m.events[id], &types.Event{
 		IssueID:   id,
 		EventType: eventType,

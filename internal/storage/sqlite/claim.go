@@ -2,7 +2,6 @@ package sqlite
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -10,16 +9,6 @@ import (
 	"github.com/steveyegge/beads/internal/storage"
 	"github.com/steveyegge/beads/internal/types"
 )
-
-// claimEventValue is the audit payload recorded for a winning claim.
-// PreviousHolder is what makes a steal reconstructable after the fact.
-type claimEventValue struct {
-	Outcome        types.ClaimResult `json:"outcome"`
-	Assignee       string            `json:"assignee"`
-	Status         types.Status      `json:"status"`
-	PreviousHolder string            `json:"previous_holder,omitempty"`
-	ClaimExpiresAt *time.Time        `json:"claim_expires_at,omitempty"`
-}
 
 // ClaimIssue atomically takes ownership of an issue. See storage.Storage.ClaimIssue
 // for the decision ladder.
@@ -164,34 +153,17 @@ func writeClaim(ctx context.Context, t *sqliteTxStorage, issue *types.Issue, ass
 
 // recordClaimEvent writes the audit row for a winning claim.
 func recordClaimEvent(ctx context.Context, t *sqliteTxStorage, before, after *types.Issue, actor string, result types.ClaimResult, previousStatus types.Status) error {
-	newValue := claimEventValue{
-		Outcome:        result,
-		Assignee:       after.Assignee,
-		Status:         after.Status,
-		ClaimExpiresAt: after.ClaimExpiresAt,
-	}
-	if result == types.ClaimStolen {
-		newValue.PreviousHolder = before.Assignee
-	}
-
-	oldData, err := json.Marshal(before)
-	if err != nil {
-		oldData = []byte(fmt.Sprintf(`{"id":%q}`, before.ID))
-	}
-	newData, err := json.Marshal(newValue)
-	if err != nil {
-		newData = []byte(`{}`)
-	}
+	oldValue, newValue := types.RenderClaimEventValues(before, after, result)
 
 	eventType := types.EventUpdated
 	if previousStatus != after.Status {
 		eventType = types.EventStatusChanged
 	}
 
-	_, err = t.conn.ExecContext(ctx, `
+	_, err := t.conn.ExecContext(ctx, `
 		INSERT INTO events (issue_id, event_type, actor, old_value, new_value)
 		VALUES (?, ?, ?, ?, ?)
-	`, after.ID, eventType, actor, string(oldData), string(newData))
+	`, after.ID, eventType, actor, oldValue, newValue)
 	if err != nil {
 		return fmt.Errorf("failed to record claim event: %w", err)
 	}
