@@ -43,6 +43,7 @@ var migrationsList = []Migration{
 	{"is_template_column", migrations.MigrateIsTemplateColumn},
 	{"remove_depends_on_fk", migrations.MigrateRemoveDependsOnFK},
 	{"additional_indexes", migrations.MigrateAdditionalIndexes},
+	{"claim_expires_at_column", migrations.MigrateClaimExpiresAtColumn},
 }
 
 // MigrationInfo contains metadata about a migration for inspection
@@ -93,6 +94,7 @@ func getMigrationDescription(name string) string {
 		"is_template_column":           "Adds is_template column for template molecules (beads-1ra)",
 		"remove_depends_on_fk":         "Removes FK constraint on depends_on_id to allow external references (bd-zmmy)",
 		"additional_indexes":           "Adds performance optimization indexes for common query patterns (bd-h0we)",
+		"claim_expires_at_column":      "Adds claim_expires_at column storing the owner-lease expiry for atomic claims (bd-ok4pr)",
 	}
 	
 	if desc, ok := descriptions[name]; ok {

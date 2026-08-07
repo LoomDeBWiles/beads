@@ -306,7 +306,7 @@ func (t *sqliteTxStorage) GetIssue(ctx context.Context, id string) (*types.Issue
 		       created_at, updated_at, closed_at, external_ref,
 		       compaction_level, compacted_at, compacted_at_commit, original_size, source_repo, close_reason,
 		       deleted_at, deleted_by, delete_reason, original_type,
-		       sender, ephemeral, pinned, is_template
+		       sender, ephemeral, pinned, is_template, claim_expires_at
 		FROM issues
 		WHERE id = ?
 	`, id)
@@ -389,6 +389,9 @@ func (t *sqliteTxStorage) UpdateIssue(ctx context.Context, id string, updates ma
 
 	// Auto-manage closed_at when status changes
 	setClauses, args = manageClosedAt(oldIssue, updates, setClauses, args)
+
+	// Release the owner lease when the issue leaves in_progress (bd-ok4pr)
+	setClauses, args = manageClaimExpiry(oldIssue, updates, setClauses, args)
 
 	// Recompute content_hash if any content fields changed (bd-95)
 	contentChanged := false
@@ -518,8 +521,10 @@ func applyUpdatesToIssue(issue *types.Issue, updates map[string]interface{}) {
 func (t *sqliteTxStorage) CloseIssue(ctx context.Context, id string, reason string, actor string) error {
 	now := time.Now()
 
+	// claim_expires_at is cleared unconditionally: a closed issue is never in_progress,
+	// so it can hold no owner lease (bd-ok4pr).
 	result, err := t.conn.ExecContext(ctx, `
-		UPDATE issues SET status = ?, closed_at = ?, updated_at = ?, close_reason = ?
+		UPDATE issues SET status = ?, closed_at = ?, updated_at = ?, close_reason = ?, claim_expires_at = NULL
 		WHERE id = ?
 	`, types.StatusClosed, now, now, reason, id)
 	if err != nil {
@@ -554,6 +559,13 @@ func (t *sqliteTxStorage) CloseIssue(ctx context.Context, id string, reason stri
 	}
 
 	return nil
+}
+
+// ClaimIssue atomically takes ownership of an issue within the transaction.
+// The claim semantics live in claim.go so that the direct and transactional paths
+// cannot drift apart.
+func (t *sqliteTxStorage) ClaimIssue(ctx context.Context, id, assignee string, lease *time.Duration, actor string) (*types.ClaimOutcome, error) {
+	return claimIssue(ctx, t, id, assignee, lease, actor)
 }
 
 // DeleteIssue deletes an issue within the transaction.
@@ -1122,7 +1134,7 @@ func (t *sqliteTxStorage) SearchIssues(ctx context.Context, query string, filter
 		       created_at, updated_at, closed_at, external_ref,
 		       compaction_level, compacted_at, compacted_at_commit, original_size, source_repo, close_reason,
 		       deleted_at, deleted_by, delete_reason, original_type,
-		       sender, ephemeral, pinned, is_template
+		       sender, ephemeral, pinned, is_template, claim_expires_at
 		FROM issues
 		%s
 		ORDER BY priority ASC, created_at DESC
@@ -1169,6 +1181,8 @@ func scanIssueRow(row scanner) (*types.Issue, error) {
 	var pinned sql.NullInt64
 	// Template field (beads-1ra)
 	var isTemplate sql.NullInt64
+	// Claim lease (bd-ok4pr)
+	var claimExpiresAt sql.NullTime
 
 	err := row.Scan(
 		&issue.ID, &contentHash, &issue.Title, &issue.Description, &issue.Design,
@@ -1177,7 +1191,7 @@ func scanIssueRow(row scanner) (*types.Issue, error) {
 		&issue.CreatedAt, &issue.UpdatedAt, &closedAt, &externalRef,
 		&issue.CompactionLevel, &compactedAt, &compactedAtCommit, &originalSize, &sourceRepo, &closeReason,
 		&deletedAt, &deletedBy, &deleteReason, &originalType,
-		&sender, &wisp, &pinned, &isTemplate,
+		&sender, &wisp, &pinned, &isTemplate, &claimExpiresAt,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to scan issue: %w", err)
@@ -1238,6 +1252,10 @@ func scanIssueRow(row scanner) (*types.Issue, error) {
 	// Template field (beads-1ra)
 	if isTemplate.Valid && isTemplate.Int64 != 0 {
 		issue.IsTemplate = true
+	}
+	// Claim lease (bd-ok4pr)
+	if claimExpiresAt.Valid {
+		issue.ClaimExpiresAt = &claimExpiresAt.Time
 	}
 
 	return &issue, nil

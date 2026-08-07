@@ -408,6 +408,11 @@ func (m *MemoryStorage) UpdateIssue(ctx context.Context, id string, updates map[
 				} else if issue.Status != types.StatusClosed && oldStatus == types.StatusClosed {
 					issue.ClosedAt = nil
 				}
+
+				// Release the owner lease when the issue leaves in_progress (bd-ok4pr)
+				if oldStatus == types.StatusInProgress && issue.Status != types.StatusInProgress {
+					issue.ClaimExpiresAt = nil
+				}
 			}
 		case "priority":
 			if v, ok := value.(int); ok {
@@ -472,6 +477,91 @@ func (m *MemoryStorage) CloseIssue(ctx context.Context, id string, reason string
 	return m.UpdateIssue(ctx, id, map[string]interface{}{
 		"status": string(types.StatusClosed),
 	}, actor)
+}
+
+// ClaimIssue atomically takes ownership of an issue. See storage.Storage.ClaimIssue
+// for the decision ladder; the write lock plays the role the IMMEDIATE transaction
+// plays in the SQLite backend.
+func (m *MemoryStorage) ClaimIssue(ctx context.Context, id, assignee string, lease *time.Duration, actor string) (*types.ClaimOutcome, error) {
+	// Validate the caller's value before reading the issue: an empty value would
+	// otherwise match the legacy "in_progress with no owner" rung and let two
+	// claimants both win.
+	if strings.TrimSpace(assignee) == "" {
+		return nil, fmt.Errorf("claim requires a non-empty assignee")
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	issue, exists := m.issues[id]
+	if !exists {
+		return nil, fmt.Errorf("issue %s not found", id)
+	}
+
+	now := time.Now()
+	holder, holderExpiry := issue.Assignee, issue.ClaimExpiresAt
+	denied := func(reason types.ClaimDenyReason) *types.ClaimOutcome {
+		issueCopy := *issue
+		return &types.ClaimOutcome{
+			Outcome:      types.ClaimDenied,
+			DenyReason:   reason,
+			Holder:       holder,
+			HolderExpiry: holderExpiry,
+			Issue:        &issueCopy,
+		}
+	}
+
+	var result types.ClaimResult
+	switch {
+	case issue.Status == types.StatusClosed || issue.IsTombstone():
+		return nil, fmt.Errorf("issue %s is %s and cannot be claimed", id, issue.Status)
+	case issue.Status == types.StatusOpen:
+		result = types.ClaimClaimed
+	case issue.Status != types.StatusInProgress:
+		return denied(types.DenyStatus), nil
+	// From here down the issue is in_progress.
+	case issue.Assignee == "":
+		result = types.ClaimClaimed
+	case issue.Assignee == assignee:
+		// Self-match precedes expiry so an expired holder renews, never self-steals.
+		result = types.ClaimRenewed
+	case issue.ClaimExpired(now):
+		result = types.ClaimStolen
+	default:
+		return denied(types.DenyHeld), nil
+	}
+
+	previousStatus := issue.Status
+	issue.Assignee = assignee
+	issue.Status = types.StatusInProgress
+	issue.UpdatedAt = now
+	issue.ClaimExpiresAt = nil
+	if lease != nil {
+		expiry := now.Add(*lease)
+		issue.ClaimExpiresAt = &expiry
+	}
+	issue.ContentHash = issue.ComputeContentHash()
+
+	m.dirty[id] = true
+
+	eventType := types.EventUpdated
+	if previousStatus != issue.Status {
+		eventType = types.EventStatusChanged
+	}
+	m.events[id] = append(m.events[id], &types.Event{
+		IssueID:   id,
+		EventType: eventType,
+		Actor:     actor,
+		CreatedAt: now,
+	})
+
+	issueCopy := *issue
+	return &types.ClaimOutcome{
+		Outcome:      result,
+		Holder:       holder,
+		HolderExpiry: holderExpiry,
+		Issue:        &issueCopy,
+	}, nil
 }
 
 // DeleteIssue permanently deletes an issue and all associated data

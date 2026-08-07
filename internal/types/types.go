@@ -53,6 +53,10 @@ type Issue struct {
 	// Template field (beads-1ra): template molecule support
 	IsTemplate bool `json:"is_template,omitempty"` // If true, issue is a read-only template molecule
 
+	// Claim lease (bd-ok4pr): when the current owner's claim expires.
+	// nil means the claim never expires (the behaviour of a human claim without --lease).
+	ClaimExpiresAt *time.Time `json:"claim_expires_at,omitempty"`
+
 	// Bonding fields (bd-rnnr): compound molecule lineage
 	BondedFrom []BondRef `json:"bonded_from,omitempty"` // For compounds: constituent protos
 
@@ -503,6 +507,48 @@ const (
 	EventLabelRemoved      EventType = "label_removed"
 	EventCompacted         EventType = "compacted"
 )
+
+// ClaimExpired reports whether the issue's owner lease has lapsed as of now.
+// An issue with no lease (ClaimExpiresAt == nil) never expires.
+func (i *Issue) ClaimExpired(now time.Time) bool {
+	return i.ClaimExpiresAt != nil && !i.ClaimExpiresAt.After(now)
+}
+
+// ClaimResult names what a claim attempt did to the issue (bd-ok4pr)
+type ClaimResult string
+
+// Claim results. Only ClaimDenied leaves the issue untouched.
+const (
+	ClaimClaimed ClaimResult = "claimed" // The issue was unowned and is now held by the caller
+	ClaimRenewed ClaimResult = "renewed" // The caller already held it; the lease was refreshed
+	ClaimStolen  ClaimResult = "stolen"  // The previous holder's lease had expired
+	ClaimDenied  ClaimResult = "denied"  // Not claimable now; nothing was written
+)
+
+// ClaimDenyReason tells a caller whether a denial is worth retrying (bd-ok4pr).
+// Without it a supervisor cannot distinguish contention from a permanently
+// non-claimable status, and would retry a blocked issue forever.
+type ClaimDenyReason string
+
+// Denial reasons.
+const (
+	// DenyHeld means another agent holds a live, unexpired claim. Retry later.
+	DenyHeld ClaimDenyReason = "held"
+	// DenyStatus means the issue's status is not claimable (e.g. blocked, deferred). Skip it.
+	DenyStatus ClaimDenyReason = "status"
+)
+
+// ClaimOutcome is the typed result of a claim attempt.
+// Holder and HolderExpiry describe the claim that was found on the issue before
+// this attempt: the denying owner on a denial, the stolen-from owner on a steal.
+// They are empty when the issue had no owner.
+type ClaimOutcome struct {
+	Outcome      ClaimResult     `json:"outcome"`
+	DenyReason   ClaimDenyReason `json:"deny_reason,omitempty"`
+	Holder       string          `json:"holder,omitempty"`
+	HolderExpiry *time.Time      `json:"holder_expiry,omitempty"`
+	Issue        *Issue          `json:"issue,omitempty"`
+}
 
 // BlockedIssue extends Issue with blocking information
 type BlockedIssue struct {

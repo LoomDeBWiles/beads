@@ -4,6 +4,7 @@ package storage
 import (
 	"context"
 	"database/sql"
+	"time"
 
 	"github.com/steveyegge/beads/internal/types"
 )
@@ -51,6 +52,7 @@ type Transaction interface {
 	CreateIssues(ctx context.Context, issues []*types.Issue, actor string) error
 	UpdateIssue(ctx context.Context, id string, updates map[string]interface{}, actor string) error
 	CloseIssue(ctx context.Context, id string, reason string, actor string) error
+	ClaimIssue(ctx context.Context, id, assignee string, lease *time.Duration, actor string) (*types.ClaimOutcome, error) // Same semantics as Storage.ClaimIssue, using this transaction
 	DeleteIssue(ctx context.Context, id string) error
 	GetIssue(ctx context.Context, id string) (*types.Issue, error)                                  // For read-your-writes within transaction
 	SearchIssues(ctx context.Context, query string, filter types.IssueFilter) ([]*types.Issue, error) // For read-your-writes within transaction
@@ -84,6 +86,25 @@ type Storage interface {
 	GetIssueByExternalRef(ctx context.Context, externalRef string) (*types.Issue, error)
 	UpdateIssue(ctx context.Context, id string, updates map[string]interface{}, actor string) error
 	CloseIssue(ctx context.Context, id string, reason string, actor string) error
+
+	// ClaimIssue atomically takes ownership of an issue, decided and written in one
+	// serialized transaction so that exactly one of two concurrent claimants wins.
+	//
+	// The decision is top-down, first match wins:
+	//
+	//	open                               -> claimed
+	//	in_progress, no assignee           -> claimed (legacy row, no owner to protect)
+	//	in_progress, assignee is claimant  -> renewed (self-match precedes expiry, so an
+	//	                                      expired holder renews and never self-steals)
+	//	in_progress, lease expired         -> stolen (the outcome names the prior holder)
+	//	in_progress, held and unexpired    -> denied, DenyHeld (nothing is written)
+	//	closed or tombstone                -> error
+	//	any other status                   -> denied, DenyStatus (nothing is written)
+	//
+	// lease sets claim_expires_at to now+lease; a nil lease stores NULL, meaning the
+	// claim never expires. assignee must be non-empty after trimming.
+	ClaimIssue(ctx context.Context, id, assignee string, lease *time.Duration, actor string) (*types.ClaimOutcome, error)
+
 	DeleteIssue(ctx context.Context, id string) error
 	SearchIssues(ctx context.Context, query string, filter types.IssueFilter) ([]*types.Issue, error)
 

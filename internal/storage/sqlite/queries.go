@@ -252,6 +252,8 @@ func (s *SQLiteStorage) GetIssue(ctx context.Context, id string) (*types.Issue, 
 	var pinned sql.NullInt64
 	// Template field (beads-1ra)
 	var isTemplate sql.NullInt64
+	// Claim lease (bd-ok4pr)
+	var claimExpiresAt sql.NullTime
 
 	var contentHash sql.NullString
 	var compactedAtCommit sql.NullString
@@ -261,7 +263,7 @@ func (s *SQLiteStorage) GetIssue(ctx context.Context, id string) (*types.Issue, 
 		       created_at, updated_at, closed_at, external_ref,
 		       compaction_level, compacted_at, compacted_at_commit, original_size, source_repo, close_reason,
 		       deleted_at, deleted_by, delete_reason, original_type,
-		       sender, ephemeral, pinned, is_template
+		       sender, ephemeral, pinned, is_template, claim_expires_at
 		FROM issues
 		WHERE id = ?
 	`, id).Scan(
@@ -271,7 +273,7 @@ func (s *SQLiteStorage) GetIssue(ctx context.Context, id string) (*types.Issue, 
 		&issue.CreatedAt, &issue.UpdatedAt, &closedAt, &externalRef,
 		&issue.CompactionLevel, &compactedAt, &compactedAtCommit, &originalSize, &sourceRepo, &closeReason,
 		&deletedAt, &deletedBy, &deleteReason, &originalType,
-		&sender, &wisp, &pinned, &isTemplate,
+		&sender, &wisp, &pinned, &isTemplate, &claimExpiresAt,
 	)
 
 	if err == sql.ErrNoRows {
@@ -336,6 +338,10 @@ func (s *SQLiteStorage) GetIssue(ctx context.Context, id string) (*types.Issue, 
 	// Template field (beads-1ra)
 	if isTemplate.Valid && isTemplate.Int64 != 0 {
 		issue.IsTemplate = true
+	}
+	// Claim lease (bd-ok4pr)
+	if claimExpiresAt.Valid {
+		issue.ClaimExpiresAt = &claimExpiresAt.Time
 	}
 
 	// Fetch labels for this issue
@@ -447,6 +453,8 @@ func (s *SQLiteStorage) GetIssueByExternalRef(ctx context.Context, externalRef s
 	var pinned sql.NullInt64
 	// Template field (beads-1ra)
 	var isTemplate sql.NullInt64
+	// Claim lease (bd-ok4pr)
+	var claimExpiresAt sql.NullTime
 
 	err := s.db.QueryRowContext(ctx, `
 		SELECT id, content_hash, title, description, design, acceptance_criteria, notes,
@@ -454,7 +462,7 @@ func (s *SQLiteStorage) GetIssueByExternalRef(ctx context.Context, externalRef s
 		       created_at, updated_at, closed_at, external_ref,
 		       compaction_level, compacted_at, compacted_at_commit, original_size, source_repo, close_reason,
 		       deleted_at, deleted_by, delete_reason, original_type,
-		       sender, ephemeral, pinned, is_template
+		       sender, ephemeral, pinned, is_template, claim_expires_at
 		FROM issues
 		WHERE external_ref = ?
 	`, externalRef).Scan(
@@ -464,7 +472,7 @@ func (s *SQLiteStorage) GetIssueByExternalRef(ctx context.Context, externalRef s
 		&issue.CreatedAt, &issue.UpdatedAt, &closedAt, &externalRefCol,
 		&issue.CompactionLevel, &compactedAt, &compactedAtCommit, &originalSize, &sourceRepo, &closeReason,
 		&deletedAt, &deletedBy, &deleteReason, &originalType,
-		&sender, &wisp, &pinned, &isTemplate,
+		&sender, &wisp, &pinned, &isTemplate, &claimExpiresAt,
 	)
 
 	if err == sql.ErrNoRows {
@@ -530,6 +538,10 @@ func (s *SQLiteStorage) GetIssueByExternalRef(ctx context.Context, externalRef s
 	if isTemplate.Valid && isTemplate.Int64 != 0 {
 		issue.IsTemplate = true
 	}
+	// Claim lease (bd-ok4pr)
+	if claimExpiresAt.Valid {
+		issue.ClaimExpiresAt = &claimExpiresAt.Time
+	}
 
 	// Fetch labels for this issue
 	labels, err := s.GetLabels(ctx, issue.ID)
@@ -560,6 +572,10 @@ var allowedUpdateFields = map[string]bool{
 	"wisp":   true, // Database column is 'ephemeral', mapped in UpdateIssue
 	// Pinned field (bd-7h5)
 	"pinned": true,
+	// Claim lease (bd-ok4pr): admitted for the JSONL import path only.
+	// Claims are taken through ClaimIssue, which is the only writer that enforces
+	// the ownership precondition; there is deliberately no CLI flag for this field.
+	"claim_expires_at": true,
 	// NOTE: replies_to, relates_to, duplicate_of, superseded_by removed per Decision 004
 	// Use AddDependency() to create graph edges instead
 }
@@ -633,6 +649,43 @@ func manageClosedAt(oldIssue *types.Issue, updates map[string]interface{}, setCl
 	return setClauses, args
 }
 
+// manageClaimExpiry enforces the lease lifecycle: an owner lease only means anything
+// while the issue is in_progress, so any status change away from in_progress clears
+// claim_expires_at. Mirrors manageClosedAt (bd-ok4pr).
+func manageClaimExpiry(oldIssue *types.Issue, updates map[string]interface{}, setClauses []string, args []interface{}) ([]string, []interface{}) {
+	// An explicit claim_expires_at (import path) is already in setClauses/args; don't override it.
+	if _, hasExplicit := updates["claim_expires_at"]; hasExplicit {
+		return setClauses, args
+	}
+
+	statusVal, hasStatus := updates["status"]
+	if !hasStatus {
+		return setClauses, args
+	}
+
+	// Handle both string and types.Status
+	var newStatus string
+	switch v := statusVal.(type) {
+	case string:
+		newStatus = v
+	case types.Status:
+		newStatus = string(v)
+	default:
+		return setClauses, args
+	}
+
+	// Only a transition out of in_progress releases the lease.
+	if newStatus == string(types.StatusInProgress) || oldIssue.Status != types.StatusInProgress {
+		return setClauses, args
+	}
+
+	updates["claim_expires_at"] = nil
+	setClauses = append(setClauses, "claim_expires_at = ?")
+	args = append(args, nil)
+
+	return setClauses, args
+}
+
 // UpdateIssue updates fields on an issue
 func (s *SQLiteStorage) UpdateIssue(ctx context.Context, id string, updates map[string]interface{}, actor string) error {
 	// Get old issue for event
@@ -676,6 +729,9 @@ func (s *SQLiteStorage) UpdateIssue(ctx context.Context, id string, updates map[
 
 	// Auto-manage closed_at when status changes (enforce invariant)
 	setClauses, args = manageClosedAt(oldIssue, updates, setClauses, args)
+
+	// Release the owner lease when the issue leaves in_progress (bd-ok4pr)
+	setClauses, args = manageClaimExpiry(oldIssue, updates, setClauses, args)
 
 	// Recompute content_hash if any content fields changed (bd-95)
 	contentChanged := false
@@ -962,8 +1018,10 @@ func (s *SQLiteStorage) CloseIssue(ctx context.Context, id string, reason string
 	// 1. issues.close_reason - for direct queries (bd show --json, exports)
 	// 2. events.comment - for audit history (when was it closed, by whom)
 	// Keep both in sync. If refactoring, consider deriving one from the other.
+	// claim_expires_at is cleared unconditionally: a closed issue is never in_progress,
+	// so it can hold no owner lease (bd-ok4pr).
 	result, err := tx.ExecContext(ctx, `
-		UPDATE issues SET status = ?, closed_at = ?, updated_at = ?, close_reason = ?
+		UPDATE issues SET status = ?, closed_at = ?, updated_at = ?, close_reason = ?, claim_expires_at = NULL
 		WHERE id = ?
 	`, types.StatusClosed, now, now, reason, id)
 	if err != nil {
