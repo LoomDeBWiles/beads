@@ -378,6 +378,10 @@ func handleRename(ctx context.Context, s *sqlite.SQLiteStorage, existing *types.
 				"priority":            incoming.Priority,
 				"issue_type":          incoming.IssueType,
 				"assignee":            incoming.Assignee,
+				// The lease travels with the owner (bd-ok4pr): this map rewrites
+				// status and assignee, so dropping it would leave the renamed row
+				// in_progress with no expiry and nothing able to steal it.
+				"claim_expires_at": incoming.ClaimExpiresAt,
 			}
 			if err := s.UpdateIssue(ctx, existing.ID, updates, "importer"); err != nil {
 				return "", fmt.Errorf("failed to update issue %s: %w", existing.ID, err)
@@ -569,6 +573,9 @@ func upsertIssues(ctx context.Context, sqliteStore *sqlite.SQLiteStorage, issues
 					updates["closed_at"] = incoming.ClosedAt
 					// Pinned field (bd-7h5)
 					updates["pinned"] = incoming.Pinned
+					// Owner lease (bd-ok4pr): an unmapped field is dropped without
+					// error, which would leave this clone in_progress with no expiry.
+					updates["claim_expires_at"] = incoming.ClaimExpiresAt
 
 					if incoming.Assignee != "" {
 						updates["assignee"] = incoming.Assignee
@@ -664,6 +671,9 @@ func upsertIssues(ctx context.Context, sqliteStore *sqlite.SQLiteStorage, issues
 				updates["closed_at"] = incoming.ClosedAt
 				// Pinned field (bd-7h5)
 				updates["pinned"] = incoming.Pinned
+				// Owner lease (bd-ok4pr): an unmapped field is dropped without
+				// error, which would leave this clone in_progress with no expiry.
+				updates["claim_expires_at"] = incoming.ClaimExpiresAt
 
 				if incoming.Assignee != "" {
 					updates["assignee"] = incoming.Assignee

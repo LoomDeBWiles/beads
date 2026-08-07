@@ -8,8 +8,11 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
+	"github.com/steveyegge/beads/internal/importer"
 	"github.com/steveyegge/beads/internal/jsonlpub"
+	"github.com/steveyegge/beads/internal/storage/sqlite"
 	"github.com/steveyegge/beads/internal/types"
 )
 
@@ -402,4 +405,178 @@ func TestExportCommand(t *testing.T) {
 			t.Errorf("Expected 100 issues after cancellation, got %d", len(issues))
 		}
 	})
+}
+
+// TestClaimRoundTrip locks the owner lease into the JSONL round trip (bd-ok4pr).
+//
+// Three import paths, because they carry the field through different code:
+// a fresh store goes through insertIssue and picks the lease up from the INSERT
+// column list, while a store that already holds the issue goes through the
+// importer's explicit update maps, which drop silently anything they do not
+// name. The renewal case is the only one where the checkFieldChanged
+// comparator decides whether the update runs at all.
+func TestClaimRoundTrip(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("import into a fresh store", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		source := newTestStore(t, filepath.Join(tmpDir, "source.db"))
+		held := createClaimedIssue(t, ctx, source, nil)
+		incoming := exportedIssue(t, ctx, source, filepath.Join(tmpDir, "source.jsonl"), held.ID)
+
+		if incoming.ClaimExpiresAt == nil {
+			t.Fatal("export dropped claim_expires_at")
+		}
+
+		targetPath := filepath.Join(tmpDir, "target.db")
+		target := newTestStore(t, targetPath)
+		importIssues(t, ctx, target, targetPath, []*types.Issue{incoming})
+
+		imported := mustGetIssue(t, ctx, target, held.ID)
+		assertSameLease(t, "fresh store", held.ClaimExpiresAt, imported.ClaimExpiresAt)
+		if imported.Assignee != held.Assignee || imported.Status != held.Status {
+			t.Errorf("imported issue is %s/%q, want %s/%q", imported.Status, imported.Assignee, held.Status, held.Assignee)
+		}
+	})
+
+	t.Run("import into a store already holding the pre-claim issue", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		source := newTestStore(t, filepath.Join(tmpDir, "source.db"))
+		held := createClaimedIssue(t, ctx, source, nil)
+		incoming := exportedIssue(t, ctx, source, filepath.Join(tmpDir, "source.jsonl"), held.ID)
+
+		// The clone still sees the issue as nobody claimed it, and its copy is
+		// older, so the importer routes the row through an update map.
+		targetPath := filepath.Join(tmpDir, "target.db")
+		target := newTestStore(t, targetPath)
+		preClaim := *held
+		preClaim.Status = types.StatusOpen
+		preClaim.Assignee = ""
+		preClaim.ClaimExpiresAt = nil
+		preClaim.ContentHash = ""
+		preClaim.UpdatedAt = held.UpdatedAt.Add(-time.Hour)
+		if err := target.CreateIssue(ctx, &preClaim, "test-user"); err != nil {
+			t.Fatalf("failed to seed the pre-claim issue: %v", err)
+		}
+
+		importIssues(t, ctx, target, targetPath, []*types.Issue{incoming})
+
+		imported := mustGetIssue(t, ctx, target, held.ID)
+		if imported.Assignee != held.Assignee || imported.Status != held.Status {
+			t.Fatalf("imported issue is %s/%q, want %s/%q", imported.Status, imported.Assignee, held.Status, held.Assignee)
+		}
+		assertSameLease(t, "existing store", held.ClaimExpiresAt, imported.ClaimExpiresAt)
+	})
+
+	t.Run("lease-only renewal on an external_ref issue", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		source := newTestStore(t, filepath.Join(tmpDir, "source.db"))
+		externalRef := "JIRA-4242"
+		held := createClaimedIssue(t, ctx, source, &externalRef)
+		incoming := exportedIssue(t, ctx, source, filepath.Join(tmpDir, "source.jsonl"), held.ID)
+
+		// Same holder, same status, only the expiry moved: this is what a
+		// renewal looks like on the wire.
+		targetPath := filepath.Join(tmpDir, "target.db")
+		target := newTestStore(t, targetPath)
+		stale := *held
+		staleExpiry := held.ClaimExpiresAt.Add(-20 * time.Minute)
+		stale.ClaimExpiresAt = &staleExpiry
+		stale.ContentHash = ""
+		stale.UpdatedAt = held.UpdatedAt.Add(-time.Hour)
+		if err := target.CreateIssue(ctx, &stale, "test-user"); err != nil {
+			t.Fatalf("failed to seed the stale-lease issue: %v", err)
+		}
+
+		importIssues(t, ctx, target, targetPath, []*types.Issue{incoming})
+
+		imported := mustGetIssue(t, ctx, target, held.ID)
+		assertSameLease(t, "lease renewal", held.ClaimExpiresAt, imported.ClaimExpiresAt)
+	})
+}
+
+// createClaimedIssue creates an issue and claims it under a lease, returning the
+// stored issue as the claim left it.
+func createClaimedIssue(t *testing.T, ctx context.Context, store *sqlite.SQLiteStorage, externalRef *string) *types.Issue {
+	t.Helper()
+
+	issue := &types.Issue{
+		Title:       "Claimed issue",
+		Description: "held under an owner lease",
+		Priority:    1,
+		IssueType:   types.TypeTask,
+		Status:      types.StatusOpen,
+		ExternalRef: externalRef,
+	}
+	if err := store.CreateIssue(ctx, issue, "test-user"); err != nil {
+		t.Fatalf("failed to create issue: %v", err)
+	}
+
+	lease := 30 * time.Minute
+	outcome, err := store.ClaimIssue(ctx, issue.ID, "agent-a", &lease, "agent-a")
+	if err != nil {
+		t.Fatalf("failed to claim issue: %v", err)
+	}
+	if outcome.Outcome != types.ClaimClaimed {
+		t.Fatalf("claim outcome is %s, want claimed", outcome.Outcome)
+	}
+
+	claimed := mustGetIssue(t, ctx, store, issue.ID)
+	if claimed.ClaimExpiresAt == nil {
+		t.Fatal("claim_expires_at is NULL after a leased claim")
+	}
+	return claimed
+}
+
+// exportedIssue exports the store to JSONL and reads one issue back out, so the
+// value under test travels the same bytes a sync would produce.
+func exportedIssue(t *testing.T, ctx context.Context, store *sqlite.SQLiteStorage, jsonlPath, id string) *types.Issue {
+	t.Helper()
+
+	if err := exportToJSONLWithStore(ctx, store, jsonlPath); err != nil {
+		t.Fatalf("failed to export to %s: %v", jsonlPath, err)
+	}
+	exported, err := loadIssuesFromJSONL(jsonlPath)
+	if err != nil {
+		t.Fatalf("failed to read exported JSONL: %v", err)
+	}
+	for _, issue := range exported {
+		if issue.ID == id {
+			return issue
+		}
+	}
+	t.Fatalf("issue %s missing from the export", id)
+	return nil
+}
+
+func importIssues(t *testing.T, ctx context.Context, store *sqlite.SQLiteStorage, dbPath string, issues []*types.Issue) {
+	t.Helper()
+
+	if _, err := importer.ImportIssues(ctx, dbPath, store, issues, importer.Options{}); err != nil {
+		t.Fatalf("import failed: %v", err)
+	}
+}
+
+func mustGetIssue(t *testing.T, ctx context.Context, store *sqlite.SQLiteStorage, id string) *types.Issue {
+	t.Helper()
+
+	issue, err := store.GetIssue(ctx, id)
+	if err != nil {
+		t.Fatalf("failed to read issue %s: %v", id, err)
+	}
+	if issue == nil {
+		t.Fatalf("issue %s not found", id)
+	}
+	return issue
+}
+
+func assertSameLease(t *testing.T, path string, want, got *time.Time) {
+	t.Helper()
+
+	if got == nil {
+		t.Fatalf("%s: claim_expires_at is NULL after import, want %v", path, want)
+	}
+	if !got.Equal(*want) {
+		t.Errorf("%s: claim_expires_at is %v after import, want %v", path, got, want)
+	}
 }

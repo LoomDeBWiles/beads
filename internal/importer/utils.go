@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/steveyegge/beads/internal/types"
 	"github.com/steveyegge/beads/internal/utils"
@@ -85,6 +86,29 @@ func (fc *fieldComparator) equalPtrStr(existing *string, newVal interface{}) boo
 	return *existing == s
 }
 
+// equalPtrTime compares an optional timestamp (bd-ok4pr). The string helpers
+// cannot be reused here: strFrom rejects a *time.Time, so every import would
+// report the lease as changed and turn into an UpdateIssue (updated_at bump,
+// event, dirty mark, export churn) even when nothing moved.
+func (fc *fieldComparator) equalPtrTime(existing *time.Time, newVal interface{}) bool {
+	var incoming *time.Time
+	switch t := newVal.(type) {
+	case *time.Time:
+		incoming = t
+	case time.Time:
+		incoming = &t
+	case nil:
+		incoming = nil
+	default:
+		return false
+	}
+
+	if existing == nil || incoming == nil {
+		return existing == nil && incoming == nil
+	}
+	return existing.Equal(*incoming)
+}
+
 func (fc *fieldComparator) equalStatus(existing types.Status, newVal interface{}) bool {
 	switch t := newVal.(type) {
 	case types.Status:
@@ -145,6 +169,8 @@ func (fc *fieldComparator) checkFieldChanged(key string, existing *types.Issue, 
 		return !fc.equalPtrStr(existing.ExternalRef, newVal)
 	case "pinned":
 		return !fc.equalBool(existing.Pinned, newVal)
+	case "claim_expires_at":
+		return !fc.equalPtrTime(existing.ClaimExpiresAt, newVal)
 	default:
 		return false
 	}
