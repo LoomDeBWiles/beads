@@ -1,0 +1,29 @@
+== identity
+{
+  "branch": "main",
+  "build": "dev",
+  "commit": "00d653c0f475b81e25300c2fc1efa1b154ed171c",
+  "version": "0.34.0"
+}
+expected commit: 00d653c0f475b81e25300c2fc1efa1b154ed171c
+IDENTITY_OK
+
+== scratch store claim cycle (/tmp/tmp.16MelYh4B3)
+issue=live-j30
+✓ Claimed issue: live-j30
+claim exit=0
+
+== the fixed defect: does the lease survive a second process?
+claim_expires_at after a second process: 2026-08-07T21:36:22.750633897+02:00
+LEASE_SURVIVES_OK
+
+== a rival is denied with exit 3
+rival exit=3 (expect 3)
+
+== release
+release exit=0
+after release: open NULL
+
+== fleet store, read-only
+fleet info exit=0
+scratch dir: /tmp/tmp.16MelYh4B3

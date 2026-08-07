@@ -321,3 +321,46 @@
 - `build-final-evidence.py` now EXITS 0.
 - Final Review dispatched (final_review_v1.md): plan_v4 as the contract, the RCA and the evidence packet as extra inputs, with the migration-signature/ledger seam called out and the E2E's stale-binary trap spelled out so it does not produce a false failure. Deploy's absence is explicitly not a finding — it is the manager's post-merge step.
 - Next: disposition findings by the three tests → three_test_decision.json → gate with --phase gate → Wrap-Up → Deploy.
+
+## 2026-08-07 — Final Review dispositioned; gate PASS; merged to main
+- final_review_v1.md: FINDINGS n=2. E2E re-run by the reviewer prints E2E_PASS; full suite green; zero FAIL lines. Checks 1 (User Intent) and 4 (integration seams) found nothing to raise — the reviewer traced every explicit column list, both INSERT sites, and the total migrations.DB signature change.
+  - F1 (corruption, high) → three tests: contract INTACT, blast radius CONTAINED, trajectory CLEAR → disposition FIXED. The defect was not in shipped code: plan_v4's rollback text claimed old binaries "ignore the extra column". The reviewer's mixed-binary probe disproves it — an old binary re-runs migration 022, blanks pinned/is_template and every lease, and the new binary's self-repair then re-adds them as NULL/0, so the loss leaves NO TRACE. Shipping forward destroys nothing; only following the wrong rollback procedure would. I corrected the procedure in CONTEXT.md (commit 48bec3eb2): a downgrade destroys those columns, and a rollback must restore the store from .beads/issues.jsonl or git after reinstalling the old binary.
+  - F2 (neither, med) → RESIDUAL: the merge driver drops unmodeled fields on rewritten rows. Pre-existing, scoped out by plan_v4's risk row, reduced by this item. Leads the follow-up list.
+- three_test_decision.json written, outcome SHIP. `build-final-evidence.py --phase gate` EXITS 0.
+- Wrap-Up: work_report.md written from work-report-facts.sh output; report_summary.json rendered to http://localhost:8095/beads/w3_atomic-claim/work_report.html; CODEMAP.md gained the migrations/db.go row, the ledger note and a warning on the "add a migration" workflow row; context/WORK_INDEX.md gained the w3 and RCA rows (row-cap check clean after trimming the RCA row); telemetry.json mined.
+- Two more pieces of tool friction hit during wrap-up, both recorded in the work report: work-report-facts.sh resolves beads by a `w3` LABEL that nothing in the bead flow applies (I labelled all 26), and it requires director-protocol decision records (e2e_confirm / final_audit / queue_drained) that the manual playbook never creates (I wrote them, each stating plainly that the manager performed the check directly and citing the real evidence).
+- Merged to main with --keep: main is now 00d653c0f. wt-merge printed one warning — `bd sync` after merge failed with a PRE-EXISTING prefix mismatch in the beads store (bd-eph- 1 issue, bd-wisp- 87 issues vs the bd- prefix). Unrelated to this item, does not affect the merge; noted as follow-up.
+
+## 2026-08-07 — Deploy Step 1: record pre-deploy state
+- Command: `git rev-parse HEAD`; `cat work/w3_atomic-claim/artifacts/prior_head.txt`; `~/.local/bin/bd version`; `bd daemons list --json > artifacts/daemons_before.json`
+- Gate: rollback anchor must predate the item; daemon inventory recorded before any stop
+- Actual: main HEAD 00d653c0f. Anchor c6076387c (verified earlier: it does not contain internal/storage/sqlite/claim.go). Installed binary before deploy: `bd version 0.34.0 (f31496d65)`. Three live daemons — /home/ben/projects/tools/beads (pid 684732), /home/ben/projects/shared-docs (pid 875252), /home/ben/projects/teaching (pid 1978167), all alive.
+- Verdict: PASS
+- Artifacts: work/w3_atomic-claim/artifacts/{prior_head.txt,daemons_before.json}
+
+## 2026-08-07 — Deploy Step 2: install the binary
+- Command: `GOBIN=$HOME/.local/bin go install ./cmd/bd/`
+- Gate: installed binary reports this worktree's HEAD (a bare `go install` would write ~/go/bin/bd and leave the fleet on the old binary — the defect bead QA caught)
+- Actual: INSTALL_OK; `~/.local/bin/bd version` → `bd version 0.34.0 (dev: main@00d653c0f475)`, matching main HEAD exactly.
+- Verdict: PASS
+- Artifacts: none beyond the binary
+
+## 2026-08-07 — Deploy Step 3: restart the daemons
+- Command: `bd daemon --stop-all`; then `bd daemons health --json > artifacts/daemons_after.json`
+- Gate: every recorded daemon stops; survivors healthy; daemons autostart on next invocation
+- Actual: "Found 3 running daemon(s), stopping... ✓ Stopped 3 daemon(s)". Health after: total 1, healthy 1, stale 0, mismatched 0, unresponsive 0 — the one entry is /home/ben/projects/tools/beads, already autostarted under a fresh pid (576470) and healthy. The other two workspaces will autostart on their next `bd` command, as designed. This step is required, not cosmetic: a daemon still running the OLD binary would keep re-running the column-wiping migrations against its store.
+- Verdict: PASS
+- Artifacts: work/w3_atomic-claim/artifacts/daemons_after.json
+
+## 2026-08-07 — Deploy Step 4: live verify against the running binary
+- Command: `bash scratchpad/live_verify.sh` (identity, claim cycle on a scratch store, second-process lease check, rival denial, release, fleet read)
+- Gate: plan_v4's E2E assertions must hold against the INSTALLED binary, not the tree
+- Actual, all green:
+  - IDENTITY_OK — `bd version --json` reports commit 00d653c0f475..., equal to main HEAD.
+  - `bd claim live-j30 --assignee deploy-verify --lease 600s` → exit 0, "✓ Claimed issue".
+  - THE FIXED DEFECT, verified live: after a second `bd` process ran against the store, `claim_expires_at` still reads 2026-08-07T21:36:22 — LEASE_SURVIVES_OK. Before this item it would have read NULL.
+  - A rival claim on the held issue → exit 3, as contracted.
+  - `bd update --status open` → exit 0; the issue reads `open` with `claim_expires_at` NULL, so the lease clears on leaving in_progress.
+  - `bd --no-daemon info --json` against the fleet store → exit 0 (read-only).
+- Verdict: PASS
+- Artifacts: work/w3_atomic-claim/artifacts/live_verify.txt

@@ -1,0 +1,41 @@
+[
+  {
+    "WorkspacePath": "/home/ben/projects/tools/beads",
+    "DatabasePath": "/home/ben/projects/tools/beads/.beads/beads.db",
+    "SocketPath": "/home/ben/projects/tools/beads/.beads/bd.sock",
+    "PID": 684732,
+    "Version": "0.34.0",
+    "UptimeSeconds": 4519.488503979,
+    "LastActivityTime": "2026-08-07T21:25:40+02:00",
+    "ExclusiveLockActive": false,
+    "ExclusiveLockHolder": "",
+    "Alive": true,
+    "Error": ""
+  },
+  {
+    "WorkspacePath": "/home/ben/projects/shared-docs",
+    "DatabasePath": "/home/ben/projects/shared-docs/.beads/beads.db",
+    "SocketPath": "/home/ben/projects/shared-docs/.beads/bd.sock",
+    "PID": 875252,
+    "Version": "0.34.0",
+    "UptimeSeconds": 4122.306392153,
+    "LastActivityTime": "2026-08-07T21:25:40+02:00",
+    "ExclusiveLockActive": false,
+    "ExclusiveLockHolder": "",
+    "Alive": true,
+    "Error": ""
+  },
+  {
+    "WorkspacePath": "/home/ben/projects/teaching",
+    "DatabasePath": "/home/ben/projects/teaching/.beads/beads.db",
+    "SocketPath": "/home/ben/projects/teaching/.beads/bd.sock",
+    "PID": 1978167,
+    "Version": "0.34.0",
+    "UptimeSeconds": 2859.695106091,
+    "LastActivityTime": "2026-08-07T21:25:40+02:00",
+    "ExclusiveLockActive": false,
+    "ExclusiveLockHolder": "",
+    "Alive": true,
+    "Error": ""
+  }
+]

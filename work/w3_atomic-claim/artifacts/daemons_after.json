@@ -1,0 +1,16 @@
+{
+  "total": 1,
+  "healthy": 1,
+  "stale": 0,
+  "mismatched": 0,
+  "unresponsive": 0,
+  "daemons": [
+    {
+      "workspace": "/home/ben/projects/tools/beads",
+      "socket_path": "/home/ben/projects/tools/beads/.beads/bd.sock",
+      "pid": 576470,
+      "version": "0.34.0",
+      "status": "healthy"
+    }
+  ]
+}
