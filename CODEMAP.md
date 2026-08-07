@@ -33,6 +33,7 @@ Storage layer:
 | `cmd/bd/sync.go` | `bd sync` command — full sync cycle |
 | `cmd/bd/init.go` | `bd init` — database creation, git hooks, merge driver |
 | `cmd/bd/create.go` | `bd create` — issue creation with deps/labels |
+| `cmd/bd/claim.go` | `bd claim` — atomic ownership take/renew/steal; exit 3 on denial |
 | `cmd/bd/show.go` | `bd show` — issue display (text + JSON) |
 | `cmd/bd/list.go` | `bd list` — filtered issue listing |
 | `cmd/bd/ready.go` | `bd ready` — unblocked work queue |
@@ -50,6 +51,7 @@ Storage layer:
 | `internal/storage/sqlite/sqlite.go` | SQLite backend entry point |
 | `internal/storage/sqlite/store.go` | SQLiteStorage struct, constructor |
 | `internal/storage/sqlite/migrations.go` | Schema migration runner (26 migrations) |
+| `internal/storage/sqlite/claim.go` | `ClaimIssue` — claim decision ladder + write, inside one `BEGIN IMMEDIATE` transaction |
 | `internal/types/types.go` | Core types: Issue, Dependency, Status, IssueType |
 | `internal/rpc/protocol.go` | RPC request/response format (JSON over Unix socket) |
 | `internal/rpc/client.go` | RPC client used by CLI commands |
