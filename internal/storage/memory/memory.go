@@ -6,6 +6,7 @@ package memory
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
@@ -409,8 +410,11 @@ func (m *MemoryStorage) UpdateIssue(ctx context.Context, id string, updates map[
 					issue.ClosedAt = nil
 				}
 
-				// Release the owner lease when the issue leaves in_progress (bd-ok4pr)
-				if oldStatus == types.StatusInProgress && issue.Status != types.StatusInProgress {
+				// Release the owner lease when the issue leaves in_progress (bd-ok4pr).
+				// An explicit claim_expires_at in the same update wins: the import path
+				// carries status and lease together, and map iteration order is random.
+				_, hasExplicitLease := updates["claim_expires_at"]
+				if !hasExplicitLease && oldStatus == types.StatusInProgress && issue.Status != types.StatusInProgress {
 					issue.ClaimExpiresAt = nil
 				}
 			}
@@ -427,6 +431,14 @@ func (m *MemoryStorage) UpdateIssue(ctx context.Context, id string, updates map[
 				issue.Assignee = v
 			} else if value == nil {
 				issue.Assignee = ""
+			}
+		case "claim_expires_at":
+			// The owner lease (bd-ok4pr). Dropping it here would leave the row
+			// in_progress with no expiry, which nothing could ever steal.
+			if v, ok := value.(*time.Time); ok {
+				issue.ClaimExpiresAt = v
+			} else if value == nil {
+				issue.ClaimExpiresAt = nil
 			}
 		case "external_ref":
 			// Update external ref index
@@ -477,6 +489,42 @@ func (m *MemoryStorage) CloseIssue(ctx context.Context, id string, reason string
 	return m.UpdateIssue(ctx, id, map[string]interface{}{
 		"status": string(types.StatusClosed),
 	}, actor)
+}
+
+// claimEventValue is the audit payload recorded for a winning claim. It is the same
+// shape the SQLite backend writes, so a claim is reconstructable from the audit trail
+// whichever backend produced it; PreviousHolder is what makes a steal reconstructable.
+type claimEventValue struct {
+	Outcome        types.ClaimResult `json:"outcome"`
+	Assignee       string            `json:"assignee"`
+	Status         types.Status      `json:"status"`
+	PreviousHolder string            `json:"previous_holder,omitempty"`
+	ClaimExpiresAt *time.Time        `json:"claim_expires_at,omitempty"`
+}
+
+// claimEventValues renders the old and new audit values for a winning claim.
+// A payload that fails to marshal degrades to an identifying stub rather than
+// failing the claim itself.
+func claimEventValues(before, after *types.Issue, result types.ClaimResult) (string, string) {
+	newValue := claimEventValue{
+		Outcome:        result,
+		Assignee:       after.Assignee,
+		Status:         after.Status,
+		ClaimExpiresAt: after.ClaimExpiresAt,
+	}
+	if result == types.ClaimStolen {
+		newValue.PreviousHolder = before.Assignee
+	}
+
+	oldData, err := json.Marshal(before)
+	if err != nil {
+		oldData = []byte(fmt.Sprintf(`{"id":%q}`, before.ID))
+	}
+	newData, err := json.Marshal(newValue)
+	if err != nil {
+		newData = []byte(`{}`)
+	}
+	return string(oldData), string(newData)
 }
 
 // ClaimIssue atomically takes ownership of an issue. See storage.Storage.ClaimIssue
@@ -532,6 +580,7 @@ func (m *MemoryStorage) ClaimIssue(ctx context.Context, id, assignee string, lea
 	}
 
 	previousStatus := issue.Status
+	before := *issue
 	issue.Assignee = assignee
 	issue.Status = types.StatusInProgress
 	issue.UpdatedAt = now
@@ -548,10 +597,13 @@ func (m *MemoryStorage) ClaimIssue(ctx context.Context, id, assignee string, lea
 	if previousStatus != issue.Status {
 		eventType = types.EventStatusChanged
 	}
+	oldValue, newValue := claimEventValues(&before, issue, result)
 	m.events[id] = append(m.events[id], &types.Event{
 		IssueID:   id,
 		EventType: eventType,
 		Actor:     actor,
+		OldValue:  &oldValue,
+		NewValue:  &newValue,
 		CreatedAt: now,
 	})
 

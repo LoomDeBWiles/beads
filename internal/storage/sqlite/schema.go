@@ -34,6 +34,8 @@ CREATE TABLE IF NOT EXISTS issues (
     pinned INTEGER DEFAULT 0,
     -- Template field (beads-1ra)
     is_template INTEGER DEFAULT 0,
+    -- Owner lease expiry for atomic claims (bd-ok4pr); NULL = lease never expires
+    claim_expires_at TIMESTAMP,
     -- NOTE: replies_to, relates_to, duplicate_of, superseded_by removed per Decision 004
     -- These relationships are now stored in the dependencies table
     CHECK ((status = 'closed') = (closed_at IS NOT NULL))

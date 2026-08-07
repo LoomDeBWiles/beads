@@ -2,6 +2,8 @@ package memory
 
 import (
 	"context"
+	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -1212,4 +1214,191 @@ func TestGetIssueByExternalRefLoadFromIssues(t *testing.T) {
 	if found2 == nil || found2.ID != "bd-2" {
 		t.Errorf("Expected to find bd-2 by external ref jira#200")
 	}
+}
+
+// newLeaseIssue creates an issue in the given state for the lease tests.
+func newLeaseIssue(t *testing.T, store *MemoryStorage, status types.Status, assignee string) *types.Issue {
+	t.Helper()
+
+	issue := &types.Issue{
+		Title:     "Lease test issue",
+		Status:    status,
+		Priority:  1,
+		IssueType: types.TypeTask,
+		Assignee:  assignee,
+	}
+	if err := store.CreateIssue(context.Background(), issue, "test-user"); err != nil {
+		t.Fatalf("failed to create issue: %v", err)
+	}
+	return issue
+}
+
+// TestUpdateIssueWritesClaimExpiresAt covers the update key the SQLite backend
+// admits through allowedUpdateFields. Dropping it here would leave the row
+// in_progress with no expiry, permanently unstealable on this backend.
+func TestUpdateIssueWritesClaimExpiresAt(t *testing.T) {
+	store := setupTestMemory(t)
+	defer store.Close()
+
+	ctx := context.Background()
+	issue := newLeaseIssue(t, store, types.StatusInProgress, "agent-a")
+	expiry := time.Now().Add(time.Hour).UTC().Truncate(time.Second)
+
+	if err := store.UpdateIssue(ctx, issue.ID, map[string]interface{}{"claim_expires_at": &expiry}, "test-user"); err != nil {
+		t.Fatalf("UpdateIssue failed: %v", err)
+	}
+
+	got, err := store.GetIssue(ctx, issue.ID)
+	if err != nil {
+		t.Fatalf("GetIssue failed: %v", err)
+	}
+	if got.ClaimExpiresAt == nil {
+		t.Fatal("claim_expires_at was dropped by UpdateIssue")
+	}
+	if !got.ClaimExpiresAt.Equal(expiry) {
+		t.Errorf("claim_expires_at = %v, want %v", got.ClaimExpiresAt, expiry)
+	}
+
+	// nil clears the lease.
+	if err := store.UpdateIssue(ctx, issue.ID, map[string]interface{}{"claim_expires_at": nil}, "test-user"); err != nil {
+		t.Fatalf("UpdateIssue failed: %v", err)
+	}
+	got, err = store.GetIssue(ctx, issue.ID)
+	if err != nil {
+		t.Fatalf("GetIssue failed: %v", err)
+	}
+	if got.ClaimExpiresAt != nil {
+		t.Errorf("claim_expires_at = %v, want nil", got.ClaimExpiresAt)
+	}
+}
+
+// TestUpdateIssueClaimExpiresAtWithStatus pins the two-key case the import path
+// produces: an explicit lease wins over the release that leaving in_progress
+// would otherwise trigger, regardless of map iteration order.
+func TestUpdateIssueClaimExpiresAtWithStatus(t *testing.T) {
+	store := setupTestMemory(t)
+	defer store.Close()
+
+	ctx := context.Background()
+	expiry := time.Now().Add(time.Hour).UTC().Truncate(time.Second)
+
+	t.Run("explicit lease survives a status change", func(t *testing.T) {
+		issue := newLeaseIssue(t, store, types.StatusInProgress, "agent-a")
+		updates := map[string]interface{}{
+			"status":           string(types.StatusOpen),
+			"claim_expires_at": &expiry,
+		}
+		if err := store.UpdateIssue(ctx, issue.ID, updates, "test-user"); err != nil {
+			t.Fatalf("UpdateIssue failed: %v", err)
+		}
+		got, err := store.GetIssue(ctx, issue.ID)
+		if err != nil {
+			t.Fatalf("GetIssue failed: %v", err)
+		}
+		if got.ClaimExpiresAt == nil || !got.ClaimExpiresAt.Equal(expiry) {
+			t.Errorf("claim_expires_at = %v, want %v", got.ClaimExpiresAt, expiry)
+		}
+	})
+
+	t.Run("leaving in_progress without an explicit lease releases it", func(t *testing.T) {
+		issue := newLeaseIssue(t, store, types.StatusInProgress, "agent-a")
+		if err := store.UpdateIssue(ctx, issue.ID, map[string]interface{}{"claim_expires_at": &expiry}, "test-user"); err != nil {
+			t.Fatalf("UpdateIssue failed: %v", err)
+		}
+		if err := store.UpdateIssue(ctx, issue.ID, map[string]interface{}{"status": string(types.StatusOpen)}, "test-user"); err != nil {
+			t.Fatalf("UpdateIssue failed: %v", err)
+		}
+		got, err := store.GetIssue(ctx, issue.ID)
+		if err != nil {
+			t.Fatalf("GetIssue failed: %v", err)
+		}
+		if got.ClaimExpiresAt != nil {
+			t.Errorf("claim_expires_at = %v, want nil after leaving in_progress", got.ClaimExpiresAt)
+		}
+	})
+}
+
+// TestClaimIssueRecordsAuditPayload asserts the claim event carries the same
+// payload the SQLite backend writes, so a steal stays reconstructable from the
+// audit trail on this backend too.
+func TestClaimIssueRecordsAuditPayload(t *testing.T) {
+	store := setupTestMemory(t)
+	defer store.Close()
+
+	ctx := context.Background()
+	issue := newLeaseIssue(t, store, types.StatusOpen, "")
+	lease := time.Hour
+
+	outcome, err := store.ClaimIssue(ctx, issue.ID, "agent-a", &lease, "test-user")
+	if err != nil {
+		t.Fatalf("ClaimIssue failed: %v", err)
+	}
+	if outcome.Outcome != types.ClaimClaimed {
+		t.Fatalf("outcome = %q, want %q", outcome.Outcome, types.ClaimClaimed)
+	}
+
+	claimEvent := lastEvent(t, store, issue.ID)
+	claimed := decodeClaimEvent(t, claimEvent)
+	if claimed.Outcome != types.ClaimClaimed || claimed.Assignee != "agent-a" {
+		t.Errorf("claim payload = %+v, want outcome=%q assignee=agent-a", claimed, types.ClaimClaimed)
+	}
+	if claimed.Status != types.StatusInProgress {
+		t.Errorf("claim payload status = %q, want %q", claimed.Status, types.StatusInProgress)
+	}
+	if claimed.ClaimExpiresAt == nil {
+		t.Error("claim payload has no claim_expires_at, want the new lease")
+	}
+	if claimed.PreviousHolder != "" {
+		t.Errorf("claim payload previous_holder = %q, want empty on a fresh claim", claimed.PreviousHolder)
+	}
+	if claimEvent.OldValue == nil || !strings.Contains(*claimEvent.OldValue, issue.ID) {
+		t.Error("claim event old_value does not carry the pre-claim issue")
+	}
+
+	// Let the lease lapse, then steal: the steal names the previous holder.
+	expired := time.Now().Add(-time.Minute)
+	if err := store.UpdateIssue(ctx, issue.ID, map[string]interface{}{"claim_expires_at": &expired}, "test-user"); err != nil {
+		t.Fatalf("UpdateIssue failed: %v", err)
+	}
+	stolen, err := store.ClaimIssue(ctx, issue.ID, "agent-b", &lease, "test-user")
+	if err != nil {
+		t.Fatalf("ClaimIssue failed: %v", err)
+	}
+	if stolen.Outcome != types.ClaimStolen {
+		t.Fatalf("outcome = %q, want %q", stolen.Outcome, types.ClaimStolen)
+	}
+
+	stealPayload := decodeClaimEvent(t, lastEvent(t, store, issue.ID))
+	if stealPayload.PreviousHolder != "agent-a" {
+		t.Errorf("steal payload previous_holder = %q, want agent-a", stealPayload.PreviousHolder)
+	}
+	if stealPayload.Assignee != "agent-b" {
+		t.Errorf("steal payload assignee = %q, want agent-b", stealPayload.Assignee)
+	}
+}
+
+func lastEvent(t *testing.T, store *MemoryStorage, issueID string) *types.Event {
+	t.Helper()
+
+	events, err := store.GetEvents(context.Background(), issueID, 0)
+	if err != nil {
+		t.Fatalf("GetEvents failed: %v", err)
+	}
+	if len(events) == 0 {
+		t.Fatal("no events recorded")
+	}
+	return events[len(events)-1]
+}
+
+func decodeClaimEvent(t *testing.T, event *types.Event) claimEventValue {
+	t.Helper()
+
+	if event.NewValue == nil {
+		t.Fatal("claim event has no new_value")
+	}
+	var payload claimEventValue
+	if err := json.Unmarshal([]byte(*event.NewValue), &payload); err != nil {
+		t.Fatalf("failed to decode claim payload %q: %v", *event.NewValue, err)
+	}
+	return payload
 }
