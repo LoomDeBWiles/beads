@@ -1,0 +1,47 @@
+{
+  "schema": 2,
+  "bead_id": "bd-ok4pr.3.2",
+  "run_id": "1786118144677961643",
+  "changes": "committed",
+  "commits": [
+    "a7e12fb35b0c58fa800efffcb329785155e7293a"
+  ],
+  "acceptance": [
+    {
+      "criterion": "Whole module still compiles with the two new merge.Issue fields",
+      "command": "go build ./...",
+      "exit": 0,
+      "log": "bd-ok4pr.3.2.1786118144677961643_step1.log"
+    },
+    {
+      "criterion": "Merge package tests pass, including the new claim-pair and pass-through cases",
+      "command": "go test ./internal/merge/...",
+      "exit": 0,
+      "log": "bd-ok4pr.3.2.1786118144677961643_step2.log"
+    },
+    {
+      "criterion": "Assignee is modeled in the merge driver",
+      "command": "grep -q 'Assignee' internal/merge/merge.go",
+      "exit": 0,
+      "log": "bd-ok4pr.3.2.1786118144677961643_step3.log"
+    },
+    {
+      "criterion": "ClaimExpiresAt is modeled in the merge driver",
+      "command": "grep -q 'ClaimExpiresAt' internal/merge/merge.go",
+      "exit": 0,
+      "log": "bd-ok4pr.3.2.1786118144677961643_step4.log"
+    },
+    {
+      "criterion": "ClaimExpiresAt semantics are locked by a test",
+      "command": "grep -q 'ClaimExpiresAt' internal/merge/merge_test.go",
+      "exit": 0,
+      "log": "bd-ok4pr.3.2.1786118144677961643_step5.log"
+    },
+    {
+      "criterion": "Merge package is vet-clean",
+      "command": "go vet ./internal/merge/...",
+      "exit": 0,
+      "log": "bd-ok4pr.3.2.1786118144677961643_step6.log"
+    }
+  ]
+}

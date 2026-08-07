@@ -1,0 +1,58 @@
+You are a builder on work item w3 in the `bd` fork (Go, v0.34). Implement exactly one bead.
+
+## Your bead
+bd-ok4pr.1.9 — close the review findings on the migration fix, plus the rollback-anchor defect.
+
+## Your worktree (the ONLY tree you may write to)
+/home/ben/worktrees/beads/w3_atomic-claim/.runs/bd-ok4pr.1.9.1786128058475942864
+
+## Step 1 — read, in this order
+1. `work/w3_atomic-claim/rca_v1.md` — the root-cause analysis behind the migration fix
+   you are hardening. It explains why the fix is shaped the way it is.
+2. `bd --db /home/ben/projects/beads/.beads/beads.db --no-auto-import show bd-ok4pr.1.9`
+   `## Contract` is a reviewer's finding text, seven numbered items, each with its file,
+   line, mechanism and reproduction. Implement them literally.
+3. `~/projects/shared-docs/CODING_PRINCIPLES.md` and
+   `~/projects/shared-docs/TESTING_PRINCIPLES.md`.
+
+## Step 2 — implement
+This bead gates a deploy to 17 live stores, and two of its items are why the deploy has not
+happened yet:
+- Item 2: an unquoted identifier can make a store PERMANENTLY UNOPENABLE. The reviewer
+  reproduced it with a column named `order`.
+- Item 3: the previous fix silently killed `Open`'s schema self-repair — a store missing a
+  column used to heal itself and now refuses to open. That is a regression this work item
+  introduced, not a pre-existing one.
+
+Item 1 is the lesson that shapes the rest: a test claimed to cover 022's rewrite while the
+ledger skipped 022 entirely, so the rewrite had zero coverage. For every test you add, say
+in your build report which code path it actually executes, and prove it by breaking that
+path and watching the test fail.
+
+Hard boundaries: your own temp stores only. Never touch `/home/ben/projects/*/.beads/`,
+any other worktree's `.beads/`, or `~/.local/bin/bd`.
+
+## Step 3 — gate and close
+1. `bdc test <the files you changed>`
+2. every `## Acceptance` command, in the bead's order, each exiting 0
+3. `bdc bd-ok4pr.1.9 <the files you changed>` — gate, tagged pathspec commit, close. No push.
+
+The repo's gate command is configured in the tracked `.bdc.conf`. Do not touch it.
+
+## Step 4 — build report
+Write, at this ABSOLUTE path:
+/home/ben/worktrees/beads/w3_atomic-claim/work/w3_atomic-claim/builds/bd-ok4pr.1.9.1786128058475942864.build.json
+
+One JSON object: `schema` = 2, `bead_id` = "bd-ok4pr.1.9", `run_id` = "1786128058475942864",
+`changes` = "committed" or "none", `commits` = the one (bd-ok4pr.1.9)-tagged commit `bdc` made
+(or [] for "none"), `acceptance` = one entry per bead Acceptance command, in the bead's
+order, same length. Each acceptance entry has exactly four keys: `criterion`,
+`command` (character for character), `exit` (the number 0), and `log` =
+`bd-ok4pr.1.9.1786128058475942864_step{N}.log` with N the 1-based position — a name relative to /home/ben/worktrees/beads/w3_atomic-claim/work/w3_atomic-claim/builds/
+(no `builds/` prefix inside the JSON), existing in that ABSOLUTE directory, non-empty.
+No other filename form is accepted. Include your mutation checks and the code path each
+new test executes.
+
+## Worker contract
+Your run worktree only. No branch switch, reset, rebase, push, or `wt-*` scripts. Stay
+inside `## Touches`. The manager owns the rebase, the merge and the deploy.

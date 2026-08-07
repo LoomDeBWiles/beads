@@ -1,0 +1,1 @@
+{"kind": "e2e_confirm", "id": "w3-e2e-1", "note": "Manual-playbook item: the manager ran the plan's E2E scenario directly (no director decision loop). Recorded here because work-report-facts.sh reads the decision protocol as its E2E evidence source."}

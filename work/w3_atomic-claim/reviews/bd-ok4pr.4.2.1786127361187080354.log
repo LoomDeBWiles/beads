@@ -1,0 +1,15 @@
+Review written to `work/w3_atomic-claim/reviews/review_bd-ok4pr.4.2_v1.md`.
+
+**VERDICT: FIX findings=1** — one high finding, in the artifact, not the script.
+
+What I verified by running it (built `/tmp/bd-w3` fresh from this worktree):
+
+- **Script passes, 3/3 runs**, exit 0, last line `E2E_PASS`. Output matches the committed artifact line for line once issue IDs and timestamps are normalized.
+- **Assertions really fail.** I copied the script to `/tmp`, flipped one expected value (`stolen` → `borrowed`), and got `FAIL: outcome: expected [borrowed], got [stolen]`, `1 check(s) failed`, exit 1. Failures accumulate in `failures` and gate the final `E2E_PASS`, so no check is decorative.
+- **Step 2 concurrency is genuine.** Two backgrounded processes, both launched before either is waited on. A single claim takes 40 ms wall including process start, so the two overlap almost entirely. Over 15 repetitions the winner was nondeterministic (A 10, B 5) and every run gave exactly one exit 0 and one exit 3, with no SQLITE_BUSY leaking through as a stray exit code. Stored assignee is checked against the actual winner.
+- **Steps 3 and 4 prove what they claim.** The steal asserts `outcome=stolen`, `.holder=agent-C`, and reads the `events` row directly with `sqlite3` to confirm `previous_holder=agent-C`. The renewal asserts `outcome=renewed`, distinct from a fresh claim.
+- **Isolation and cleanup are clean.** Every invocation carries `--no-daemon --no-auto-import --db <temp>`; `trap cleanup EXIT INT TERM` fires on the failure path too (no `/tmp/bd_e2e_claim.*` survived any run, including the deliberately failing one); no daemon or stray process left; `~/.beads/config.yaml` untouched. Nothing goes near `~/.local/bin/bd`.
+- **Scope respected**: no `go install`, no daemon command anywhere in the script.
+- Step 5's key-absence assertion is sound, not vacuous: `ClaimExpiresAt` is a plain `*time.Time` with `omitempty` (`internal/types/types.go:59`), and step 6 proves the key does surface when a lease is set.
+
+The finding: `prior_head.txt` holds `9a59bda9a`, which is this bead's own first commit and already carries the whole claim implementation. The plan's rollback (`plan_v4.md:209`) checks out that commit and reinstalls, which would put the new code back rather than the previous binary. The correct value is the branch point, `c6076387c`. The bead's acceptance command (`git rev-parse HEAD`) is what produced it, so the fix belongs in both the artifact and that acceptance line.

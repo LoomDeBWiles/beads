@@ -1,0 +1,15 @@
+Done. bd-ok4pr.2.1 is implemented, gated, committed (`a81cf7a3e`) and closed.
+
+**What landed**
+- `internal/rpc/protocol.go`: `OpClaim` + `ClaimArgs{ID, Assignee, LeaseSeconds *int64}`.
+- `internal/rpc/server_issues_epics.go`: `handleClaim` — validates a non-empty assignee, calls `store.ClaimIssue`, emits `MutationUpdate` only on a win. A denial is a *successful* response carrying the denied outcome, so the client can map it to exit 3 and read `deny_reason`; errors are reserved for exit-1 cases.
+- `internal/rpc/client.go`: `Claim(args *ClaimArgs)`.
+- `cmd/bd/claim.go`: the `claim <id>` command — `--assignee` required and rejected when blank after trimming (Cobra's required check can't catch `--assignee ""`), `--lease` duration (rejected under 1s, since the wire carries whole seconds and a sub-second lease would arrive already expired), partial-ID resolve, daemon/direct routing, exit map 0/3/1, denial text that names the holder + expiry for a held denial and the status for a status denial.
+- `cmd/bd/main.go`: registers the command.
+- `cmd/bd/claim_test.go` and the flat `cmd/bd/testdata/claim.txt`, which drives exit 0 / 3 / 1 in direct mode and again through a real daemon it starts and stops.
+
+**One file outside `## Touches`**: `internal/rpc/server_routing_validation_diagnostics.go` got the one-line `case OpClaim:`. That switch is the only dispatch; without it the op is unreachable and the daemon route can't work.
+
+**Pre-existing defect found, not fixed (not this bead's scope, but it makes the lease inert in production and will bite bd-ok4pr.4.2's E2E)**: migration 019 re-adds the four deprecated edge columns on every DB open, so migration 022 rebuilds the `issues` table on *every* `bd` invocation. Its fixed INSERT column list predates every later column, so each run silently blanks `pinned`, `is_template` and now `claim_expires_at`. Verified end to end: `bd pin X` then any `bd show` leaves `pinned = 0`; a claim's `claim_expires_at` is written and exported correctly, then nulled by the next command. Claim, renew and deny across processes still work (assignee survives); only lease expiry — and therefore steal — does not persist. My tests avoid asserting lease survival across process boundaries for that reason.
+
+Also pre-existing: `TestScripts/help`, `/init` and `/dep_add` fail on the untouched baseline (confirmed with the changes stashed). `TestScripts/claim` passes.

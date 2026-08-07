@@ -1,0 +1,1 @@
+cd /home/ben/worktrees/beads/w3_atomic-claim && claude -p --model claude-opus-5 --effort high --dangerously-skip-permissions < work/w3_atomic-claim/review_prompt_v2.txt

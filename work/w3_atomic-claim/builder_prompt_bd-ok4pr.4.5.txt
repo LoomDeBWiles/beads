@@ -1,0 +1,42 @@
+You are a builder on work item w3 in the `bd` fork (Go, v0.34). Implement exactly one bead.
+
+## Your bead
+bd-ok4pr.4.5 — three comment-accuracy corrections. No behavior changes.
+
+## Your worktree (the ONLY tree you may write to)
+/home/ben/worktrees/beads/w3_atomic-claim/.runs/bd-ok4pr.4.5.1786124495612483839
+
+## Step 1 — read
+1. `bd --db /home/ben/projects/beads/.beads/beads.db --no-auto-import show bd-ok4pr.4.5`
+   Its `## Contract` names each defect with its file, line and mechanism.
+2. Every source location the Contract cites. Verify each claim against the code
+   before you write the corrected comment: these are defects of exactly the kind
+   where a plausible-sounding correction is still wrong.
+
+## Step 2 — implement
+Comments only. If you find yourself changing a statement, an assertion or a
+signature, stop — you have left the bead.
+
+## Step 3 — gate and close
+1. `bdc test <the files you changed>`
+2. every `## Acceptance` command in the bead, in order, each exiting 0
+3. `bdc bd-ok4pr.4.5 <the files you changed>` — gate, tagged pathspec commit, close. No push.
+
+The repo's gate command is configured in the tracked `.bdc.conf`. Do not touch it.
+
+## Step 4 — build report
+Write, at this ABSOLUTE path:
+/home/ben/worktrees/beads/w3_atomic-claim/work/w3_atomic-claim/builds/bd-ok4pr.4.5.1786124495612483839.build.json
+
+One JSON object: `schema` = 2, `bead_id` = "bd-ok4pr.4.5", `run_id` = "1786124495612483839",
+`changes` = "committed" or "none", `commits` = the one (bd-ok4pr.4.5)-tagged commit `bdc`
+made (or [] for "none"), `acceptance` = one entry per bead Acceptance command,
+in the bead's order, same length. Each acceptance entry has exactly four keys:
+`criterion`, `command` (character for character), `exit` (the number 0), and
+`log` = `bd-ok4pr.4.5.1786124495612483839_step{N}.log` with N the 1-based position — a name relative to
+/home/ben/worktrees/beads/w3_atomic-claim/work/w3_atomic-claim/builds/ (no `builds/` prefix inside the JSON), existing in that ABSOLUTE
+directory, non-empty. No other filename form is accepted.
+
+## Worker contract
+Your run worktree only. No branch switch, reset, rebase, push, or `wt-*` scripts.
+Stay inside `## Touches`. The manager owns the rebase and the merge.

@@ -1,0 +1,56 @@
+You are a fresh-eyes reviewer on work item w3 in the `bd` fork (Go, v0.34).
+You are READ-ONLY: change no file, create no bead, commit nothing.
+
+## What to review — this gates a deploy to 17 live stores
+Bead bd-ok4pr.1.9 — the hardening round on the migration fix.
+Commit range in /home/ben/worktrees/beads/w3_atomic-claim:
+`git log -p dcea0aff7aaff5e9f2db1371d96ddd8bee4d3a47..29003e307e9f9ea0d5866ff765fbbfea64b6fc43`
+
+It is a wide diff: every migration's signature changed so the whole pass can run on one
+connection, plus a new internal/storage/sqlite/migrations/db.go.
+
+## Judge against
+1. `bd --db /home/ben/projects/beads/.beads/beads.db --no-auto-import show bd-ok4pr.1.9`
+   — seven numbered Contract items, each a prior reviewer's finding with its reproduction.
+   Confirm EACH is genuinely closed.
+2. `work/w3_atomic-claim/rca_v1.md` — the original root cause.
+3. `~/projects/shared-docs/CODING_PRINCIPLES.md`, `~/projects/shared-docs/TESTING_PRINCIPLES.md`.
+
+## Look hardest at
+- Item 1 first, and judge it the way the finding was judged: does the new test execute
+  022's RUNTIME COLUMN REWRITE, or does the ledger skip 022 so the test proves nothing?
+  Prove it — restore 022 from the parent commit (or otherwise break the rewrite) and confirm
+  the new test FAILS. The previous round's test looked right and covered nothing.
+- Item 2: are ALL runtime-derived identifiers quoted now? Build a scratch store with a
+  column named `order` plus an edge column and confirm the migration succeeds where it
+  previously made the store permanently unopenable.
+- Item 3: does a store with a dropped column heal again? Drop `pinned` from a scratch store,
+  open it with this build, and confirm it opens and repairs rather than refusing.
+- Item 5 and the signature change: the migration pass must run on ONE connection or a real
+  transaction, with each ledger row committed atomically with its migration. Look for any
+  path that still reaches the pool. A ledger row that survives a rolled-back migration
+  skips that migration forever — state plainly whether that is now impossible.
+- The blast question, answered directly: for a store shaped like the 17 live ones (no
+  ledger, created by an older binary), does opening it with this build preserve every
+  column value? Test it, do not reason about it.
+- Anything this wide diff broke by accident. Thirty files changed signature.
+
+## Run it yourself, in your own temp directories only
+`cd /home/ben/worktrees/beads/w3_atomic-claim && go build ./... && go test ./...`
+NEVER touch /home/ben/projects/*/.beads/, any other worktree's .beads/, or ~/.local/bin/bd.
+Restore every file you modify for a mutation check and confirm `git status --porcelain` is
+clean before you finish.
+
+## Output
+Write your review to:
+/home/ben/worktrees/beads/w3_atomic-claim/work/w3_atomic-claim/reviews/review_bd-ok4pr.1.9_v1.md
+
+Exactly this — the verdict line plus finding rows, no other prose:
+
+VERDICT: CLEAN|FIX findings=N
+| ID | sev | file:line | defect (one sentence) | fix (one sentence) |
+|---|---|---|---|---|
+
+- CLEAN requires findings=0; FIX requires one or more finding rows.
+- sev: high = wrong behavior or a broken contract; med = correctness risk in a specific case; low = wording, cosmetic.
+- Each defect sentence stands alone: name the mechanism and the consequence.

@@ -1,0 +1,91 @@
+{
+  "schema": 2,
+  "bead_id": "bd-ok4pr.4.2",
+  "run_id": "1786124765602796418",
+  "changes": "committed",
+  "commits": [
+    "9a59bda9a2ae5419c6ef12302a7490996c7e90fe"
+  ],
+  "blocked": {
+    "summary": "The E2E proof is written and runs, but it cannot pass: an owner lease does not survive the next bd invocation, so steps 3, 4 and 6 fail. The bead is NOT closed and the commit above is a plain pathspec commit, not a bdc gate-and-close.",
+    "root_cause": "Two migrations fight each other on every database open. `messaging_fields` (internal/storage/sqlite/migrations/019_messaging_fields.go) re-adds replies_to, relates_to, duplicate_of and superseded_by whenever they are missing; `drop_edge_columns` (internal/storage/sqlite/migrations/022_drop_edge_columns.go) then sees them, rebuilds the issues table without them, and copies only the 28 columns it knows about. Every column added by a migration after 022 - pinned (023), is_template (026) and now claim_expires_at (027) - is re-created empty on each open, so its data is wiped. The pair runs on every `bd` process start, so a lease written by one process is NULL by the time the next process reads it.",
+    "evidence": [
+      "Scratch store, this worktree's binary: `bd claim <id> --assignee agent-C --lease 60s` then `sqlite3 .beads/beads.db 'select claim_expires_at from issues'` shows the lease; after any subsequent bd command (even `bd list`) the same query returns NULL, with updated_at unchanged.",
+      "A trigger created on the issues table disappears after any bd command while a trigger on the events table survives, which identifies the issues-table rebuild in migration 022 as the writer.",
+      "The defect is pre-existing, not introduced by w3: on the installed baseline `bd version 0.34.0 (f31496d65)`, setting pinned=1 in a scratch store and running `bd list` resets pinned to 0 the same way.",
+      "Because of this, `bd claim --lease 1s` is never stealable from another process: the second claimant sees claim_expires_at NULL, reads it as 'never expires' and is denied with deny_reason=held (exit 3)."
+    ],
+    "why_not_fixed_here": "The fix belongs in internal/storage/sqlite/migrations/*, which is outside this bead's ## Touches (work/w3_atomic-claim/e2e_claim.sh and work/w3_atomic-claim/artifacts/*), and it changes migration behaviour for every existing store on the host. That needs its own bead and its own review.",
+    "suggested_fix": "Make 022 idempotent against re-addition (drop the 019 entries for replies_to/relates_to/duplicate_of/superseded_by, or have 022 record completion and 019 skip the four edge columns once 022 has run), and have any issues-table rebuild copy columns by introspection rather than by a hard-coded list. Add a regression test that writes a value into a post-022 column, reopens the store, and asserts the value survives.",
+    "unit_tests_pass_because": "The storage tests exercise ClaimIssue within a single open store, where the 019/022 pair has already run and does not run again; only a second process exposes the wipe. That is exactly the gap this E2E proof was written to close."
+  },
+  "acceptance": [
+    {
+      "criterion": "Full test suite passes",
+      "command": "go test ./...",
+      "exit": 0,
+      "log": "bd-ok4pr.4.2.1786124765602796418_step1.log"
+    },
+    {
+      "criterion": "Binary under test builds",
+      "command": "go build -o /tmp/bd-w3 ./cmd/bd/",
+      "exit": 0,
+      "log": "bd-ok4pr.4.2.1786124765602796418_step2.log"
+    },
+    {
+      "criterion": "E2E script is executable",
+      "command": "test -x work/w3_atomic-claim/e2e_claim.sh",
+      "exit": 0,
+      "log": "bd-ok4pr.4.2.1786124765602796418_step3.log"
+    },
+    {
+      "criterion": "E2E script prints E2E_PASS as its last line",
+      "command": "mkdir -p work/w3_atomic-claim/artifacts && bash work/w3_atomic-claim/e2e_claim.sh | tee work/w3_atomic-claim/artifacts/e2e_claim_output.txt | tail -1 | grep -q E2E_PASS",
+      "exit": 1,
+      "log": "bd-ok4pr.4.2.1786124765602796418_step4.log"
+    },
+    {
+      "criterion": "CAS proof line present in the artifact",
+      "command": "grep -q 'one exit=0, one exit=3' work/w3_atomic-claim/artifacts/e2e_claim_output.txt",
+      "exit": 0,
+      "log": "bd-ok4pr.4.2.1786124765602796418_step5.log"
+    },
+    {
+      "criterion": "E2E output artifact is non-empty",
+      "command": "test -s work/w3_atomic-claim/artifacts/e2e_claim_output.txt",
+      "exit": 0,
+      "log": "bd-ok4pr.4.2.1786124765602796418_step6.log"
+    },
+    {
+      "criterion": "Claim race test passes five times",
+      "command": "go test ./internal/storage/sqlite/ -run TestClaimRace -count=5",
+      "exit": 0,
+      "log": "bd-ok4pr.4.2.1786124765602796418_step7.log"
+    },
+    {
+      "criterion": "Denial writes nothing",
+      "command": "go test ./internal/storage/sqlite/ -run TestClaimDeniedNoWrite",
+      "exit": 0,
+      "log": "bd-ok4pr.4.2.1786124765602796418_step8.log"
+    },
+    {
+      "criterion": "Prior HEAD recorded for rollback",
+      "command": "git rev-parse HEAD > work/w3_atomic-claim/artifacts/prior_head.txt",
+      "exit": 0,
+      "log": "bd-ok4pr.4.2.1786124765602796418_step9.log"
+    },
+    {
+      "criterion": "Prior HEAD artifact is non-empty",
+      "command": "test -s work/w3_atomic-claim/artifacts/prior_head.txt",
+      "exit": 0,
+      "log": "bd-ok4pr.4.2.1786124765602796418_step10.log"
+    }
+  ],
+  "notes": [
+    "The E2E script passes step 1 (scratch store + issue), step 2 (two concurrent claims: exactly one exit 0 and one exit 3, stored assignee equals the winner, line 'one exit=0, one exit=3' printed) and step 5 (leaving in_progress clears the lease). Steps 3, 4 and 6 fail on the migration defect above.",
+    "The script never touches the fleet store, ~/.local/bin/bd or any daemon: every invocation carries --no-daemon and an explicit --db under a mktemp -d directory it removes via a trap on EXIT, INT and TERM.",
+    "No install or daemon command was run; the deploy sequence stays with the manager per the bead's SCOPE CHANGE note.",
+    "prior_head.txt records dcbe1a6121d45d6c2c665641c68b4b27ec08df82, the HEAD before this run's commit.",
+    "The script requires jq and sqlite3 and fails early with a named message if either is missing; sqlite3 reads only the script's own scratch store, to assert the steal event's previous_holder."
+  ]
+}

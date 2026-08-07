@@ -1,0 +1,15 @@
+bd-ok4pr.1.6 is implemented, gated, committed (`e18c180`), and closed. All five contract items landed:
+
+1. **Probe test for `claim_expires_at`** — `TestProbeSchema_DetectsDroppedClaimExpiresAt` builds a migrated in-memory DB, runs `ALTER TABLE issues DROP COLUMN claim_expires_at`, and asserts `verifySchemaCompatibility` returns an error wrapping `ErrSchemaIncompatible` whose text names the column.
+2. **`is_template` added** to `expectedSchema["issues"]`; the issues list is now fully probed.
+3. **Schema-constant drift test** — `TestSchemaConstantCoversProbedIssueColumns` executes the `schema` constant alone into a bare DB with no migrations and asserts every probed issues column exists. Two columns were genuinely missing from the constant, `source_repo` and `close_reason` (added late by migrations 012 and 017), so I mirrored them into the constant; both migrations already no-op when the column exists, so a fresh DB behaves identically.
+4. **Payload de-duplicated** — `ClaimEventValue` and `RenderClaimEventValues` now live in `internal/types/types.go`, including the steal-only `PreviousHolder` rule. Both `recordClaimEvent` (sqlite) and `MemoryStorage.ClaimIssue` call it; both backend-local copies are deleted, with no forwarding wrapper.
+5. **Memory lease update hardened** — the `claim_expires_at` case is now a type switch accepting `nil`, `*time.Time` and `time.Time` (by value, as the sqlite path admits), and returning an error naming the field on anything else instead of falling through.
+
+Mutation checks, each run and then reverted:
+
+- Removing `"claim_expires_at"` from the probe list → `TestProbeSchema_DetectsDroppedClaimExpiresAt` fails ("expected an incompatibility error after dropping claim_expires_at").
+- Removing `claim_expires_at TIMESTAMP` from the `schema` constant → `TestSchemaConstantCoversProbedIssueColumns` fails, naming the missing column.
+- Removing the `time.Time` case from the memory update switch → `TestUpdateIssueClaimExpiresAtValueTypes` fails ("claim_expires_at was dropped for a time.Time value").
+
+All four Acceptance commands exit 0; step logs are in `work/w3_atomic-claim/builds/`. Build report written; nothing pushed.

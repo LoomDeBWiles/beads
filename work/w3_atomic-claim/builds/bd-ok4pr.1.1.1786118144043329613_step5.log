@@ -1,0 +1,3 @@
+$ grep -q 'ClaimExpiresAt' internal/types/types.go
+
+exit=0

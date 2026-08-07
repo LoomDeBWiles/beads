@@ -1,0 +1,142 @@
+Review plan_v1.md for w3_atomic-claim (atomic claim verb + owner lease in the bd fork) — identify gaps that would cause rework, ship a claim that can still lose a race, corrupt store data across 17 live databases, or break the JSONL/merge pipeline.
+
+<instructions>
+1. Read the plan, then read every referenced file to verify assumptions
+2. For each checklist item, evaluate against the actual files
+3. YAGNI, both directions. For every guard, gate, validator, retry, and test
+   the artifact carries: if it does not serve a named failure or requested
+   behavior, report a finding whose fix is to delete it. For your own findings:
+   never propose adding machinery unless a failure you can cite demands it and
+   nothing already in the design covers it — the best fix deletes or simplifies
+4. Only report issues that need fixing — skip observations, style, and low-probability concerns
+5. Add one finding row per issue (see output format)
+6. Output the canonical verdict line: CLEAN or FIX
+</instructions>
+
+<files>
+Plan under review:
+- /home/ben/worktrees/beads/w3_atomic-claim/work/w3_atomic-claim/plan_v1.md — the artifact
+- /home/ben/worktrees/beads/w3_atomic-claim/work/w3_atomic-claim/manager_log.md — settled decisions (pre-plan lock-in, probe outputs, design dispositions)
+
+Repo maps:
+- /home/ben/worktrees/beads/w3_atomic-claim/CODEMAP.md — architecture, common-task recipes (add CLI command / RPC op / storage method / migration)
+- /home/ben/worktrees/beads/w3_atomic-claim/CONTEXT.md — gotchas (stale daemons, jsonlpub freshness invariant)
+
+Source the plan changes or depends on:
+- /home/ben/worktrees/beads/w3_atomic-claim/internal/storage/sqlite/queries.go — UpdateIssue (:637, the racy path), manageClosedAt (:592), CloseIssue (:951)
+- /home/ben/worktrees/beads/w3_atomic-claim/internal/storage/sqlite/transaction.go — BEGIN IMMEDIATE RunInTransaction (:29-41), sqliteTxStorage.UpdateIssue/CloseIssue, scanIssueRow (:1149)
+- /home/ben/worktrees/beads/w3_atomic-claim/internal/storage/storage.go — Storage + Transaction interfaces
+- /home/ben/worktrees/beads/w3_atomic-claim/internal/storage/sqlite/store.go — connection string, busy_timeout (:113)
+- /home/ben/worktrees/beads/w3_atomic-claim/internal/storage/sqlite/migrations.go — RunMigrations (:107)
+- /home/ben/worktrees/beads/w3_atomic-claim/internal/storage/sqlite/migrations/023_pinned_column.go — the column-add pattern the plan mirrors
+- /home/ben/worktrees/beads/w3_atomic-claim/internal/types/types.go — Issue struct (:12), ComputeContentHash (:67)
+- /home/ben/worktrees/beads/w3_atomic-claim/internal/merge/merge.go — merge driver Issue struct (:41), mergeIssue (:542)
+- /home/ben/worktrees/beads/w3_atomic-claim/internal/rpc/protocol.go — ops + UpdateArgs (:85)
+- /home/ben/worktrees/beads/w3_atomic-claim/internal/rpc/client.go — client call pattern
+- /home/ben/worktrees/beads/w3_atomic-claim/internal/rpc/server_issues_epics.go — update handler pattern
+- /home/ben/worktrees/beads/w3_atomic-claim/cmd/bd/show.go — updateCmd (:461), the CLI pattern claim mirrors
+- /home/ben/worktrees/beads/w3_atomic-claim/cmd/bd/main.go — command registration, daemon routing (:615-682), autostart (:414-424)
+- /home/ben/worktrees/beads/w3_atomic-claim/cmd/bd/export.go and /home/ben/worktrees/beads/w3_atomic-claim/cmd/bd/import.go — JSONL round-trip paths the plan claims survive via json tag
+</files>
+
+<checklist>
+USER INTENT
+- Plan states what the user asked for? (not what the agent decided to build)
+- Every proposed change traces back to user intent? (flag gold-plating)
+- If the plan succeeds perfectly, does the user get what they wanted: an atomic claim whose loser gets a nonzero exit, and lease-based steal replacing blind recovery?
+
+EVIDENCE
+- Design decisions grounded in code? (file:line citations, not assumptions)
+- Quantities measured? (probe outputs, store counts)
+
+MECHANISMS EXIST
+- Every upstream mechanism the plan depends on: traced the code path — not just confirmed the name exists?
+- BEGIN IMMEDIATE serialization claim (transaction.go:29): does the driver honor it per-connection here, and does the plan's claim path actually run inside it?
+- Migration idempotency claim (migrations.go:107): does the 023 pattern the plan mirrors actually guard column-exists?
+- Content-hash refresh claim: verify ComputeContentHash covers assignee+status and that a claim without hash refresh would actually diverge export freshness
+- JSONL round-trip via json tag: read export.go/import.go — does import rebuild issues through a path that would drop an unknown struct field (explicit field mapping) as the plan's Phase 3 hedge suggests?
+
+PROOF-TEST
+- Plan depends on unverified hypothesis about upstream behavior? If yes: sandboxed proof-test step included?
+- The race reproduction probe exists; is the fixed-behavior E2E (one exit 0, one exit 3) specified concretely enough to execute?
+
+SCOPE
+- "Not in Scope" entries match the user's boundaries: nothing excluded that the intent requires? (caller migrations were explicitly deferred to follow-up items in manager_log)
+- "Files NOT Affected" reasons: would they survive reading the code? Especially importer.go and jsonlpub.
+- Deploy included (Done-includes-deploy: yes in manager_log) — deploy steps complete for a binary with 6 live daemons and 17 stores?
+
+MINIMALITY
+- Every guard, lock, ledger, retry, and config flag: which named failure justifies it? Every test: which requested behavior or named invariant? Over-engineering is a defect.
+- Is the lease/steal/renew semantics the minimal design that removes both the claim race and the blind-recovery overwrite, or is there simpler?
+- Exit code 3: justified vs plain exit 1?
+- Merge-driver assignee fix: in-scope correctness fix or scope creep? (plan argues same root: field-drop on conflict)
+
+VERIFICATION
+- Verification commands runnable, expected outputs correct for this system?
+- At least one proof-of-behavior check beyond "tests pass"?
+- E2E verification describes the whole system (daemon + direct modes)?
+- Architectural principle "claim is the only preconditioned path; update stays unconditioned" — is there a check verifying the principle itself?
+
+KEY INSIGHT
+- States what breaks if you forget, and is actually non-obvious?
+
+ALGORITHM
+- The claim decision matrix (open/renew/steal/deny): concrete trace present? Any undefined cell (e.g. blocked status, custom statuses, tombstone, is_template, pinned, wisp issues; claim on an epic; empty --assignee)?
+- Lease semantics edge cases: renew with absent --lease clears expiry — is that the intended contract or a footgun the plan should define differently? Steal at exactly now == claim_expires_at?
+
+PHASE GATES
+- Each phase's gate quantitative? Gates ordered?
+
+LIVE STATE
+- Plan touches running daemons → verified what's deployed? Rollout window (old daemon + new CLI or vice versa) reasoned about? RPC version skew: old daemon receiving unknown OpClaim — what happens (traced, not assumed)?
+
+RISKS & ROLLBACK
+- Risks identified with mitigations? Rollback covers the additive migration and binary reinstall claims — verify old-binary-ignores-new-column is actually true for these scanners (explicit column lists vs SELECT *)?
+
+SIZING/TOUCHES/CONTRACT/ACCEPTANCE/DEPENDENCIES/DECOMPOSITION (Execution Handoff claims ~6 beads)
+- Every affected caller, consumer, and new file accounted for? (scan sites via the pinned-grep enumeration claim — spot-check it: does `pinned` actually appear in every scanner/insert the new column must touch?)
+- Each change row maps to at most 1 bead? Rows with 3+ functions → split?
+
+SCENARIO TRACE (read source, walk the code)
+1. Two builders race `bd claim` in daemon mode: CLI → RPC OpClaim → store.ClaimIssue — does the daemon serialize, and does the loser's denial propagate as exit 3 through the RPC error path (read how existing handlers map errors to client exits)?
+2. Builder claims with --lease in direct mode while the workspace daemon is running (mixed-mode write): is that possible today via --no-daemon, and does it break the serialization story?
+3. Claimed bead exported → JSONL → imported in a linked worktree flush cycle (w645 generated lanes): does claim_expires_at survive, and does the daemon's debounced export fire on a claim (dirty mark → MutationUpdate)?
+- Flag silent misses and cross-system assumptions at each step.
+
+OPERATIONAL
+- Every CLI flag in plan commands verified to exist (bd init/create/update/show flags used in E2E)?
+- Deploy failure mid-way (install succeeds, daemon restart fails): state? Partial results preserved?
+- Missing steps between build → install → daemon restart → live verify?
+</checklist>
+
+<output>
+Write review to: /home/ben/worktrees/beads/w3_atomic-claim/work/w3_atomic-claim/review_codex_v1.md
+- Subagent writes the file directly — parent reads it afterward
+</output>
+
+<output-format>
+Output exactly this — the verdict line plus finding rows, no other prose:
+
+VERDICT: CLEAN|FIX findings=N
+| ID | sev | file:line | defect (one sentence) | fix (one sentence) |
+|---|---|---|---|---|
+
+- CLEAN requires findings=0; FIX requires one or more finding rows.
+- sev: high = design or behavior must change; med = correctness risk in a
+  specific case; low = wording, docs, cosmetic.
+- N states the true total; the table lists every finding, no cap.
+- Each defect sentence stands alone — the manager dispositions it with no
+  follow-up round: name the mechanism and the consequence, grounded in
+  file:line and, when needed, a number or a ≤10-word quote.
+- Each fix sentence is a concrete change to the artifact under review.
+</output-format>
+
+<constraints>
+- Read every file listed above before evaluating — do not guess
+- Only report issues that will cause rework, wrong behavior, degraded result, data corruption, or miss user intent
+- If it doesn't need fixing, don't report it
+- Do not suggest scope expansion — only evaluate the plan as written
+- Decisions recorded in manager_log.md are settled — do not re-open them absent safety evidence
+- Do not create or modify the artifact under review — only write your review file
+- Load the elegant skill and the coding skill before evaluating (architectural change + code changes); load the testing skill for the test rows and the beads skill for the Execution Handoff decomposition claim
+</constraints>

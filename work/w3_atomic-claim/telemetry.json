@@ -1,0 +1,318 @@
+{
+  "schema": 2,
+  "item_id": "beads__w3__atomic-claim",
+  "repo": "beads",
+  "work_id": "w3",
+  "slug": "atomic-claim",
+  "dates": {
+    "first": "2026-08-07",
+    "last": "2026-08-07",
+    "source": "log-entries"
+  },
+  "route": "free",
+  "orchestrator_failed": null,
+  "route_evidence": "found direct builder execution artifacts: builds/bd-ok4pr.1.1.1786118144043329613_step1.log, builds/bd-ok4pr.1.1.1786118144043329613_step2.log, builds/bd-ok4pr.1.1.1786118144043329613_step3.log, builds/bd-ok4pr.1.1.1786118144043329613_step4.log, builds/bd-ok4pr.1.1.1786118144043329613_step5.log, builds/bd-ok4pr.1.1.1786118144043329613_step6.log, builds/bd-ok4pr.1.1.1786118144043329613_step7.log, builds/bd-ok4pr.1.1.1786118144043329613_step8.log, builds/bd-ok4pr.1.2.1786119304126143397_step1.log, builds/bd-ok4pr.1.2.1786119304126143397_step2.log, builds/bd-ok4pr.1.2.1786119304126143397_step3.log, builds/bd-ok4pr.1.2.1786119304126143397_step4.log, builds/bd-ok4pr.1.2.1786119304126143397_step5.log, builds/bd-ok4pr.1.2.1786119304126143397_step6.log, builds/bd-ok4pr.1.2.1786119304126143397_step7.log, builds/bd-ok4pr.1.3.1786119304518562984_step1.log, builds/bd-ok4pr.1.3.1786119304518562984_step10.log, builds/bd-ok4pr.1.3.1786119304518562984_step2.log, builds/bd-ok4pr.1.3.1786119304518562984_step3.log, builds/bd-ok4pr.1.3.1786119304518562984_step4.log, builds/bd-ok4pr.1.3.1786119304518562984_step5.log, builds/bd-ok4pr.1.3.1786119304518562984_step6.log, builds/bd-ok4pr.1.3.1786119304518562984_step7.log, builds/bd-ok4pr.1.3.1786119304518562984_step8.log, builds/bd-ok4pr.1.3.1786119304518562984_step9.log, builds/bd-ok4pr.1.4.1786120664782510009_step1.log, builds/bd-ok4pr.1.4.1786120664782510009_step2.log, builds/bd-ok4pr.1.4.1786120664782510009_step3.log, builds/bd-ok4pr.1.4.1786120664782510009_step4.log, builds/bd-ok4pr.1.4.1786120664782510009_step5.log, builds/bd-ok4pr.1.5.1786121791555322720_step1.log, builds/bd-ok4pr.1.5.1786121791555322720_step2.log, builds/bd-ok4pr.1.5.1786121791555322720_step3.log, builds/bd-ok4pr.1.6.1786121792434235601_step1.log, builds/bd-ok4pr.1.6.1786121792434235601_step2.log, builds/bd-ok4pr.1.6.1786121792434235601_step3.log, builds/bd-ok4pr.1.6.1786121792434235601_step4.log, builds/bd-ok4pr.1.7.1786123306148603375_step1.log, builds/bd-ok4pr.1.7.1786123306148603375_step2.log, builds/bd-ok4pr.1.7.1786123306148603375_step3.log, builds/bd-ok4pr.1.7.1786123306148603375_step4.log, builds/bd-ok4pr.1.8.1786126221148056130_step1.log, builds/bd-ok4pr.1.8.1786126221148056130_step2.log, builds/bd-ok4pr.1.8.1786126221148056130_step3.log, builds/bd-ok4pr.1.8.1786126221148056130_step4.log, builds/bd-ok4pr.1.8.1786126221148056130_step5.log, builds/bd-ok4pr.1.8.1786126221148056130_step6.log, builds/bd-ok4pr.1.9.1786128058475942864_step1.log, builds/bd-ok4pr.1.9.1786128058475942864_step2.log, builds/bd-ok4pr.1.9.1786128058475942864_step3.log, builds/bd-ok4pr.1.9.1786128058475942864_step4.log, builds/bd-ok4pr.1.9.1786128058475942864_step5.log, builds/bd-ok4pr.2.1.1786119304934325447_step1.log, builds/bd-ok4pr.2.1.1786119304934325447_step10.log, builds/bd-ok4pr.2.1.1786119304934325447_step2.log, builds/bd-ok4pr.2.1.1786119304934325447_step3.log, builds/bd-ok4pr.2.1.1786119304934325447_step4.log, builds/bd-ok4pr.2.1.1786119304934325447_step5.log, builds/bd-ok4pr.2.1.1786119304934325447_step6.log, builds/bd-ok4pr.2.1.1786119304934325447_step7.log, builds/bd-ok4pr.2.1.1786119304934325447_step8.log, builds/bd-ok4pr.2.1.1786119304934325447_step9.log, builds/bd-ok4pr.2.2.1786121791963235628_step1.log, builds/bd-ok4pr.2.2.1786121791963235628_step2.log, builds/bd-ok4pr.2.2.1786121791963235628_step3.log, builds/bd-ok4pr.2.2.1786121791963235628_step4.log, builds/bd-ok4pr.2.3.1786123306564418455_step1.log, builds/bd-ok4pr.2.3.1786123306564418455_step2.log, builds/bd-ok4pr.2.3.1786123306564418455_step3.log, builds/bd-ok4pr.2.3.1786123306564418455_step4.log, builds/bd-ok4pr.3.1.1786120665171689172_step1.log, builds/bd-ok4pr.3.1.1786120665171689172_step2.log, builds/bd-ok4pr.3.1.1786120665171689172_step3.log, builds/bd-ok4pr.3.1.1786120665171689172_step4.log, builds/bd-ok4pr.3.1.1786120665171689172_step5.log, builds/bd-ok4pr.3.1.1786120665171689172_step6.log, builds/bd-ok4pr.3.2.1786118144677961643_step1.log, builds/bd-ok4pr.3.2.1786118144677961643_step2.log, builds/bd-ok4pr.3.2.1786118144677961643_step3.log, builds/bd-ok4pr.3.2.1786118144677961643_step4.log, builds/bd-ok4pr.3.2.1786118144677961643_step5.log, builds/bd-ok4pr.3.2.1786118144677961643_step6.log, builds/bd-ok4pr.3.3.1786121792848710033_step1.log, builds/bd-ok4pr.3.3.1786121792848710033_step2.log, builds/bd-ok4pr.3.3.1786121792848710033_step3.log, builds/bd-ok4pr.3.3.1786121792848710033_step4.log, builds/bd-ok4pr.3.4.1786123307028141032_step1.log, builds/bd-ok4pr.3.4.1786123307028141032_step2.log, builds/bd-ok4pr.3.4.1786123307028141032_step3.log, builds/bd-ok4pr.4.1.1786120665573585553_step1.log, builds/bd-ok4pr.4.1.1786120665573585553_step2.log, builds/bd-ok4pr.4.1.1786120665573585553_step3.log, builds/bd-ok4pr.4.1.1786120665573585553_step4.log, builds/bd-ok4pr.4.2.1786124765602796418_step1.log, builds/bd-ok4pr.4.2.1786124765602796418_step10.log, builds/bd-ok4pr.4.2.1786124765602796418_step2.log, builds/bd-ok4pr.4.2.1786124765602796418_step3.log, builds/bd-ok4pr.4.2.1786124765602796418_step4.log, builds/bd-ok4pr.4.2.1786124765602796418_step5.log, builds/bd-ok4pr.4.2.1786124765602796418_step6.log, builds/bd-ok4pr.4.2.1786124765602796418_step7.log, builds/bd-ok4pr.4.2.1786124765602796418_step8.log, builds/bd-ok4pr.4.2.1786124765602796418_step9.log, builds/bd-ok4pr.4.2.1786127113258652334_step1.log, builds/bd-ok4pr.4.2.1786127113258652334_step10.log, builds/bd-ok4pr.4.2.1786127113258652334_step2.log, builds/bd-ok4pr.4.2.1786127113258652334_step3.log, builds/bd-ok4pr.4.2.1786127113258652334_step4.log, builds/bd-ok4pr.4.2.1786127113258652334_step5.log, builds/bd-ok4pr.4.2.1786127113258652334_step6.log, builds/bd-ok4pr.4.2.1786127113258652334_step7.log, builds/bd-ok4pr.4.2.1786127113258652334_step8.log, builds/bd-ok4pr.4.2.1786127113258652334_step9.log, builds/bd-ok4pr.4.3.1786118145278812025_step1.log, builds/bd-ok4pr.4.3.1786118145278812025_step2.log, builds/bd-ok4pr.4.3.1786118145278812025_step3.log, builds/bd-ok4pr.4.3.1786118145278812025_step4.log, builds/bd-ok4pr.4.3.1786118145278812025_step5.log, builds/bd-ok4pr.4.4.1786121793299201539_step1.log, builds/bd-ok4pr.4.4.1786121793299201539_step2.log, builds/bd-ok4pr.4.4.1786121793299201539_step3.log, builds/bd-ok4pr.4.4.1786121793299201539_step4.log, builds/bd-ok4pr.4.5.1786124495612483839_step1.log, builds/bd-ok4pr.4.5.1786124495612483839_step2.log, builds/bd-ok4pr.4.5.1786124495612483839_step3.log, builds/bd-ok4pr.4.5.1786124495612483839_step4.log",
+  "task_type": "code",
+  "ext_shares": {
+    "infra": 0.0,
+    "prompt_skill": 0.0,
+    "context_docs": 0.0,
+    "config": 0.0,
+    "code": 0.9393939393939394,
+    "docs": 0.06060606060606061
+  },
+  "plan_reviews": [
+    {
+      "round": "v1",
+      "model": "fable-5",
+      "model_confidence": "dispatch",
+      "raised": 6,
+      "accepted": 6,
+      "rejected": 0,
+      "effort": "high"
+    },
+    {
+      "round": "v2",
+      "model": "opus-5",
+      "model_confidence": "dispatch",
+      "raised": 8,
+      "accepted": 8,
+      "rejected": 0,
+      "effort": "high"
+    },
+    {
+      "round": "v3",
+      "model": "opus-5",
+      "model_confidence": "dispatch",
+      "raised": 7,
+      "accepted": 7,
+      "rejected": 0,
+      "effort": "high"
+    },
+    {
+      "round": "v4",
+      "model": "opus-5",
+      "model_confidence": "dispatch",
+      "raised": 0,
+      "accepted": 0,
+      "rejected": 0,
+      "effort": "high"
+    }
+  ],
+  "final_reviews": [
+    {
+      "version": "v1",
+      "model": "opus-5",
+      "model_confidence": "dispatch",
+      "raised": 2,
+      "accepted": null,
+      "rejected": null,
+      "repaired": null
+    }
+  ],
+  "fix_cycles": 0,
+  "builder_dispatches": [
+    {
+      "bead": "bd-ok4pr",
+      "run": "1786118144043329613",
+      "model": "opus-5",
+      "effort": "medium",
+      "model_confidence": "dispatch",
+      "outcome": "completed",
+      "review_verdict": "unknown",
+      "review_artifact": "unknown"
+    },
+    {
+      "bead": "bd-ok4pr",
+      "run": "1786119304126143397",
+      "model": "opus-5",
+      "effort": "medium",
+      "model_confidence": "dispatch",
+      "outcome": "completed",
+      "review_verdict": "unknown",
+      "review_artifact": "unknown"
+    },
+    {
+      "bead": "bd-ok4pr",
+      "run": "1786119304518562984",
+      "model": "opus-5",
+      "effort": "medium",
+      "model_confidence": "dispatch",
+      "outcome": "completed",
+      "review_verdict": "unknown",
+      "review_artifact": "unknown"
+    },
+    {
+      "bead": "bd-ok4pr",
+      "run": "1786120664782510009",
+      "model": "opus-5",
+      "effort": "medium",
+      "model_confidence": "dispatch",
+      "outcome": "completed",
+      "review_verdict": "unknown",
+      "review_artifact": "unknown"
+    },
+    {
+      "bead": "bd-ok4pr",
+      "run": "1786121791555322720",
+      "model": "opus-5",
+      "effort": "medium",
+      "model_confidence": "dispatch",
+      "outcome": "completed",
+      "review_verdict": "unknown",
+      "review_artifact": "unknown"
+    },
+    {
+      "bead": "bd-ok4pr",
+      "run": "1786121792434235601",
+      "model": "opus-5",
+      "effort": "medium",
+      "model_confidence": "dispatch",
+      "outcome": "completed",
+      "review_verdict": "unknown",
+      "review_artifact": "unknown"
+    },
+    {
+      "bead": "bd-ok4pr",
+      "run": "1786123306148603375",
+      "model": "opus-5",
+      "effort": "medium",
+      "model_confidence": "dispatch",
+      "outcome": "completed",
+      "review_verdict": "unknown",
+      "review_artifact": "unknown"
+    },
+    {
+      "bead": "bd-ok4pr",
+      "run": "1786126221148056130",
+      "model": "opus-5",
+      "effort": "medium",
+      "model_confidence": "dispatch",
+      "outcome": "completed",
+      "review_verdict": "unknown",
+      "review_artifact": "unknown"
+    },
+    {
+      "bead": "bd-ok4pr",
+      "run": "1786128058475942864",
+      "model": "opus-5",
+      "effort": "medium",
+      "model_confidence": "dispatch",
+      "outcome": "completed",
+      "review_verdict": "unknown",
+      "review_artifact": "unknown"
+    },
+    {
+      "bead": "bd-ok4pr",
+      "run": "1786119304934325447",
+      "model": "opus-5",
+      "effort": "medium",
+      "model_confidence": "dispatch",
+      "outcome": "completed",
+      "review_verdict": "unknown",
+      "review_artifact": "unknown"
+    },
+    {
+      "bead": "bd-ok4pr",
+      "run": "1786121791963235628",
+      "model": "opus-5",
+      "effort": "medium",
+      "model_confidence": "dispatch",
+      "outcome": "completed",
+      "review_verdict": "unknown",
+      "review_artifact": "unknown"
+    },
+    {
+      "bead": "bd-ok4pr",
+      "run": "1786123306564418455",
+      "model": "opus-5",
+      "effort": "medium",
+      "model_confidence": "dispatch",
+      "outcome": "completed",
+      "review_verdict": "unknown",
+      "review_artifact": "unknown"
+    },
+    {
+      "bead": "bd-ok4pr",
+      "run": "1786120665171689172",
+      "model": "opus-5",
+      "effort": "medium",
+      "model_confidence": "dispatch",
+      "outcome": "completed",
+      "review_verdict": "unknown",
+      "review_artifact": "unknown"
+    },
+    {
+      "bead": "bd-ok4pr",
+      "run": "1786118144677961643",
+      "model": "opus-5",
+      "effort": "medium",
+      "model_confidence": "dispatch",
+      "outcome": "completed",
+      "review_verdict": "unknown",
+      "review_artifact": "unknown"
+    },
+    {
+      "bead": "bd-ok4pr",
+      "run": "1786121792848710033",
+      "model": "opus-5",
+      "effort": "medium",
+      "model_confidence": "dispatch",
+      "outcome": "completed",
+      "review_verdict": "unknown",
+      "review_artifact": "unknown"
+    },
+    {
+      "bead": "bd-ok4pr",
+      "run": "1786123307028141032",
+      "model": "opus-5",
+      "effort": "medium",
+      "model_confidence": "dispatch",
+      "outcome": "completed",
+      "review_verdict": "unknown",
+      "review_artifact": "unknown"
+    },
+    {
+      "bead": "bd-ok4pr",
+      "run": "1786120665573585553",
+      "model": "opus-5",
+      "effort": "medium",
+      "model_confidence": "dispatch",
+      "outcome": "completed",
+      "review_verdict": "unknown",
+      "review_artifact": "unknown"
+    },
+    {
+      "bead": "bd-ok4pr",
+      "run": "1786124765602796418",
+      "model": "opus-5",
+      "effort": "medium",
+      "model_confidence": "dispatch",
+      "outcome": "completed",
+      "review_verdict": "unknown",
+      "review_artifact": "unknown"
+    },
+    {
+      "bead": "bd-ok4pr",
+      "run": "1786127113258652334",
+      "model": "opus-5",
+      "effort": "medium",
+      "model_confidence": "dispatch",
+      "outcome": "completed",
+      "review_verdict": "unknown",
+      "review_artifact": "unknown"
+    },
+    {
+      "bead": "bd-ok4pr",
+      "run": "1786118145278812025",
+      "model": "opus-5",
+      "effort": "medium",
+      "model_confidence": "dispatch",
+      "outcome": "completed",
+      "review_verdict": "unknown",
+      "review_artifact": "unknown"
+    },
+    {
+      "bead": "bd-ok4pr",
+      "run": "1786121793299201539",
+      "model": "opus-5",
+      "effort": "medium",
+      "model_confidence": "dispatch",
+      "outcome": "completed",
+      "review_verdict": "unknown",
+      "review_artifact": "unknown"
+    },
+    {
+      "bead": "bd-ok4pr",
+      "run": "1786124495612483839",
+      "model": "opus-5",
+      "effort": "medium",
+      "model_confidence": "dispatch",
+      "outcome": "completed",
+      "review_verdict": "unknown",
+      "review_artifact": "unknown"
+    }
+  ],
+  "bug_beads": 0,
+  "run_burn": {
+    "runs": 0,
+    "designed": 0,
+    "retry": 0,
+    "same_class_tail": 0,
+    "reviews_with_outcome": 0,
+    "zero_yield_reviews": 0
+  },
+  "triage_dispositions": {
+    "approve": 0,
+    "merge": 0,
+    "reject": 0
+  },
+  "failure_causes": [],
+  "parse": {
+    "dispositions": "enriched",
+    "sources": [
+      "manager_log.md"
+    ],
+    "notes": []
+  }
+}

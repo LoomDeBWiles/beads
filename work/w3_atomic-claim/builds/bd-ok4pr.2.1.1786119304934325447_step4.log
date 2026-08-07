@@ -1,0 +1,2 @@
+$ grep -q 'OpClaim' internal/rpc/protocol.go
+exit=0

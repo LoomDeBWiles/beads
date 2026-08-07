@@ -1,0 +1,2 @@
+$ grep -q "27 migrations" CODEMAP.md
+exit=0

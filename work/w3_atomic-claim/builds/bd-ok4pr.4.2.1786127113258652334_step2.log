@@ -1,0 +1,2 @@
+$ go build -o /tmp/bd-w3 ./cmd/bd/
+exit=0

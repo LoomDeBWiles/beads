@@ -1,0 +1,13 @@
+VERDICT: FIX findings=3. Review at `work/w3_atomic-claim/reviews/review_bd-ok4pr.1.2_v1.md`.
+
+Gate result, run unmodified: `go test ./internal/storage/sqlite/ -run 'TestClaim' -count=5` → **ok, 4.188s**.
+
+I falsified the load-bearing tests against a scratch copy in /tmp (worktree untouched, copy trashed afterwards):
+
+- **Race test is real.** Replacing `ClaimIssue` with a read-then-write that decides outside the transaction makes `TestClaimRace` fail with 4, 8, 4 winners across three runs. It genuinely proves the compare-and-swap. The pool is `NumCPU+1` connections on a file DB, so the goroutines really contend.
+- **`TestClaimDeniedNoWrite` bites on all three limbs.** A denial that touches only `updated_at` fails; a denial that only calls `markDirty` fails; the events check is a row count.
+- **Migration test is honest.** Migrations re-run by name on every open (no version table), the pre-027 shape is built in code via `ALTER TABLE ... DROP COLUMN` in a `t.TempDir()` DB, no fixture is committed, and removing `claim_expires_at_column` from the migration list fails the test.
+
+Ladder coverage is otherwise complete: open→claimed, held-unexpired→denied/`held`, self→renewed (including the expired-self rung above the steal rung), expired→stolen with `previous_holder` in the event, unowned `in_progress`→claimed, `blocked`→denied/`status`, empty and whitespace assignee→error, closed→error, no-lease→NULL and never stealable.
+
+The three findings are gaps, not wrong assertions: the lease duration is never checked against what was asked (a 7x-wrong expiry passes everything), the tombstone rung is claimed in a comment but never exercised (the `IsTombstone()` branch can be deleted with the suite green), and "not found" has no case.

@@ -1,0 +1,7 @@
+VERDICT: FIX findings=9 — written to `work/w3_atomic-claim/bead_review_codex_v1.md`.
+
+Coverage is complete (every plan Changes row maps to a bead) and there are no cycles, no person-in-the-loop beads, and no artifact-path violations. The blockers:
+
+- **1 high**: `bd-ok4pr.3.1` (importer + round-trip) isn't blocked by `bd-ok4pr.1.1`, but its `TestClaimRoundTrip` needs `ClaimExpiresAt`, migration 027 and `ClaimIssue` — parallel dispatch hands a builder a non-compiling package.
+- **7 med**: scripttest files pointed at `cmd/bd/testdata/script/` when the runner globs `testdata/*.txt` (gate would pass vacuously); two multi-file `grep -q` acceptance lines that short-circuit on the first match; a migration-fixture file outside Touches; an artifact `test -s` with no producing command; bare `bd version` that passes against the old binary; unrecorded `bd daemon --stop-all` across other agents' workspaces.
+- **1 low**: `bd-ok4pr.1.1` is a 12-file bead over the sizing test.

@@ -1,0 +1,6 @@
+?   	github.com/steveyegge/beads/internal/storage	[no test files]
+ok  	github.com/steveyegge/beads/internal/storage/memory	(cached)
+ok  	github.com/steveyegge/beads/internal/storage/sqlite	(cached)
+?   	github.com/steveyegge/beads/internal/storage/sqlite/migrations	[no test files]
+ok  	github.com/steveyegge/beads/internal/types	(cached)
+exit=0

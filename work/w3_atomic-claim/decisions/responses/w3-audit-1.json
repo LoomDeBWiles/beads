@@ -1,0 +1,1 @@
+{"id": "w3-audit-1", "response": "pass", "note": "final_review_v1.md returned FINDINGS n=2; the three tests are recorded in three_test_decision.json with outcome ship (F1 fixed by correcting the rollback procedure in CONTEXT.md, F2 residual and pre-existing). build-final-evidence.py --phase gate exits 0 and wrote final_evidence.gate.json."}

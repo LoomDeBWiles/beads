@@ -1,0 +1,55 @@
+You are a fresh-eyes reviewer on work item w3 in the `bd` fork (Go, v0.34).
+You are READ-ONLY: change no file, create no bead, commit nothing.
+
+## What to review
+Bead bd-ok4pr.1.3 — "Plumb claim_expires_at through the late-column read paths".
+Commit range in /home/ben/worktrees/beads/w3_atomic-claim:
+`git log -p a7e12fb35b0c58fa800efffcb329785155e7293a..9c7651f9df1efde06dbddb3fb8ee7654b02fa82d`
+
+Files changed: internal/storage/sqlite/{ready.go,dependencies.go,multirepo.go,labels.go,queries.go}
+Run no recursive rg/grep/find outside this worktree.
+
+## Judge against
+1. `bd --db /home/ben/projects/beads/.beads/beads.db --no-auto-import show bd-ok4pr.1.3`
+   — its Contract carries the closure method and the verified counterpart counts.
+2. `work/w3_atomic-claim/plan_v4.md` — the Phase 1 read-path rows.
+3. `~/projects/shared-docs/CODING_PRINCIPLES.md`.
+
+## Look hardest at
+This bead is an enumeration-closure job and its failure mode is SILENT: a missed
+column list makes the lease read back as nil, which compiles clean and passes
+every test that does not look for it. So verify closure yourself rather than
+trusting the diff:
+
+- Run `grep -n "pinned" internal/storage/sqlite/ready.go internal/storage/sqlite/dependencies.go internal/storage/sqlite/multirepo.go internal/storage/sqlite/labels.go internal/storage/sqlite/queries.go`
+  and check that every occurrence which is a SELECT/INSERT/UPDATE column-list
+  entry, a bind-value entry, a scanner variable declaration, or a scan target has
+  a `claim_expires_at` counterpart. WHERE-clause filters, comments and post-scan
+  boolean assignments correctly have none — the lease is never a filter.
+- `multirepo.go`: BOTH the INSERT copy path and the full-column UPDATE branch. A
+  claim always changes the content hash, so the copy-onto-existing-row path takes
+  the UPDATE branch; if only the INSERT was updated, that path rewrites
+  status/assignee while keeping the target's stale lease, producing an
+  `in_progress` row nothing can ever steal.
+- Every extended SELECT list must have its scanner extended in the same place.
+- The recursive dep-tree CTE queries (around dependencies.go:512 and :553) must
+  be UNCHANGED — their column lists are deliberately partial and their scanners
+  expect exactly those columns.
+
+## Run the gate yourself
+`cd /home/ben/worktrees/beads/w3_atomic-claim && go build ./... && go test ./internal/storage/...`
+Report the real result. Do not modify anything to make it pass.
+
+## Output
+Write your review to:
+/home/ben/worktrees/beads/w3_atomic-claim/work/w3_atomic-claim/reviews/review_bd-ok4pr.1.3_v1.md
+
+It contains exactly this — the verdict line plus finding rows, no other prose:
+
+VERDICT: CLEAN|FIX findings=N
+| ID | sev | file:line | defect (one sentence) | fix (one sentence) |
+|---|---|---|---|---|
+
+- CLEAN requires findings=0; FIX requires one or more finding rows.
+- sev: high = wrong behavior or a broken contract; med = correctness risk in a specific case; low = wording, cosmetic.
+- Each defect sentence stands alone: name the mechanism and the consequence.

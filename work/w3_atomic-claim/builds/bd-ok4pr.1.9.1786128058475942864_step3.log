@@ -1,0 +1,2 @@
+$ go vet ./internal/storage/... ./cmd/bd/
+exit=0

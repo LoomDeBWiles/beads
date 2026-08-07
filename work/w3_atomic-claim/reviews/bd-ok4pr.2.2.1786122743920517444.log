@@ -1,0 +1,16 @@
+Review written to `work/w3_atomic-claim/reviews/review_bd-ok4pr.2.2_v2.md`.
+
+**Gate (real result):** `go build ./...` OK; `go test ./cmd/bd/ ./internal/rpc/...` → both `ok` (24.8s / 4.3s). `go test ./...` also fully green. `go test ./cmd/bd/ -run Claim -v` executes `TestClaimExitCodesInDirectMode`, `TestClaimExitCodesInDaemonMode`, `TestClaimRPCRejectsNonPositiveLease` — all PASS, none skipped. `-tags scripttests` was not added anywhere.
+
+**Contract items, verified by mutation (each mutation reverted; `git status` clean):**
+
+| Item | Closed? | Mutation evidence |
+|---|---|---|
+| 1 tag-free exit-code test in the default gate | Partly | Tests do run. Exit 0 asserted literally; exit 1 asserted (making `closed` a denial instead of an error fails both mode tests). **Exit 3 is not asserted** — see F1. |
+| 2 daemon coverage proves the RPC route | Yes | Injecting `outcome.DenyReason = ""` in `handleClaim` fails only the daemon test, direct passes — the RPC handler is genuinely exercised. The metrics check (`OpClaim` counts) is what carries the proof; the stderr guard is weaker than its comment claims (F3). |
+| 3 same expiry both routes for sub-second lease | Yes | Deleting `lease = lease.Truncate(time.Second)` fails `TestClaimFlagsTruncatesSubSecondRemainder` (`1m30.5s` vs `90s`). |
+| 4 handler rejects zero/negative LeaseSeconds | Yes | Deleting the `< 1` guard fails `TestClaimRPCRejectsNonPositiveLease`, and the dump shows the exact harm: `claim_expires_at` one second *before* `updated_at`. Error string matches the CLI's `--lease must be at least 1s`. |
+
+Findings: F1 high (tautological exit-3 assertion — the gate stays green with `claimDeniedExit` changed to 1), F2 med (33 MB `/tmp` leak per test run), F3 low (fallback-warning guard inert without `BD_VERBOSE`).
+
+I trashed the 23 leaked `/tmp/bd-claim-e2e-*` directories (~760 MB) via `trash.sh`; restore batch `20260807T171731Z-1592071`.

@@ -1,0 +1,61 @@
+# Apply the accepted QA round-2 fixes to the w3 bead set
+
+<input>
+- Approved plan: /home/ben/worktrees/beads/w3_atomic-claim/work/w3_atomic-claim/plan_v4.md
+- QA round 2: /home/ben/worktrees/beads/w3_atomic-claim/work/w3_atomic-claim/bead_review_codex_v2.md
+- Repo: /home/ben/worktrees/beads/w3_atomic-claim (Go, the `bd` fork at v0.34)
+- Beads DB (use in EVERY bd command):
+  `bd --db /home/ben/projects/beads/.beads/beads.db --no-auto-import <verb> ...`
+- Tree: root bd-ok4pr; epics bd-ok4pr.1 .. .4; tasks .1.1 .1.2 .1.3 .2.1 .3.1 .3.2 .4.1 .4.2 .4.3
+</input>
+
+<instructions>
+1. Load Skill(beads) first — if that fails, read ~/projects/shared-docs/BEADS.md
+2. Edit the existing beads in place (`bd update`, `bd dep add`). Do not recreate
+   the tree and do not add or remove beads.
+3. The manager ACCEPTED findings 1, 2, 3, 4, 5, 8 and REJECTED findings 6 and 7.
+   Apply exactly the six accepted ones; change nothing for the two rejected.
+   - F1 (bd-ok4pr.4.2): `go install ./cmd/bd/` becomes
+     `GOBIN=$HOME/.local/bin go install ./cmd/bd/` in the Contract deploy
+     sequence and in the acceptance line. Manager-verified: `go env GOBIN` is
+     empty and GOPATH is /home/ben/go, so a bare `go install` writes
+     /home/ben/go/bin/bd (stale, dated 2025-07-18) while PATH resolves
+     /home/ben/.local/bin/bd first — the deploy would leave the fleet on the old
+     binary and the identity acceptance could not pass.
+   - F2 (bd-ok4pr.1.3): add `internal/storage/sqlite/labels.go` to Touches, and
+     name its `GetIssuesByLabel` SELECT list (labels.go:156-166) in the
+     Contract's closure list as a required `claim_expires_at` counterpart.
+     Manager-verified: that query's 26 columns are scanned by the shared
+     `scanIssues`.
+   - F3 (bd-ok4pr.1.1 and bd-ok4pr.1.3): add a Contract sentence to 1.1
+     EXCLUDING the SELECT lists that delegate to `s.scanIssues`
+     (`queries.go:1644` SearchIssues, `ready.go:114`, `labels.go:156`), and add
+     `internal/storage/sqlite/queries.go` to 1.3's Touches with an explicit line
+     requiring the `SearchIssues` list to change in the same bead as the shared
+     scanner. Manager-verified: SearchIssues ends in `return s.scanIssues(ctx, rows)`.
+   - F4 (bd-ok4pr.1.1): add a Contract line above the decision ladder —
+     `ClaimIssue` returns an error when the `assignee` ARGUMENT is empty or
+     whitespace-only, checked before the row is read. (The ladder's
+     `in_progress AND assignee == ""` row is about the STORED row, a different
+     thing; without this line the core contradicts bd-ok4pr.1.2's required
+     matrix.)
+   - F5 (bd-ok4pr.1.3): delete ":513, :554" from the `dependencies.go` change
+     row; cite :252, :274, :827-:837, :930-:941 instead, and state that the
+     recursive dep-tree queries at :512 and :553 carry no late columns (no
+     `pinned`, no `ephemeral`) and stay unchanged. Manager-verified in source.
+   - F8 (bd-ok4pr.4.2): the prior-HEAD step becomes
+     `git rev-parse HEAD > work/w3_atomic-claim/artifacts/prior_head.txt`
+     (parent created by the preceding `mkdir -p`), plus the acceptance line
+     `test -s work/w3_atomic-claim/artifacts/prior_head.txt`.
+4. Do NOT apply findings 6 and 7. Rejection rationale, for your consistency
+   check: both assume sibling builders share one worktree. They do not — this
+   item runs the manual playbook, where every builder gets its own run worktree
+   forked from the item tip (`wt-run.sh fork`), so a sibling's in-flight files
+   are never visible to another bead's gate.
+5. Every task must still carry `## Contract`, `## Acceptance` (exact runnable
+   commands, all exit 0, from the repo root), and `## Touches`.
+</instructions>
+
+<output>
+Write report to: /home/ben/worktrees/beads/w3_atomic-claim/work/w3_atomic-claim/bead_authoring_v3.md — exactly one line: `manifest: <epic-ids>` — comma-separated, every epic that is the DIRECT parent of a task.
+</output>

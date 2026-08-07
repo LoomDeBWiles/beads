@@ -1,0 +1,22 @@
+Bead tree created in `/home/ben/projects/beads/.beads/beads.db`, root `bd-ok4pr`, 4 phase epics, 7 tasks, no cycles.
+
+| Bead | Title | Blocked by |
+|---|---|---|
+| bd-ok4pr.1.1 | Add claim_expires_at column and atomic ClaimIssue storage core (P0) | — |
+| bd-ok4pr.1.2 | Test claim decision matrix and concurrent-claim race | 1.1 |
+| bd-ok4pr.2.1 | Add claim RPC op and bd claim CLI command | 1.1 |
+| bd-ok4pr.3.1 | Carry claim lease through importer update maps and round-trip test | — |
+| bd-ok4pr.3.2 | Model assignee and lease in the JSONL merge driver | — |
+| bd-ok4pr.4.1 | Update CODEMAP and CONTEXT for the claim verb | — |
+| bd-ok4pr.4.2 | Write E2E claim script, install binary, verify deploy | all six |
+
+Split decisions: Phase 3 became two beads because its file rows are two disjoint sets (importer.go/utils.go/export_test.go vs merge.go/merge_test.go); Phase 4 splits docs from deploy for the same reason. Phase 1 and Phase 3 carry no edge between them, per the plan's parallel-builder note.
+
+Every task description carries `## Contract` (plan Changes rows quoted verbatim), `## Acceptance` (shell commands from the phase Gate and the Proof-of-behavior table, all exit-0), and `## Touches` limited to that task's plan file paths. No review markers authored — manual per-bead playbook.
+
+Two things worth your eye:
+
+1. The deploy bead's acceptance includes `bd daemon --stop-all`, which stops daemons this session did not start. It is the plan's approved deploy step (w2 precedent, documented lifecycle op, daemons autostart), so I kept it, but it is the one step that touches processes outside the item.
+2. `bd-ok4pr.3.1`'s round-trip test needs `types.ClaimExpiresAt` from 1.1 to compile. I left the beads unblocked as instructed; a builder starting 3.1 before 1.1 lands will need to stub or wait.
+
+Report: `work/w3_atomic-claim/bead_authoring_v1.md` — `manifest: bd-ok4pr.1,bd-ok4pr.2,bd-ok4pr.3,bd-ok4pr.4`

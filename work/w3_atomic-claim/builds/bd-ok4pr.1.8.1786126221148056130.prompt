@@ -1,0 +1,71 @@
+You are a builder on work item w3 in the `bd` fork (Go, v0.34). Implement exactly one bead.
+
+## Your bead
+bd-ok4pr.1.8 — stop migrations wiping column data on every database open.
+
+## Your worktree (the ONLY tree you may write to)
+/home/ben/worktrees/beads/w3_atomic-claim/.runs/bd-ok4pr.1.8.1786126221148056130
+
+## Step 1 — read, in this order
+1. `work/w3_atomic-claim/rca_v1.md` — the full root-cause analysis: mechanism with line
+   numbers, live reproductions, blast radius, three candidate fixes with their risks, and
+   the falsification checks behind the conclusion. Read it BEFORE you write any code. Your
+   bead implements its recommendation.
+2. `bd --db /home/ben/projects/beads/.beads/beads.db --no-auto-import show bd-ok4pr.1.8`
+   `## Contract` is your spec, `## Acceptance` the exact commands, `## Touches` your
+   write allowlist.
+3. `~/projects/shared-docs/CODING_PRINCIPLES.md` and
+   `~/projects/shared-docs/TESTING_PRINCIPLES.md`.
+
+## Step 2 — implement
+This is the highest-stakes change in the item: it alters migration behavior for every
+`.beads` store on this machine, and 17 are live. Two rules follow from that.
+
+- Order matters. Fix B (rebuild copies columns discovered from `pragma_table_info`) must
+  land together with fix C (migration ledger), B first, because B is what makes C's single
+  final backfill pass lossless.
+- The backfill is exactly "run everything once more, then record everything". Behaviour-
+  identical to today for one open, so it cannot produce a state today's code would not
+  already produce. Any attempt to DETECT which migrations already ran and skip some can
+  leave a store half-migrated. The bead says do not; do not.
+
+The regression test is not optional garnish — it is the thing that stops this recurring.
+Enumerate columns from `pragma_table_info`, never from a hand-written list: a hand-written
+list would have been written in the same breath as 022's and would have carried the same
+three omissions.
+
+Hard boundaries: run migrations only against databases under your own `mktemp -d`. Never
+touch `/home/ben/projects/*/.beads/`, any other worktree's `.beads/`, or
+`~/.local/bin/bd`.
+
+Prove your fix with a real reproduction, not only unit tests — the unit suite passed
+throughout while this bug was live, because it never opens a populated store twice. In a
+temp store with a binary you build: write a value into `pinned` and `claim_expires_at`,
+run a second `bd` process (`bd --no-daemon list` is enough), and read the values back.
+Paste that transcript into your build report.
+
+## Step 3 — gate and close, in this order
+1. `bdc test <the files you changed>`
+2. every `## Acceptance` command in the bead, in the bead's order, each exiting 0
+3. `bdc bd-ok4pr.1.8 <the files you changed>` — gate, tagged pathspec commit, close. No push.
+
+The repo's gate command is configured in the tracked `.bdc.conf`. Do not touch it.
+
+## Step 4 — build report
+Write, at this ABSOLUTE path:
+/home/ben/worktrees/beads/w3_atomic-claim/work/w3_atomic-claim/builds/bd-ok4pr.1.8.1786126221148056130.build.json
+
+One JSON object: `schema` = 2, `bead_id` = "bd-ok4pr.1.8", `run_id` = "1786126221148056130",
+`changes` = "committed" or "none", `commits` = the one (bd-ok4pr.1.8)-tagged commit `bdc` made
+(or [] for "none"), `acceptance` = one entry per bead Acceptance command, in the bead's
+order, same length. Each acceptance entry has exactly four keys: `criterion`,
+`command` (character for character), `exit` (the number 0), and `log` =
+`bd-ok4pr.1.8.1786126221148056130_step{N}.log` with N the 1-based position — a name relative to /home/ben/worktrees/beads/w3_atomic-claim/work/w3_atomic-claim/builds/
+(no `builds/` prefix inside the JSON), existing in that ABSOLUTE directory, non-empty.
+No other filename form is accepted. Include your reproduction transcript in the report.
+
+## Worker contract
+Your run worktree only. No branch switch, reset, rebase, push, or `wt-*` scripts. Stay
+inside `## Touches`. The manager owns the rebase, the merge and the deploy. If the bead
+cannot be completed as written, stop and write the reason into the build report instead of
+improvising past it.

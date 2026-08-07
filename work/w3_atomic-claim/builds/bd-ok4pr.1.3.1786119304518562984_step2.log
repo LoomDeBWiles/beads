@@ -1,0 +1,6 @@
+$ go test ./internal/storage/...
+?   	github.com/steveyegge/beads/internal/storage	[no test files]
+ok  	github.com/steveyegge/beads/internal/storage/memory	(cached)
+ok  	github.com/steveyegge/beads/internal/storage/sqlite	19.663s
+?   	github.com/steveyegge/beads/internal/storage/sqlite/migrations	[no test files]
+exit=0

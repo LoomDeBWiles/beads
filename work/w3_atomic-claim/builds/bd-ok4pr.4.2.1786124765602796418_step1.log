@@ -1,0 +1,37 @@
+ok  	github.com/steveyegge/beads	0.118s
+ok  	github.com/steveyegge/beads/cmd/bd	23.765s
+ok  	github.com/steveyegge/beads/cmd/bd/doctor	2.032s
+ok  	github.com/steveyegge/beads/cmd/bd/doctor/fix	1.073s
+ok  	github.com/steveyegge/beads/cmd/bd/setup	0.020s
+ok  	github.com/steveyegge/beads/internal/audit	0.004s
+ok  	github.com/steveyegge/beads/internal/autoimport	0.015s
+ok  	github.com/steveyegge/beads/internal/beads	0.248s
+ok  	github.com/steveyegge/beads/internal/compact	0.005s
+ok  	github.com/steveyegge/beads/internal/config	0.015s
+ok  	github.com/steveyegge/beads/internal/configfile	0.004s
+ok  	github.com/steveyegge/beads/internal/daemon	0.123s
+ok  	github.com/steveyegge/beads/internal/debug	0.002s
+ok  	github.com/steveyegge/beads/internal/export	0.117s
+ok  	github.com/steveyegge/beads/internal/git	0.813s
+ok  	github.com/steveyegge/beads/internal/hooks	1.212s
+ok  	github.com/steveyegge/beads/internal/idgen	0.002s
+ok  	github.com/steveyegge/beads/internal/importer	1.421s
+ok  	github.com/steveyegge/beads/internal/jsonlpub	0.104s
+ok  	github.com/steveyegge/beads/internal/linear	0.004s
+ok  	github.com/steveyegge/beads/internal/lockfile	0.010s
+ok  	github.com/steveyegge/beads/internal/merge	0.005s
+ok  	github.com/steveyegge/beads/internal/molecules	0.219s
+ok  	github.com/steveyegge/beads/internal/routing	0.003s
+ok  	github.com/steveyegge/beads/internal/rpc	4.121s
+?   	github.com/steveyegge/beads/internal/storage	[no test files]
+ok  	github.com/steveyegge/beads/internal/storage/memory	0.003s
+ok  	github.com/steveyegge/beads/internal/storage/sqlite	24.060s
+?   	github.com/steveyegge/beads/internal/storage/sqlite/migrations	[no test files]
+ok  	github.com/steveyegge/beads/internal/syncbranch	0.393s
+ok  	github.com/steveyegge/beads/internal/testutil	0.002s
+?   	github.com/steveyegge/beads/internal/testutil/fixtures	[no test files]
+ok  	github.com/steveyegge/beads/internal/types	0.004s
+?   	github.com/steveyegge/beads/internal/ui	[no test files]
+ok  	github.com/steveyegge/beads/internal/util	0.002s
+ok  	github.com/steveyegge/beads/internal/utils	0.005s
+ok  	github.com/steveyegge/beads/internal/validation	0.002s

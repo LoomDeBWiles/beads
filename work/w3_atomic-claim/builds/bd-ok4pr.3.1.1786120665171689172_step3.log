@@ -1,0 +1,3 @@
+$ go test ./internal/importer/...
+ok  	github.com/steveyegge/beads/internal/importer	(cached)
+exit=0

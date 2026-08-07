@@ -1,0 +1,3 @@
+$ for f in internal/storage/sqlite/issues.go internal/storage/sqlite/queries.go internal/storage/sqlite/transaction.go; do grep -q claim_expires_at "$f" || exit 1; done
+
+exit=0

@@ -1,0 +1,12 @@
+Done. Commit `a0d51ee` on the run worktree; bead closed; not pushed.
+
+What changed, all four Contract items:
+
+1. `internal/storage/sqlite/schema.go:37` — added `claim_expires_at TIMESTAMP` to the `issues` CREATE TABLE constant, next to `is_template`, following the `pinned` precedent.
+2. `internal/storage/sqlite/schema_probe.go:23` — added `"claim_expires_at"` to `expectedSchema["issues"]`, so a store whose migration did not apply now fails the probe (a diagnosable startup error) instead of failing every read.
+3. `internal/storage/memory/memory.go` — `UpdateIssue` gained `case "claim_expires_at"` accepting `*time.Time` and `nil`. I also had to guard the status-driven lease release with "an explicit `claim_expires_at` in the same update wins": the switch iterates a map, so the import path (which carries status and lease together) would otherwise drop the lease at random. That mirrors `manageClaimExpiry` in `queries.go:657`.
+4. `internal/storage/memory/memory.go` — the claim event now carries the same `old_value` (the pre-claim issue) and `new_value` (outcome, assignee, status, previous holder on a steal, lease expiry) the SQLite path writes. The payload struct is duplicated in the memory package because `claimEventValue` is unexported in `sqlite` and moving it to `types` is outside `## Touches`.
+
+Tests added to `internal/storage/memory/memory_test.go`: lease write/clear, the two-key import case both ways, and the claim/steal audit payload.
+
+One gap I did not close: item 2 has no dedicated test. A test that builds a store missing the column and asserts the probe rejects it belongs in `internal/storage/sqlite/schema_probe_test.go`, which is not in `## Touches`, and it cannot be written from the `memory` package. `TestProbeSchema_AllTablesPresent` covers the positive direction only (it runs migrations). Worth a follow-up bead if you want the negative case pinned.

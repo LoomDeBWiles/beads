@@ -1,0 +1,2 @@
+$ test "$(grep -c claim_expires_at internal/storage/sqlite/multirepo.go)" -ge 4
+exit=0

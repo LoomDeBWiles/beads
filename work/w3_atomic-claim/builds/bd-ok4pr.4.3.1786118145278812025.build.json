@@ -1,0 +1,41 @@
+{
+  "schema": 2,
+  "bead_id": "bd-ok4pr.4.3",
+  "run_id": "1786118145278812025",
+  "changes": "committed",
+  "commits": [
+    "69d9a27b9a95383793e66379bb3ba4412b13d9f2"
+  ],
+  "acceptance": [
+    {
+      "criterion": "Locked-config merge driver test passes, and passes repeatedly in one process (permissions fully restored between runs)",
+      "command": "go test ./cmd/bd/doctor/fix/ -run TestMergeDriverWithLockedConfig_E2E -count=2",
+      "exit": 0,
+      "log": "bd-ok4pr.4.3.1786118145278812025_step1.log"
+    },
+    {
+      "criterion": "Whole doctor/fix package passes, so no sibling test was broken by the permission change",
+      "command": "go test ./cmd/bd/doctor/fix/",
+      "exit": 0,
+      "log": "bd-ok4pr.4.3.1786118145278812025_step2.log"
+    },
+    {
+      "criterion": "Full repo test suite is green, making the deploy bead's gate meaningful",
+      "command": "bash scripts/test.sh",
+      "exit": 0,
+      "log": "bd-ok4pr.4.3.1786118145278812025_step3.log"
+    },
+    {
+      "criterion": "The error-message assertion under test is still present, i.e. the subtest was repaired rather than weakened",
+      "command": "grep -q 'failed to update git merge driver config' cmd/bd/doctor/fix/e2e_test.go",
+      "exit": 0,
+      "log": "bd-ok4pr.4.3.1786118145278812025_step4.log"
+    },
+    {
+      "criterion": "Package vets clean",
+      "command": "go vet ./cmd/bd/doctor/fix/",
+      "exit": 0,
+      "log": "bd-ok4pr.4.3.1786118145278812025_step5.log"
+    }
+  ]
+}

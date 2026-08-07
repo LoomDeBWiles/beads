@@ -1,0 +1,11 @@
+Done. bd-ok4pr.3.1 is committed (`a0c6be32`) and closed.
+
+**What changed**
+
+- `internal/importer/importer.go`: all three explicit update maps now carry `claim_expires_at` — the rename-collision map at `handleRename` (:381), the external_ref-match map (:576), and the ID-collision map (:674). Without it the field was dropped without error, leaving a synced clone `in_progress` with no expiry.
+- `internal/importer/utils.go`: new `equalPtrTime` (nil-aware, `time.Time.Equal`) plus a `case "claim_expires_at"` in `checkFieldChanged`. The string helpers can't be reused: `strFrom` rejects a `*time.Time`, so every import would have reported an unconditional change and turned into an `UpdateIssue` with the attendant `updated_at` bump, event, dirty mark, and export churn.
+- `cmd/bd/export_test.go`: `TestClaimRoundTrip` with three subtests — fresh store (`insertIssue`), store already holding the pre-claim issue (update map), and a lease-only renewal on an `external_ref` issue (where the comparator is load-bearing). Each does a real export via `exportToJSONLWithStore` and a real `importer.ImportIssues`.
+
+I verified the test catches the defect: with the three map lines removed, subtests 2 and 3 fail (`claim_expires_at is NULL after import`, stale expiry retained) while the fresh-store case still passes, which is exactly the blind spot the bead describes.
+
+All six acceptance commands exited 0, and `bdc test` ran the full gate (`go build ./... && go test ./... && go vet ./...`) clean. Report at `work/w3_atomic-claim/builds/bd-ok4pr.3.1.1786120665171689172.build.json` with six step logs. Nothing pushed; closing bd-ok4pr.3.1 auto-closed the parent epic bd-ok4pr.3.

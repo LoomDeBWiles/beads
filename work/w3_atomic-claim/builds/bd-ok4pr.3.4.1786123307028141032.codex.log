@@ -1,0 +1,15 @@
+Done. Bead bd-ok4pr.3.4 is committed (`3094806`) and closed.
+
+**What changed (2 files, no product code):**
+
+1. `cmd/bd/export_test.go` — dropped the seeded-true status/assignee assertion in the rename-collision subtest. The twin is a copy of the claimed issue, so it necessarily carried `in_progress`/`agent-a`; `ComputeContentHash` folds both in, so the row could not have reached `handleRename` otherwise. Replaced with a check that the squatter at `held.ID` is left alone: title unchanged, no lease gained.
+
+2. `CONTEXT.md:41` — citation corrected from `claim.go:130-136` (the UPDATE SQL text) to `claim.go:121-125`, verified in the file as `claimed.ClaimExpiresAt = nil` plus the `if lease != nil` override. Capitalized "removed. **T**he caller decides". Re-read the note: the only other citation, `queries.go:813`, checks out.
+
+**Mutation checks (both restored via `git checkout --`):**
+- Merge target `existing.ID` → `incoming.ID` → failed at `export_test.go:537`, squatter title overwritten.
+- Extra `UpdateIssue(incoming.ID, {claim_expires_at})` leaking only the lease → failed at `export_test.go:540`, squatter gained a lease.
+
+**One thing to flag:** the very first `bdc test` run reported a gate failure whose failing package fell outside the captured tail. Every rerun passed — `bdc test` exit 0, `go test ./...` exit 0, three consecutive uncached `go test ./cmd/bd/` runs ok. Not reproducible, and the tree was clean of the mutation at that point. Recorded in the build report as unexplained rather than dismissed.
+
+Build report: `work/w3_atomic-claim/builds/bd-ok4pr.3.4.1786123307028141032.build.json`, with the three step logs alongside it.

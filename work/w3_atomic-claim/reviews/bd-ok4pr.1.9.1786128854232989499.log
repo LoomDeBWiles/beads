@@ -1,0 +1,19 @@
+VERDICT: FIX findings=3 — nothing that blocks the deploy. Review written to `work/w3_atomic-claim/reviews/review_bd-ok4pr.1.9_v1.md` (strict format; the verification evidence is below, since the file spec forbade prose).
+
+**All seven contract items are genuinely closed, each verified by running it.**
+
+Item 1, judged the way the finding was. `TestDropEdgeColumnsRebuildKeepsLaterColumns` calls `MigrateDropEdgeColumns` directly on a table that still carries the four edge columns, so the runtime rewrite executes. Proof: I restored `d677554ef`'s hard-coded 28-column 022 (signature adapted to `DB`). The new test **FAILED** — `no such column: pinned` — as did the two other new tests, while `TestIssueColumnsSurviveReopen`, `TestMigrationLedgerRecordsEveryMigration` and `TestClaimMigrationExistingStore` all still **passed**. That is exactly the previous round's hole, now covered.
+
+Item 2. Every runtime-derived identifier goes through `quoteIdent`. Making `quoteIdent` return the bare name reproduces `near "order": syntax error`. A store created by the pre-item binary carrying `"order"`, `"weird name"` and `replies_to` opens cleanly under this build with both values intact.
+
+Item 3. Replacing the `DROP TABLE IF EXISTS schema_migrations` at `store.go:172` with a no-op makes `TestOpenHealsDroppedColumn` fail with the reviewer's exact message. Live: `pinned` dropped from a scratch store, reopened — opens, column restored, row intact, ledger back to 27.
+
+Item 5, stated plainly. The whole pass runs on one `*sql.Conn`. `PRAGMA foreign_keys`, `BEGIN EXCLUSIVE`, every migration, every `recordMigration`, the snapshot, the invariants, `COMMIT` and the deferred `ROLLBACK` all use that one handle, and the defers unwind in the correct order. No migration in the package references `*sql.DB` any more, and `RunMigrations` has no caller outside `store.go`. **A ledger row surviving a rolled-back migration is now impossible.** The only remaining pool write is the deliberate ledger drop at `store.go:172`, outside the pass, failing loudly.
+
+Items 4, 6, 7 confirmed: hand-typed name list gone (derived from `pragma_table_info('issues_new')`); `bd migrate --inspect` prints and JSON-emits the ledger; `prior_head.txt` is `c6076387c`, equals the merge-base, and `git cat-file -e <it>:claim.go` fails.
+
+**The blast question, tested.** A store built by a binary compiled from `c6076387c` — no ledger, `pinned`/`is_template` at cid 28/29, the 17-store fingerprint — with a distinct sentinel in all 30 columns, opened twice with this build: **all 30 values byte-identical.** The only diff is the new `claim_expires_at`, NULL. The rebuild demonstrably ran (a trigger died — finding 1), ledger filled to 27, index preserved, and a `bd claim` lease then survived a reopen. Eight parallel first-opens on a ledgerless store: no errors, `integrity_check ok`.
+
+Collateral: `go build ./...`, `go vet`, `go test ./...` all clean; the 29 other migration files are signature-only. `gofmt -l` flags the touched files, but flags them at the parent commit too — the repo is not gofmt-clean and this diff does not change that.
+
+Every file I mutated was restored; `git status --porcelain` shows no tracked changes.

@@ -1,0 +1,2 @@
+$ grep -q 'claim_expires_at' internal/importer/importer.go internal/importer/utils.go
+exit=0

@@ -1,0 +1,12 @@
+Review written to `work/w3_atomic-claim/reviews/review_bd-ok4pr.1.4_v1.md`.
+
+**VERDICT: FIX findings=5** (no high; all four contract gaps are genuinely closed behaviorally).
+
+Gate, run as given: `go build ./...` clean; `go test -count=1 ./internal/storage/... ./internal/types/...` all pass (sqlite 27s, memory/types ok). Nothing modified in the worktree; revert experiments ran on a copy at /tmp/w3rev, since trashed.
+
+Revert-sensitivity, verified by actually reverting each hunk on the copy:
+- Memory update case (gap 3): reverting fails `TestUpdateIssueWritesClaimExpiresAt`, `TestUpdateIssueClaimExpiresAtWithStatus/explicit_lease_survives_a_status_change`, and `TestClaimIssueRecordsAuditPayload`.
+- Memory event payload (gap 4): reverting fails `TestClaimIssueRecordsAuditPayload`.
+- Schema probe (gap 2) and schema constant (gap 1): **pass either way** — the entire storage suite stays green with both reverted. Those are findings 1 and 3.
+
+The two substantive additions: the probe still omits `is_template`, which every issue read selects, so the same startup-error-becomes-read-path-failure hole remains one column over (pre-existing); and the claim audit payload is now duplicated verbatim in both backends.

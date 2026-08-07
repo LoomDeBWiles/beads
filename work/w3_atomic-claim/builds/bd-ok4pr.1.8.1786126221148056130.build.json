@@ -1,0 +1,71 @@
+{
+  "schema": 2,
+  "bead_id": "bd-ok4pr.1.8",
+  "run_id": "1786126221148056130",
+  "changes": "committed",
+  "commits": [
+    "fa540710544b89475e57a5870b7d3d687096a831"
+  ],
+  "acceptance": [
+    {
+      "criterion": "go build ./...",
+      "command": "go build ./...",
+      "exit": 0,
+      "log": "bd-ok4pr.1.8.1786126221148056130_step1.log"
+    },
+    {
+      "criterion": "go test ./internal/storage/... ./internal/types/...",
+      "command": "go test ./internal/storage/... ./internal/types/...",
+      "exit": 0,
+      "log": "bd-ok4pr.1.8.1786126221148056130_step2.log"
+    },
+    {
+      "criterion": "go vet ./internal/storage/...",
+      "command": "go vet ./internal/storage/...",
+      "exit": 0,
+      "log": "bd-ok4pr.1.8.1786126221148056130_step3.log"
+    },
+    {
+      "criterion": "go test ./...",
+      "command": "go test ./...",
+      "exit": 0,
+      "log": "bd-ok4pr.1.8.1786126221148056130_step4.log"
+    },
+    {
+      "criterion": "grep -q schema_migrations internal/storage/sqlite/migrations.go",
+      "command": "grep -q schema_migrations internal/storage/sqlite/migrations.go",
+      "exit": 0,
+      "log": "bd-ok4pr.1.8.1786126221148056130_step5.log"
+    },
+    {
+      "criterion": "grep -q pragma_table_info internal/storage/sqlite/migrations/022_drop_edge_columns.go",
+      "command": "grep -q pragma_table_info internal/storage/sqlite/migrations/022_drop_edge_columns.go",
+      "exit": 0,
+      "log": "bd-ok4pr.1.8.1786126221148056130_step6.log"
+    }
+  ],
+  "what_changed": {
+    "fix_B_022_drop_edge_columns": "The rebuild no longer copies a hard-coded 28-column list. It reads the live issues columns from pragma_table_info, drops the four edge columns, creates issues_new from the canonical constrained columns, appends every other live column with ALTER TABLE ADD COLUMN (type and default taken from the pragma), and copies exactly the live-minus-dropped set. It also replays the live table's CREATE INDEX statements from sqlite_master, skipping any that mention a dropped column, so DROP TABLE no longer silently discards indexes (idx_issues_sender and idx_issues_ephemeral were permanently absent at rest before this).",
+    "fix_C_migration_ledger": "RunMigrations creates schema_migrations(name TEXT PRIMARY KEY, applied_at DATETIME), skips any migration already recorded, and records each on success inside the same EXCLUSIVE transaction. Backfill is exactly as specified: a store with an empty ledger has every migration run and then every migration recorded, one pass identical to the old behaviour. No detection of which migrations already ran, no skipping on a store with no ledger. The DDL const lives in schema.go next to the schema.",
+    "regression_test": "TestIssueColumnsSurviveReopen in internal/storage/sqlite/migrations_test.go enumerates the issues columns from pragma_table_info (never a hand-written list), writes a distinguishable non-default value into every one of them, creates a trigger on issues, runs RunMigrations again to simulate the next process, then asserts every value survived and the trigger is still present. TestMigrationLedgerRecordsEveryMigration asserts all 27 migrations are recorded once and a second pass adds nothing."
+  },
+  "outside_touches_allowlist": {
+    "file": "internal/storage/sqlite/claim_test.go",
+    "why": "TestClaimMigrationExistingStore built its pre-027 fixture by dropping claim_expires_at and relying on the comment 'Migrations are idempotent and re-run at every open'. With the ledger that premise is false and the test failed, blocking the bead's own acceptance command 'go test ./...'. The fixture now also deletes the claim_expires_at_column row from schema_migrations, which is what a genuine pre-027 store looks like; the comment was corrected in the same edit. No assertion was weakened. This file is not in the bead's Touches list, so flagging it here.",
+    "diff_size": "5 lines added, 2 comment lines rewritten"
+  },
+  "test_falsification": "The new test was run against the pre-fix code to confirm it catches the defect rather than merely passing. With 022 restored from HEAD and the ledger skip disabled, TestIssueColumnsSurviveReopen fails with exactly the RCA's three columns plus the rebuild itself:\n  column pinned lost its value across reopen: want \"1\", got \"0\"\n  column is_template lost its value across reopen: want \"1\", got \"0\"\n  column claim_expires_at lost its value across reopen: want \"sentinel-30-claim_expires_at\", got \"<nil>\"\n  issues table was rebuilt on reopen: probe trigger is gone (sql: no rows in result set)",
+  "reproduction": {
+    "note": "Real binaries, real stores, all under /tmp/bd-ok4pr18-repro.cqJ7JI (now trashed). Nothing outside that temp directory was opened. The pre-fix binary was built from a 'git archive HEAD' snapshot into the same temp directory, so the before/after contrast uses the same steps against the same code minus this change.",
+    "before_pre_fix_binary": "$ sqlite3 db \"UPDATE issues SET pinned=1, claim_expires_at='2030-01-01T00:00:00Z' WHERE id='repo-old-l63';\n                    CREATE TRIGGER trg_probe AFTER UPDATE ON issues BEGIN SELECT 1; END;\"\nPRE-FIX BEFORE: repo-old-l63|pinned=1|claim_expires_at=2030-01-01T00:00:00Z, trigger=trg_probe\n$ bd-prefix --no-daemon list > /dev/null          # a second process, a pure read\nPRE-FIX AFTER:  repo-old-l63|pinned=0|claim_expires_at=NULL, trigger=gone",
+    "after_fixed_binary": "$ sqlite3 db \"UPDATE issues SET pinned=1, claim_expires_at='2030-01-01T00:00:00Z' WHERE id='bd-mgx';\n                    CREATE TRIGGER trg_probe AFTER UPDATE ON issues BEGIN SELECT 1; END;\"\nBEFORE: bd-mgx|pinned=1|claim_expires_at=2030-01-01T00:00:00Z|updated_at=2026-08-07T20:18:50.323832289+02:00\nBEFORE trigger: trg_probe\n$ bd --no-daemon list > /dev/null                 # a second process, a pure read\nAFTER:  bd-mgx|pinned=1|claim_expires_at=2030-01-01T00:00:00Z|updated_at=2026-08-07T20:18:50.323832289+02:00\nAFTER trigger:  trg_probe\n$ bd --no-daemon list > /dev/null                 # and a third\nAFTER2: bd-mgx|pinned=1|claim_expires_at=2030-01-01T00:00:00Z\nledger: 27 migrations recorded\nsender/ephemeral indexes: idx_issues_ephemeral,idx_issues_sender",
+    "legacy_store_backfill_pass": "The store created by the pre-fix binary has no ledger, i.e. it is shaped like the 17 live stores. Opening it once with the fixed binary is the single backfill pass, and it loses nothing:\n$ sqlite3 db \"SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='schema_migrations'\"\n0\n$ sqlite3 db \"UPDATE issues SET pinned=1, is_template=1, claim_expires_at='2030-01-01T00:00:00Z' WHERE id='repo-old-l63'\"\nBEFORE upgrade: pinned=1|is_template=1|claim_expires_at=2030-01-01T00:00:00Z\n$ bd --no-daemon list > /dev/null                 # first open with the fixed binary\nAFTER backfill: pinned=1|is_template=1|claim_expires_at=2030-01-01T00:00:00Z\nledger now: 27\n$ bd --no-daemon list > /dev/null\nAFTER next open: pinned=1|is_template=1|claim_expires_at=2030-01-01T00:00:00Z",
+    "the_reported_symptom": "$ bd --no-daemon claim bd-mgx --assignee holder-A --lease 600s\n✓ Claimed issue: bd-mgx\nafter claim:      bd-mgx|holder-A|2026-08-07T20:29:56.691471877+02:00\n$ bd --no-daemon list > /dev/null\nafter reopen:     bd-mgx|holder-A|2026-08-07T20:29:56.691471877+02:00"
+  },
+  "notes_for_the_manager": [
+    "Deploy order matters for the 17 live stores. The RCA's harvest step still stands: any pinned/is_template value that was wiped is recoverable only from 'git log -p .beads/issues.jsonl'. Harvest first, deploy, then 'bd import' - after this change the restored values stick.",
+    "Migration 019 still re-adds the four edge columns and 022 still rebuilds once per store, on the backfill pass only. The RCA's fix A (stop 019 re-adding them, guard 021) is deliberately out of scope and remains a follow-up.",
+    "Unrelated pre-existing gap, unchanged by this bead and not worth its own action right now: idx_issues_pinned is never created on a fresh store, because schema.go already declares the pinned column so migration 023 early-returns before reaching its CREATE INDEX. Same shape for any index created after an early-return guard.",
+    "A database written by this version and then opened by an older bd loses the ledger's protection - the old binary re-runs everything and resumes wiping. Nothing to do about it here; worth knowing before any downgrade."
+  ]
+}

@@ -1,0 +1,3 @@
+$ go test ./cmd/bd/ -run TestClaim
+ok  	github.com/steveyegge/beads/cmd/bd	0.005s
+exit=0

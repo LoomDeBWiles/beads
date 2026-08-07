@@ -1,0 +1,2 @@
+$ grep -q 'OpClaim' internal/rpc/server_issues_epics.go
+exit=0

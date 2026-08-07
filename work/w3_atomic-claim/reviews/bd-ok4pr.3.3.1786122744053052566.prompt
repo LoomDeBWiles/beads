@@ -1,0 +1,50 @@
+You are a fresh-eyes reviewer on work item w3 in the `bd` fork (Go, v0.34).
+You are READ-ONLY: change no file, create no bead, commit nothing.
+
+## What to review
+Bead bd-ok4pr.3.3 — a fix bead authored from an earlier review's findings.
+Commit range in /home/ben/worktrees/beads/w3_atomic-claim:
+`git log -p f2f2c5ecf23e4ede78a6ad279c0af70d28e08046..46305de95f0712843030e60fc9c99dd5b75b70f8`
+
+Files changed: cmd/bd/export_test.go
+Run no recursive rg/grep/find outside this worktree.
+
+## Judge against
+1. `bd --db /home/ben/projects/beads/.beads/beads.db --no-auto-import show bd-ok4pr.3.3`
+   Its `## Contract` is the earlier review's finding text, item by item. Your
+   first job is to confirm EACH numbered item is genuinely closed — not
+   mentioned, not partially addressed.
+2. `work/w3_atomic-claim/plan_v4.md` — the Design section is the authority on
+   claim semantics.
+3. `~/projects/shared-docs/CODING_PRINCIPLES.md` and
+   `~/projects/shared-docs/TESTING_PRINCIPLES.md`.
+
+## Look hardest at
+- Does the new subtest genuinely route through `handleRename`? A subtest that takes the ordinary update path leaves the mapping as uncovered as before. Verify the seeded row is same-content, different-ID, with an older `updated_at`.
+- Mutation check: delete the `claim_expires_at` entry from the `handleRename` map in internal/importer/importer.go, confirm the new subtest FAILS, then restore the file exactly.
+
+Several of the original findings were proven by MUTATION: an implementation line
+was deleted and the suite stayed green. Apply the same standard here. For each
+test this bead adds, break the thing it protects, confirm the test fails, and
+restore the file exactly. Report any test that passes either way — that item is
+not closed, whatever the diff says.
+
+Also scan for defects the fix itself introduced.
+
+## Run the gate yourself
+`cd /home/ben/worktrees/beads/w3_atomic-claim && go build ./... && go test ./cmd/bd/ -run TestClaimRoundTrip -v && go test ./internal/importer/...`
+Report the real result. Do not modify anything to make it pass.
+
+## Output
+Write your review to:
+/home/ben/worktrees/beads/w3_atomic-claim/work/w3_atomic-claim/reviews/review_bd-ok4pr.3.3_v2.md
+
+It contains exactly this — the verdict line plus finding rows, no other prose:
+
+VERDICT: CLEAN|FIX findings=N
+| ID | sev | file:line | defect (one sentence) | fix (one sentence) |
+|---|---|---|---|---|
+
+- CLEAN requires findings=0; FIX requires one or more finding rows.
+- sev: high = wrong behavior or a broken contract; med = correctness risk in a specific case; low = wording, cosmetic.
+- Each defect sentence stands alone: name the mechanism and the consequence.

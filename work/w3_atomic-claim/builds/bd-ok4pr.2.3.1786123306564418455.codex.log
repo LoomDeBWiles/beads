@@ -1,0 +1,17 @@
+Done. bd-ok4pr.2.3 is committed (`e0ab635`) and closed; only `cmd/bd/claim_test.go` changed.
+
+**What I fixed**
+
+1. **Literal exit code.** Both denial assertions now compare against `3`, not `claimDeniedExit` (`claim_test.go:375` direct, `:440` daemon); the constant survives only in the failure text. Auditing the rest of the file turned up two more instances of the same pattern, both fixed: `assertDaemonServedClaims` matched the daemon's metrics row on `rpc.OpClaim` (a rename would have kept it green), and the lease truncation test cross-checked the RPC value against what `claimFlags` itself returned. I also split two `x == nil || *x != want` guards, which printed a pointer address instead of the observed number on failure.
+
+2. **The 33 MB leak.** The `sync.Once` now records the build directory, and a new package-level `TestMain` removes it after `m.Run()` returns, before `os.Exit` — so it runs on failure too. `cmd/bd` had no prior `TestMain`.
+
+3. **`BD_VERBOSE=1`** in the daemon test's environment, so the connect-failed and health-failed fallbacks (gated on it at `main.go:739`) actually print; the comment now names the metrics counters as the primary proof the RPC route ran.
+
+**Mutation checks**, all restored afterward with an empty `git diff`:
+- `claimDeniedExit = 3` → `1`: both exit-code tests failed. This is the exact mutation the old gate survived.
+- `OpClaim = "claim"` → `"claim_renamed"`: the claims still worked end to end and every exit-code assertion still passed — only the new literal metrics check failed, which is the point.
+- `int64(lease.Seconds())` → `+ 1`: both lease tests failed with readable numbers.
+- Cleanup disabled: 33 MB survived; enabled: 0, including on a deliberately failing run.
+
+One thing worth knowing: a sibling builder is running `go test ./cmd/bd/` in a loop against the pre-fix file, so new `/tmp/bd-claim-e2e-*` directories keep appearing from that worktree. I measured the leak under an isolated `TMPDIR` to get a clean signal, and trashed the scratch directories I made.

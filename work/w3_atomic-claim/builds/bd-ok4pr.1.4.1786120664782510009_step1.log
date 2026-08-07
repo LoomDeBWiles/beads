@@ -1,0 +1,2 @@
+$ for f in internal/storage/sqlite/schema.go internal/storage/sqlite/schema_probe.go internal/storage/memory/memory.go; do grep -q claim_expires_at "$f" || exit 1; done
+exit=0

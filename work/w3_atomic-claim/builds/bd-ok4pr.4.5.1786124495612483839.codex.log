@@ -1,0 +1,13 @@
+Done. bd-ok4pr.4.5 is committed (`dcbe1a6`) and closed. Comments only, no behavior change.
+
+The three corrections, each verified against the source first:
+
+1. `internal/storage/memory/memory_test.go:1455` — the doc comment's first word was `TestUpdateIssueRejectedLeaveIssueUntouched`; the function is `...Leaves...`. Fixed the one word so the comment actually attaches to the identifier.
+
+2. `cmd/bd/claim_test.go:425` — the "Every fallback message says 'direct mode'" claim is false: `emitVerboseWarning` (`cmd/bd/daemon_autostart.go:423-428`) returns without printing for `FallbackWorktreeSafety` and `FallbackFlagNoDaemon`. Reworded to lead with the daemon operation counters as the primary proof, call the stderr check a fast secondary signal covering the fallback reasons reachable here, and name the two silent reasons as the gap.
+
+3. `cmd/bd/export_test.go:410-418` — the comment said "Three import paths" but `TestClaimRoundTrip` has four subtests, and named `insertIssue` where the fresh store actually writes through the batch `insertIssues` (`internal/storage/sqlite/issues.go:106-114`, confirmed: line 106 sits inside `func insertIssues`, while singular `insertIssue` is at line 24). Now says "Four import paths", names the batch `insertIssues`, and adds the rename-collision path: `handleRename` merges the incoming fields into the twin holding the content under another ID, and the unrelated squatter on the incoming ID must come through untouched, lease included.
+
+Acceptance, all exit 0: `go build ./...`, `go vet ./cmd/bd/ ./internal/storage/...`, `go test ./cmd/bd/ -run TestClaimRoundTrip`, `go test ./...`. Logs and the build report are in `work/w3_atomic-claim/builds/`.
+
+One note: my first log-capture pass left the `go build` and `go vet` logs empty (both commands print nothing on success). I trashed those two zero-byte files and re-ran both with the command line and exit code captured in the log, so every log is non-empty. Nothing pushed.

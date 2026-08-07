@@ -1,0 +1,110 @@
+{
+  "item": "w3_atomic-claim",
+  "title": "An atomic claim verb for bd, and the eight-month-old bug that had to be fixed to make it work",
+  "report_path": "/home/ben/worktrees/beads/w3_atomic-claim/work/w3_atomic-claim/work_report.md",
+  "context": [
+    "/home/ben/worktrees/beads/w3_atomic-claim/work/w3_atomic-claim",
+    "/home/ben/projects/beads/work/w3_atomic-claim"
+  ],
+  "what_shipped": "Claiming a bead is now a single preconditioned write. `bd claim <id> --assignee X [--lease 30m]` reads, decides and writes inside one SQLite IMMEDIATE transaction, so exactly one of two concurrent claimants wins: the winner exits 0, the loser exits 3 with a reason saying whether to retry or skip, and a real error still exits 1. An optional lease bounds the hold, so a dead agent's bead can be stolen once its lease expires instead of being blindly overwritten or stranded forever. Finishing this required fixing a pre-existing defect that had been silently destroying column data in every bd store on this machine since December 2025: migrations re-ran on every database open and two of them formed a cycle that rebuilt the issues table from a frozen column list, blanking every column added since. The item's end-to-end test is what exposed it.",
+  "how_verified": [
+    {
+      "check": "The original failing scenario: two concurrent claims on one open issue (E2E script, step 2)",
+      "result": "One exit 0 and one exit 3, stored assignee equals the winner. Before this item both claimants exited 0 and one claim was silently lost."
+    },
+    {
+      "check": "Full end-to-end proof against a binary built from the final tip (`bash work/w3_atomic-claim/e2e_claim.sh`)",
+      "result": "E2E_PASS on the last line: expired lease stolen with the prior holder recorded, holder renews, lease cleared on leaving in_progress, lease round-trips into both a fresh store and one already holding the issue."
+    },
+    {
+      "check": "Concurrency test under repetition (`go test ./internal/storage/sqlite/ -run TestClaimRace -count=5`)",
+      "result": "PASS five times; eight goroutines claim one issue, exactly one wins each run."
+    },
+    {
+      "check": "The migration fix on a store shaped like the live ones (created by a pre-fix binary, no ledger)",
+      "result": "Values set before the upgrade survive the single backfill pass and every open after it. Pre-fix, one `bd list` blanked them."
+    },
+    {
+      "check": "Full test suite on the final tip",
+      "result": "All packages pass, including the pre-existing baseline failure this item repaired."
+    },
+    {
+      "check": "Rollback anchor is genuinely pre-item",
+      "result": "prior_head.txt holds c6076387c, and that commit does not contain the claim implementation - verified with git cat-file."
+    }
+  ],
+  "numbers": [
+    { "label": "Beads closed", "value": "26" },
+    { "label": "Files changed", "value": "70" },
+    { "label": "Per-bead reviews", "value": "20" },
+    { "label": "Review findings dispositioned", "value": "44" },
+    { "label": "Months the migration bug had been live", "value": "8" },
+    { "label": "Live stores affected by it", "value": "17" }
+  ],
+  "deviations": [
+    {
+      "planned": "The plan covered the claim verb only.",
+      "actual": "It also fixes a migration cycle that wiped pinned, is_template and the new lease column on every database open.",
+      "why": "The lease could not survive between two bd processes, so the item's core feature was non-functional without it. Confirmed pre-existing against the installed 0.34.0 binary."
+    },
+    {
+      "planned": "The deploy bead would install the binary, stop the daemons and live-verify.",
+      "actual": "The bead ends at the executed end-to-end proof; the deploy steps are run and logged by the manager after the merge.",
+      "why": "Those commands replace the fleet's binary and stop daemons belonging to other agents' workspaces. A builder in a throwaway worktree is the wrong actor, and the plan puts the live verify after the merge anyway."
+    },
+    {
+      "planned": "The plan's deploy step said `go install ./cmd/bd/`.",
+      "actual": "`GOBIN=$HOME/.local/bin go install ./cmd/bd/`.",
+      "why": "GOBIN is empty here and GOPATH is /home/ben/go, so the bare command writes ~/go/bin/bd while PATH resolves ~/.local/bin/bd first. The deploy would have reported success and left the fleet on the old binary."
+    },
+    {
+      "planned": "No repo-level test gate configuration.",
+      "actual": "A tracked .bdc.conf was added.",
+      "why": "bdc has no default gate for this Go repo, so every builder was inventing its own narrower gate as an untracked file that then blocked merge-back."
+    }
+  ],
+  "key_decisions": [
+    {
+      "decision": "Fix the migration defect inside this item rather than deferring it.",
+      "why": "Without it the lease never survives to the next process, so the item could not deliver what it promised. It was also actively destroying data in every store on the machine."
+    },
+    {
+      "decision": "Fix the table rebuild first, then add the migration ledger, in one change.",
+      "why": "The ledger's one backfill pass still runs every migration once. With the rebuild already fixed, that final pass loses nothing; the other order would have cost one last wipe on all 17 stores."
+    },
+    {
+      "decision": "Leave migration 019 alone, even though it is the other half of the cycle.",
+      "why": "Migration 021 queries those columns with no existence guard, so 019's re-add is currently the only thing keeping every bd command from failing. Removing it without guarding 021 first would break the tool."
+    },
+    {
+      "decision": "Make mutation testing the explicit standard in bead text and review prompts.",
+      "why": "Five separate tests in this item could not fail - one behind a build tag, one compared against a constant from the code under test, one seeded true by its fixture. Repeating the instruction had not worked; requiring a recorded break-and-confirm did."
+    },
+    {
+      "decision": "Ship the merge-driver field loss as a documented residual rather than expanding scope again.",
+      "why": "Pre-existing, explicitly scoped out by the approved plan, and this item strictly reduced it. It leads the follow-up list instead."
+    }
+  ],
+  "follow_up": [
+    {
+      "issue": "The git merge driver still drops fields it does not model - close_reason (600 rows), wisp (107), labels (65), external_ref (16), comments (13) - on any row a merge rewrites.",
+      "suggestion": "Model the remaining exported keys, or carry unknown keys through a raw-JSON catch-all that is re-emitted on marshal."
+    },
+    {
+      "issue": "pinned and is_template values wiped since v0.30.7 are gone from the databases.",
+      "suggestion": "Harvest them from git history of .beads/issues.jsonl across the 17 stores and re-import. After this fix the restored values stick."
+    },
+    {
+      "issue": "Migration 019 still re-adds the four edge columns, so 022 still rebuilds once per store.",
+      "suggestion": "Stop 019 re-adding them and guard migration 021's four unguarded queries, in one change."
+    },
+    {
+      "issue": "Infrastructure friction cost real time: bdc has no default gate for a Go repo, the evidence packet's review-artifact naming is undocumented, its build_proof check conflicts with the playbook's own rebase-before-merge flow, and work-report-facts.sh requires director-protocol records the manual playbook never creates.",
+      "suggestion": "Document the review artifact name alongside the build report contract, have the merge step rewrite rebased SHAs in build reports, and reconcile work-report-facts.sh with the manual playbook."
+    },
+    {
+      "issue": "Three tag-gated scripttest files fail, so that suite cannot be gated green.",
+      "suggestion": "Fix or quarantine help.txt, init.txt and dep_add.txt, then wire the tagged suite into the gate."
+    }
+  ]
+}

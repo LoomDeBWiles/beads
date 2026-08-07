@@ -1,0 +1,35 @@
+{
+  "schema": 2,
+  "bead_id": "bd-ok4pr.3.3",
+  "run_id": "1786121792848710033",
+  "changes": "committed",
+  "commits": [
+    "46305de95f0712843030e60fc9c99dd5b75b70f8"
+  ],
+  "acceptance": [
+    {
+      "criterion": "The tree still builds with the new subtest in place",
+      "command": "go build ./...",
+      "exit": 0,
+      "log": "bd-ok4pr.3.3.1786121792848710033_step1.log"
+    },
+    {
+      "criterion": "All four TestClaimRoundTrip subtests pass, including the new rename-collision one",
+      "command": "go test ./cmd/bd/ -run TestClaimRoundTrip -v",
+      "exit": 0,
+      "log": "bd-ok4pr.3.3.1786121792848710033_step2.log"
+    },
+    {
+      "criterion": "The importer package and the bd command package are green together",
+      "command": "go test ./internal/importer/... ./cmd/bd/",
+      "exit": 0,
+      "log": "bd-ok4pr.3.3.1786121792848710033_step3.log"
+    },
+    {
+      "criterion": "The whole suite is green",
+      "command": "go test ./...",
+      "exit": 0,
+      "log": "bd-ok4pr.3.3.1786121792848710033_step4.log"
+    }
+  ]
+}

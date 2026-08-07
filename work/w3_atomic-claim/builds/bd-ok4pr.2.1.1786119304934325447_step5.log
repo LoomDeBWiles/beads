@@ -1,0 +1,2 @@
+$ grep -qE 'func .*Claim\(' internal/rpc/client.go
+exit=0

@@ -1,0 +1,40 @@
+# Create beads from approved plan
+
+<input>
+- Approved plan: /home/ben/worktrees/beads/w3_atomic-claim/work/w3_atomic-claim/plan_v4.md
+- Repo: /home/ben/worktrees/beads/w3_atomic-claim (Go, the `bd` fork at v0.34)
+- Beads DB (use in EVERY bd command): /home/ben/projects/beads/.beads/beads.db
+  Command form: `bd --db /home/ben/projects/beads/.beads/beads.db --no-auto-import <verb> ...`
+</input>
+
+<instructions>
+1. Load Skill(beads) first — if that fails, read ~/projects/shared-docs/BEADS.md
+2. Read plan_v4.md in full before creating anything.
+3. Create the bead tree with `bd create`:
+   - one root epic for the item
+   - one phase epic per plan phase (Phase 1 Storage+migration, Phase 2 RPC+CLI,
+     Phase 3 JSONL round-trip + merge driver, Phase 4 Docs+deploy)
+   - tasks under the phase epics, roughly the plan's Execution Handoff sizing
+     (~6 tasks along phase boundaries: storage+migration core; claim tests
+     (matrix+race); RPC+CLI; JSONL/merge; docs; deploy+E2E). Split further only
+     where the plan's own file rows make two disjoint file sets.
+   - dependencies: storage before RPC/CLI; everything before deploy+E2E.
+     Phase 1 and Phase 3 are disjoint file sets and may run in parallel.
+4. Every task carries, in its description:
+   - `## Contract` — what to implement, in plain words, quoting the plan's
+     relevant Changes-table rows verbatim (file + change + why)
+   - `## Acceptance` — the exact shell commands that prove it, copied from the
+     plan's phase Gate and Proof-of-behavior table. Commands run from the repo
+     root. Every command must exit 0.
+   - `## Touches` — the write allowlist: explicit file paths from the plan's
+     Changes table for that task, nothing broader
+5. Never create a bead for work needing a person (approval, host access,
+   waiting on someone). The deploy bead's steps that need the user are already
+   USER steps in the plan.
+6. This item runs on the MANUAL per-bead playbook (the supervisor daemon is
+   disabled), so do NOT author cluster review markers.
+</instructions>
+
+<output>
+Write report to: /home/ben/worktrees/beads/w3_atomic-claim/work/w3_atomic-claim/bead_authoring_v1.md — exactly one line: `manifest: <epic-ids>` — comma-separated, every epic that is the DIRECT parent of a task (a 3-level tree lists the phase epics, never the top root)
+</output>

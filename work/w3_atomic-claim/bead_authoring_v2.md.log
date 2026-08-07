@@ -1,0 +1,16 @@
+All nine QA findings applied plus the manager-added baseline-repair bead. `bd dep cycles` is clean.
+
+What changed:
+
+- **F1** `bd-ok4pr.3.1` now blocked by `bd-ok4pr.1.1`.
+- **F2** `bd-ok4pr.2.1`: scripttest files moved to flat `cmd/bd/testdata/*.txt` in both Contract and Touches, with the runner's non-recursive glob spelled out.
+- **F3** `bd-ok4pr.1.1`: the four-file `ClaimIssue` grep replaced by a per-file `for` loop.
+- **F4** `bd-ok4pr.2.1`: the three-file `OpClaim` grep split into three per-file assertions (`OpClaim` in protocol.go, `func .*Claim(` in client.go, `OpClaim` in server_issues_epics.go), plus a check that a scripttest file exercising claim exists.
+- **F5** `bd-ok4pr.1.2`: Contract now requires the pre-027 schema to be built in-code in a `t.TempDir()` DB and forbids a committed fixture; acceptance asserts `git ls-files internal/storage/sqlite/testdata` is empty.
+- **F6** `bd-ok4pr.4.2`: one `tee` line writes `artifacts/e2e_claim_output.txt` while asserting `E2E_PASS`; the `one exit=0, one exit=3` check now greps the artifact.
+- **F7** deployed identity is `~/.local/bin/bd version --json | grep -q "$(git rev-parse --short HEAD)"`.
+- **F8** `bd-ok4pr.4.2` records `bd daemons list --json` to the artifact before `bd daemon --stop-all` and `bd daemons health --json` after, stating daemons autostart on next invocation.
+- **F9** `bd-ok4pr.1.1` retitled "Add atomic ClaimIssue storage core" (9 files, read-path rows removed); new sibling **bd-ok4pr.1.3** "Plumb claim_expires_at through the late-column read paths" carries `ready.go`, `dependencies.go`, `multirepo.go` with a `pinned`-precedent grep-closure acceptance, blocked by `.1.1` and blocking `.4.2`. `.1.2` keeps its `.1.1` blocker (the migration it tests stayed in the core).
+- **Manager addition** `bd-ok4pr.4.3` "Repair locked-git-config merge driver baseline test": chmod `.git/` itself non-writable, restore in the existing defer, keep the "failed to update git merge driver config" assertion; blocks `.4.2`.
+
+Report: `work/w3_atomic-claim/bead_authoring_v2.md` — `manifest: bd-ok4pr.1,bd-ok4pr.2,bd-ok4pr.3,bd-ok4pr.4`

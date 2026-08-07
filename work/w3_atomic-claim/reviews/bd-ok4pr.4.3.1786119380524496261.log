@@ -1,0 +1,9 @@
+**VERDICT: CLEAN findings=0** — written to `work/w3_atomic-claim/reviews/review_bd-ok4pr.4.3_v1.md`.
+
+Evidence:
+
+- Gate run as given: `go test ./cmd/bd/doctor/fix/ -run TestMergeDriverWithLockedConfig_E2E -count=2` passes, both subtests, both iterations. Full package `go test ./cmd/bd/doctor/fix/` passes; `go vet` clean. Nothing modified (`git status` shows only the untracked `work/` dir).
+- The fix strengthens rather than weakens: it adds `os.Chmod(gitDir, 0555)` alongside the existing 0444 on the file, which is exactly the missing condition (git writes `.git/config.lock` and renames, needing directory write permission).
+- Assertions intact at `cmd/bd/doctor/fix/e2e_test.go:787-794`: still `t.Fatal` on nil error and still requires the message to contain `failed to update git merge driver config`. Since the test passes, `MergeDriver` really did return that error from `merge_driver.go:21` — not an earlier `validateBeadsWorkspace` failure, which would have tripped the message check.
+- Cleanup is correct on every exit path: the `defer` restores `.git` to 0755 and the config to 0644, and Go runs defers before `t.TempDir` cleanup, including on the `t.Fatal` path (Goexit). `-count=2` passing confirms restoration is complete. The one pre-defer failure path (`chmod gitDir` errors) leaves only the file at 0444, which does not block `RemoveAll`.
+- No skip, deletion, or `.test-skip` entry: `.test-skip` is unchanged and still empty; the diff is 13 added / 3 removed lines in one test file. The root, darwin, and CI skips at lines 747-760 are untouched, so root and macOS behavior is unchanged.

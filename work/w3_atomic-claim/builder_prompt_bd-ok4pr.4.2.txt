@@ -1,0 +1,64 @@
+You are a builder on work item w3 in the `bd` fork (Go, v0.34). Finish exactly one bead.
+
+## Your bead
+bd-ok4pr.4.2 — write and run the E2E claim proof.
+
+## Your worktree (the ONLY tree you may write to)
+/home/ben/worktrees/beads/w3_atomic-claim/.runs/bd-ok4pr.4.2.1786127113258652334
+
+## State of play — read this first
+An earlier run of this bead wrote `work/w3_atomic-claim/e2e_claim.sh` and ran it. The
+script was correct; the PRODUCT was broken. Its failure exposed a real, pre-existing defect
+(migrations wiped every column added after migration 022 on each database open, so an owner
+lease never survived to the next process). That defect is now FIXED and merged — see
+`work/w3_atomic-claim/rca_v1.md` for the analysis and bead bd-ok4pr.1.8 for the fix.
+
+The script is already in your tree, already committed. The manager has re-run it against the
+fixed code and it prints `E2E_PASS`. Your job is to execute the bead's acceptance commands
+for the record, regenerate the committed artifacts from YOUR run, and close the bead.
+
+Do not rewrite the script unless an acceptance command genuinely fails. If one does, stop
+and report it — do not weaken an assertion to make it pass.
+
+## Step 1 — read
+1. `bd --db /home/ben/projects/beads/.beads/beads.db --no-auto-import show bd-ok4pr.4.2`
+   `## Acceptance` is the exact command list; `## Touches` is your write allowlist.
+   Note the SCOPE CHANGE in the Contract: no install command, no daemon command. Deploy
+   belongs to the manager, after the merge.
+2. `work/w3_atomic-claim/e2e_claim.sh` — know what you are running.
+
+## Step 2 — run
+Every `## Acceptance` command, in the bead's order, each exiting 0. The E2E artifacts
+under `work/w3_atomic-claim/artifacts/` must come from YOUR run, not the earlier one:
+the acceptance command writes them with `tee` while asserting on the same stream.
+
+The script defaults to the binary at `/tmp/bd-w3`, which an earlier acceptance step
+builds. Build it yourself from THIS worktree first — a stale binary at that path is exactly
+what made the manager's first re-run look like a failure.
+
+Hard boundaries, unchanged: your own temp stores only. Never touch
+`/home/ben/projects/*/.beads/`, any other worktree's `.beads/`, or `~/.local/bin/bd`.
+
+## Step 3 — gate and close
+1. `bdc test <the files you changed>`
+2. every `## Acceptance` command, in order
+3. `bdc bd-ok4pr.4.2 <the files you changed>` — gate, tagged pathspec commit, close. No push.
+
+The repo's gate command is configured in the tracked `.bdc.conf`. Do not touch it.
+
+## Step 4 — build report
+Write, at this ABSOLUTE path:
+/home/ben/worktrees/beads/w3_atomic-claim/work/w3_atomic-claim/builds/bd-ok4pr.4.2.1786127113258652334.build.json
+
+One JSON object: `schema` = 2, `bead_id` = "bd-ok4pr.4.2", `run_id` = "1786127113258652334",
+`changes` = "committed" or "none", `commits` = the one (bd-ok4pr.4.2)-tagged commit `bdc` made
+(or [] for "none"), `acceptance` = one entry per bead Acceptance command, in the bead's
+order, same length. Each acceptance entry has exactly four keys: `criterion`,
+`command` (character for character), `exit` (the number 0), and `log` =
+`bd-ok4pr.4.2.1786127113258652334_step{N}.log` with N the 1-based position — a name relative to /home/ben/worktrees/beads/w3_atomic-claim/work/w3_atomic-claim/builds/
+(no `builds/` prefix inside the JSON), existing in that ABSOLUTE directory, non-empty.
+No other filename form is accepted.
+
+## Worker contract
+Your run worktree only. No branch switch, reset, rebase, push, or `wt-*` scripts. Stay
+inside `## Touches`. The manager owns the rebase, the merge and the deploy.

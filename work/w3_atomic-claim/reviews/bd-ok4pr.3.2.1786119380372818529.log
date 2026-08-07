@@ -1,0 +1,11 @@
+Review written to `work/w3_atomic-claim/reviews/review_bd-ok4pr.3.2_v1.md`.
+
+**Gate (run by me, nothing modified):** `go build ./...` exit 0, `go vet ./internal/merge/...` exit 0, `go test ./internal/merge/...` → `ok github.com/steveyegge/beads/internal/merge 0.003s`. The two new tests execute (verified with `-run Claim -v`): `TestMergeIssue_Claim` (4 subtests) and `TestMerge3Way_ClaimPassThrough` both PASS. `gofmt -l internal/merge/` is empty.
+
+**The four things you asked me to look hardest at, all satisfied:**
+- The rebuild survives: `mergeIssue` assigns both fields into `result` at merge.go:585-589, and `TestMerge3Way_ClaimPassThrough` drives the real `Merge3Way` file path where the row is re-marshaled, asserting the wire names `"assignee"` and `"claim_expires_at"` in the raw output — not just struct round-trip.
+- Merged as a pair: `mergeClaim` (merge.go:677-696) returns both fields from one side in every branch, tie-broken by `isTimeAfter(left.UpdatedAt, right.UpdatedAt)`. No branch can mix one side's holder with the other's expiry.
+- Lease cleared / assignee kept off `in_progress`: merge.go:588-589 clears only `ClaimExpiresAt`. Covered by the "close beats claim" subtest and consistent with the plan's storage-side rule (`manageClaimExpiry` nulls the lease when status leaves `in_progress`).
+- Pass-through case present, twice: at the `mergeIssue` unit level and at the `Merge3Way` file level.
+
+**One finding (med), and it is not rework of this commit:** the same re-marshal mechanism still drops five keys that exist in the production store — `close_reason` (600 rows), `wisp` (107), `labels` (65), `external_ref` (16), `comments` (13) — because they are unmodeled in `merge.Issue`. Any merge that rewrites those rows deletes the fields from issues.jsonl. Outside this bead's contract; it wants a follow-up bead, either modeling the remaining exported keys or adding a `map[string]json.RawMessage` catch-all re-emitted on marshal.

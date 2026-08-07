@@ -1,0 +1,39 @@
+{
+  "schema": 2,
+  "bead_id": "bd-ok4pr.1.4",
+  "run_id": "1786120664782510009",
+  "changes": "committed",
+  "commits": ["a0d51ee71e33a136ad3e6528ebbea880e1ea3bb0"],
+  "acceptance": [
+    {
+      "criterion": "claim_expires_at is present in the schema constant, the schema probe and the memory backend",
+      "command": "for f in internal/storage/sqlite/schema.go internal/storage/sqlite/schema_probe.go internal/storage/memory/memory.go; do grep -q claim_expires_at \"$f\" || exit 1; done",
+      "exit": 0,
+      "log": "bd-ok4pr.1.4.1786120664782510009_step1.log"
+    },
+    {
+      "criterion": "the whole module builds",
+      "command": "go build ./...",
+      "exit": 0,
+      "log": "bd-ok4pr.1.4.1786120664782510009_step2.log"
+    },
+    {
+      "criterion": "storage and types tests pass, including the new memory lease and claim-audit tests",
+      "command": "go test ./internal/storage/... ./internal/types/...",
+      "exit": 0,
+      "log": "bd-ok4pr.1.4.1786120664782510009_step3.log"
+    },
+    {
+      "criterion": "go vet is clean across the storage packages",
+      "command": "go vet ./internal/storage/...",
+      "exit": 0,
+      "log": "bd-ok4pr.1.4.1786120664782510009_step4.log"
+    },
+    {
+      "criterion": "the full test suite passes",
+      "command": "go test ./...",
+      "exit": 0,
+      "log": "bd-ok4pr.1.4.1786120664782510009_step5.log"
+    }
+  ]
+}

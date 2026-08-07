@@ -1,0 +1,2 @@
+$ go vet ./cmd/bd/doctor/fix/
+exit=0

@@ -1,0 +1,7 @@
+Done. bd-ok4pr.4.3 is committed and closed.
+
+**The fix** (`cmd/bd/doctor/fix/e2e_test.go:751`, the only file touched): the subtest now chmods `.git/` itself to 0555 in addition to the existing 0444 on `.git/config`, because `git config` writes `.git/config.lock` and renames it over the target — that needs write permission on the directory, not the file, so the old 0444-only setup left git free to succeed. The existing `defer` restores `.git/` to 0755 before restoring the file to 0644, so `t.TempDir` cleanup works and `-count=2` re-runs cleanly. The assertion on `failed to update git merge driver config` is unchanged, nothing is skipped, and no non-test file changed.
+
+**Mutation check, done by hand as required:** I temporarily added `if true { return nil }` at the top of `MergeDriver` (`cmd/bd/doctor/fix/merge_driver.go:10`). The repaired subtest failed with `expected error when git config is read-only`. I reverted the edit and confirmed with `git status --porcelain` that only `e2e_test.go` was modified.
+
+Baseline before the change: the subtest failed on this host. All five acceptance commands now exit 0, including the full `bash scripts/test.sh` suite. Commit `901a0ab07` — not pushed, per the worker contract.

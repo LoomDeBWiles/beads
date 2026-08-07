@@ -1,0 +1,9 @@
+VERDICT: CLEAN findings=0
+| ID | sev | file:line | defect (one sentence) | fix (one sentence) |
+|---|---|---|---|---|
+
+Review written to `work/w3_atomic-claim/review_codex_v4.md`.
+
+All ten round-3 accepts landed exactly and completely: H1 at plan_v4.md:98 (exit-3 paragraph, the "without parsing JSON" claim removed) and :110 (supervisor cell), H1b at :140, H2 at :98, H2b at :159/:150/:161, H3 at :150/:161, H4 at :168, H5 at :169, H5r at :218, H6 at :148, H7 at :142.
+
+Consistency holds: `DenyReason` is `held` | `status` at all five appearances, the two Design DENY cells map one-to-one onto those two reasons, and the empty-assignee rules agree — the flag must be non-empty after trimming (Design :98, claim.go row :159) while the `in_progress ∧ assignee==""` CLAIM cell governs pre-existing legacy rows only. Unchanged text (E2E step 2, Proof row 1, deploy line) stays true under the reworded contract.

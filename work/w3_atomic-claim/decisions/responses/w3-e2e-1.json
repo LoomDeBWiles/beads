@@ -1,0 +1,1 @@
+{"id": "w3-e2e-1", "response": "pass", "evidence_paths": ["artifacts/e2e_claim_output.txt"], "note": "bash work/w3_atomic-claim/e2e_claim.sh against a binary built from the item tip prints E2E_PASS on its last line; the same run wrote the cited artifact. Independently re-run by the final reviewer, whose pasted output also ends E2E_PASS."}

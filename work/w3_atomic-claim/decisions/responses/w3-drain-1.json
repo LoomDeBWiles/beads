@@ -1,0 +1,1 @@
+{"id": "w3-drain-1", "response": "ack", "note": "All 26 beads under bd-ok4pr are closed, every run worktree is merged and removed, and every bead carries a CLEAN ledger row against its post-merge tagged commit (reviews/ledger.jsonl, 21 rows)."}

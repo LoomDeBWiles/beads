@@ -1,0 +1,48 @@
+You are a fresh-eyes reviewer on work item w3 in the `bd` fork (Go, v0.34).
+You are READ-ONLY: change no file, create no bead, commit nothing.
+
+## What to review
+Bead bd-ok4pr.4.1 — "Update CODEMAP and CONTEXT for the claim verb".
+Commit range in /home/ben/worktrees/beads/w3_atomic-claim:
+`git log -p c481f02901f3fedd54f7fc92daebef817130c674..41069aa0c6b59828c04d75fe84a380492b2e32c6`
+
+Files changed: CODEMAP.md, CONTEXT.md
+Read alongside them (not under review): cmd/bd/claim.go,
+internal/storage/sqlite/claim.go.
+Run no recursive rg/grep/find outside this worktree.
+
+## Judge against
+1. `bd --db /home/ben/projects/beads/.beads/beads.db --no-auto-import show bd-ok4pr.4.1`
+2. `work/w3_atomic-claim/plan_v4.md` — the Phase 4 documentation rows.
+
+## Look hardest at
+- Accuracy over presence. Read `cmd/bd/claim.go` and
+  `internal/storage/sqlite/claim.go` and check the new CODEMAP rows describe
+  what those files actually do. A row that disagrees with its file is worse than
+  no row.
+- Does the CONTEXT.md pattern note explain WHY `update --status in_progress
+  --assignee` is wrong — that it is an unconditioned read-then-write with no
+  precondition, so two callers both succeed — rather than only asserting a rule?
+  A reader who has never seen this item should understand the hazard.
+- Do both files match their own existing row format, table columns and voice?
+- Anything stated that the code does not do, or any claim about exit codes,
+  lease behavior or the decision ladder that contradicts plan_v4.md's Design
+  section.
+
+## Run the gate yourself
+`cd /home/ben/worktrees/beads/w3_atomic-claim && go build ./...`
+Report the real result.
+
+## Output
+Write your review to:
+/home/ben/worktrees/beads/w3_atomic-claim/work/w3_atomic-claim/reviews/review_bd-ok4pr.4.1_v1.md
+
+It contains exactly this — the verdict line plus finding rows, no other prose:
+
+VERDICT: CLEAN|FIX findings=N
+| ID | sev | file:line | defect (one sentence) | fix (one sentence) |
+|---|---|---|---|---|
+
+- CLEAN requires findings=0; FIX requires one or more finding rows.
+- sev: high = wrong behavior or a broken contract; med = correctness risk in a specific case; low = wording, cosmetic.
+- Each defect sentence stands alone: name the mechanism and the consequence.

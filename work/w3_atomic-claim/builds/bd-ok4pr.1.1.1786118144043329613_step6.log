@@ -1,0 +1,3 @@
+$ grep -q 'DenyReason' internal/types/types.go
+
+exit=0

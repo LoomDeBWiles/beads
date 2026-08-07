@@ -50,7 +50,8 @@ Storage layer:
 | `internal/storage/storage.go` | `Storage` interface — all backend operations |
 | `internal/storage/sqlite/sqlite.go` | SQLite backend entry point |
 | `internal/storage/sqlite/store.go` | SQLiteStorage struct, constructor |
-| `internal/storage/sqlite/migrations.go` | Schema migration runner (27 migrations) |
+| `internal/storage/sqlite/migrations.go` | Schema migration runner (27 migrations); `schema_migrations` ledger skips ones already applied, so each runs once per store |
+| `internal/storage/sqlite/migrations/db.go` | The `DB` interface every migration takes, so the whole pass runs on one connection |
 | `internal/storage/sqlite/claim.go` | `ClaimIssue` — claim decision ladder + write, inside one `BEGIN IMMEDIATE` transaction |
 | `internal/types/types.go` | Core types: Issue, Dependency, Status, IssueType |
 | `internal/rpc/protocol.go` | RPC request/response format (JSON over Unix socket) |
@@ -133,5 +134,5 @@ Freshness (ContentState): file sha256 ∈ {jsonl_content_hash, jsonl_pending_has
 | Add a CLI command | Create `cmd/bd/<name>.go`, register in `main.go` via `rootCmd.AddCommand()` |
 | Add an RPC operation | Add const in `internal/rpc/protocol.go`, handler in `server_*.go`, caller in `cmd/bd/<name>.go` |
 | Add a storage method | Add to `internal/storage/storage.go` interface, implement in `sqlite/*.go` |
-| Add a schema migration | Create `internal/storage/sqlite/migrations/0NN_<name>.go`, register in `migrations.go` |
+| Add a schema migration | Create `internal/storage/sqlite/migrations/0NN_<name>.go` taking a `migrations.DB`, register in `migrations.go`. A migration that rebuilds a table must copy columns discovered from `pragma_table_info`, never a literal list — a frozen list silently drops every column added after it |
 | Add a hook event | Add constant in `internal/hooks/hooks.go`, fire from daemon event loop |

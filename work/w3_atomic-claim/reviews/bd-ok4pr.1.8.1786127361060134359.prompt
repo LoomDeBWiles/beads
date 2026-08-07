@@ -1,0 +1,63 @@
+You are a fresh-eyes reviewer on work item w3 in the `bd` fork (Go, v0.34).
+You are READ-ONLY: change no file, create no bead, commit nothing.
+
+## What to review — the highest-stakes change in this item
+Bead bd-ok4pr.1.8 — "Stop migrations wiping post-022 columns on every open".
+Commit range in /home/ben/worktrees/beads/w3_atomic-claim:
+`git log -p dcbe1a6121d45d6c2c665641c68b4b27ec08df82..fa540710544b89475e57a5870b7d3d687096a831`
+
+Files changed: internal/storage/sqlite/migrations.go,
+internal/storage/sqlite/migrations/022_drop_edge_columns.go,
+internal/storage/sqlite/migrations_test.go, internal/storage/sqlite/schema.go,
+internal/storage/sqlite/claim_test.go
+
+This change alters migration behavior for EVERY `.beads` store on this machine, and 17 are
+live. A defect here can corrupt real trackers. Review it accordingly.
+
+## Judge against
+1. `work/w3_atomic-claim/rca_v1.md` — the root-cause analysis this fix implements
+   (fix B: rebuild copies columns discovered from pragma_table_info; fix C: a
+   schema_migrations ledger; B first so C's single backfill pass is lossless).
+2. `bd --db /home/ben/projects/beads/.beads/beads.db --no-auto-import show bd-ok4pr.1.8`
+3. `~/projects/shared-docs/CODING_PRINCIPLES.md` and
+   `~/projects/shared-docs/TESTING_PRINCIPLES.md`.
+
+## Look hardest at
+- THE BACKFILL. A store with no ledger must run all migrations exactly as today and then
+  record them all. Verify the code does that and NOT any form of detect-which-ran-and-skip,
+  which can leave a store half-migrated. This is the single most dangerous thing in the diff.
+- Is the ledger write inside the SAME transaction as the migration it records? A migration
+  that succeeds while its ledger row is lost re-runs forever; a ledger row written for a
+  migration that failed skips it forever. Both are corruption.
+- Does 022's runtime column list correctly exclude the four dropped columns and include
+  everything else, including columns added by future migrations? What happens on a table
+  with an unexpected shape?
+- Does the fix hold for a store that legitimately still has the edge columns (an old store
+  that never ran 022)?
+- Prove the reopen-survival test bites: restore 022 from the parent commit, or disable the
+  ledger skip, and confirm TestIssueColumnsSurviveReopen FAILS. Restore every file exactly
+  and confirm `git status --porcelain` is clean before you finish.
+- claim_test.go is outside the bead's Touches (the manager accepted it: the pre-027 fixture
+  relied on migrations re-running, which the ledger makes false). Confirm no assertion was
+  weakened to accommodate the fix.
+
+## Run it yourself, in your own temp directories only
+`cd /home/ben/worktrees/beads/w3_atomic-claim && go build ./... && go test ./internal/storage/... ./internal/types/...`
+Then reproduce the fix end to end: build a binary, create a scratch store under `mktemp -d`,
+write values into `pinned` and `claim_expires_at`, run a second `bd` process, and read them
+back. NEVER touch /home/ben/projects/*/.beads/, any other worktree's .beads/, or
+~/.local/bin/bd.
+
+## Output
+Write your review to:
+/home/ben/worktrees/beads/w3_atomic-claim/work/w3_atomic-claim/reviews/review_bd-ok4pr.1.8_v1.md
+
+Exactly this — the verdict line plus finding rows, no other prose:
+
+VERDICT: CLEAN|FIX findings=N
+| ID | sev | file:line | defect (one sentence) | fix (one sentence) |
+|---|---|---|---|---|
+
+- CLEAN requires findings=0; FIX requires one or more finding rows.
+- sev: high = wrong behavior or a broken contract; med = correctness risk in a specific case; low = wording, cosmetic.
+- Each defect sentence stands alone: name the mechanism and the consequence.

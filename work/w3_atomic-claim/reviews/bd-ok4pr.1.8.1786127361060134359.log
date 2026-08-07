@@ -1,0 +1,16 @@
+Review written to `work/w3_atomic-claim/reviews/review_bd-ok4pr.1.8_v1.md`.
+
+**VERDICT: FIX, 6 findings** (1 high, 2 med, 3 low). The fix itself is correct — I verified it end to end.
+
+What I verified working:
+- **The backfill is the safe form.** `migrations.go:195` runs every migration a store has no ledger row for, then records it. A store with no ledger runs all 27 exactly as today. No detect-and-skip anywhere.
+- **The ledger write commits with its migration.** `recordMigration` follows `migration.Func` inside the same `BEGIN EXCLUSIVE`; a failed pass rolls the row back with the work.
+- **Fix B works on a real legacy store.** I gave a scratch store the four edge columns back, deleted the `drop_edge_columns` ledger row, and reopened: `pinned` and `claim_expires_at` survived the rebuild, the edge columns and `idx_issues_replies_to` went away, and a custom index and a partial unique index were replayed.
+- **E2E.** Scratch store, `bd pin` + `bd claim`, second process: both values read back unchanged; ledger holds 27 rows.
+- **claim_test.go was not weakened** — the fixture gained a `DELETE FROM schema_migrations` line; every assertion, including the pre-027 fixture guard, is untouched.
+
+The high finding: **the reopen test does not bite for the 022 rewrite.** I restored 022 from the parent commit and all three tests still passed, because the ledger skips 022 on the second pass. Disabling the ledger skip instead does fail the test — but only on the probe-trigger assertion; the column values survive (which is itself proof that fix B works). So the 295-line runtime-column rewrite ships with no regression test.
+
+Two med findings: runtime column names are interpolated unquoted, so a column named e.g. `order` makes the store permanently unopenable (reproduced); and the ledger silently kills the schema self-repair that `store.go:158` still depends on — with `pinned` dropped, the parent binary heals the store, this build refuses to open it.
+
+`git status --porcelain` on tracked files is clean; all scratch dirs trashed. I never touched any real `.beads` or `~/.local/bin/bd`.

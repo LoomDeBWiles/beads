@@ -1,0 +1,1 @@
+go build ./... exited 0 (no output means success)

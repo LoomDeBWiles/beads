@@ -1,0 +1,12 @@
+=== RUN   TestClaimRoundTrip
+=== RUN   TestClaimRoundTrip/import_into_a_fresh_store
+=== RUN   TestClaimRoundTrip/import_into_a_store_already_holding_the_pre-claim_issue
+=== RUN   TestClaimRoundTrip/lease-only_renewal_on_an_external_ref_issue
+=== RUN   TestClaimRoundTrip/rename_collision_keeps_the_lease_on_the_surviving_ID
+--- PASS: TestClaimRoundTrip (0.53s)
+    --- PASS: TestClaimRoundTrip/import_into_a_fresh_store (0.15s)
+    --- PASS: TestClaimRoundTrip/import_into_a_store_already_holding_the_pre-claim_issue (0.12s)
+    --- PASS: TestClaimRoundTrip/lease-only_renewal_on_an_external_ref_issue (0.14s)
+    --- PASS: TestClaimRoundTrip/rename_collision_keeps_the_lease_on_the_surviving_ID (0.12s)
+PASS
+ok  	github.com/steveyegge/beads/cmd/bd	0.533s

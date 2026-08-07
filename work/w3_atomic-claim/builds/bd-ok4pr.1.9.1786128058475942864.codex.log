@@ -1,0 +1,19 @@
+Done. bd-ok4pr.1.9 is implemented, gated, committed (`29003e307`) and closed. No push.
+
+**What changed, item by item**
+
+1. **022 rewrite now has coverage.** `TestDropEdgeColumnsRebuildKeepsLaterColumns` calls `MigrateDropEdgeColumns` directly on a table with the four edge columns restored, a `pinned`/`claim_expires_at` row, and two indexes. It asserts the values survive, the index on a surviving column is replayed, the index on a dropped column is not, and the edge columns are gone. Restoring the frozen-list behaviour (dropping `claim_expires_at` from the carried set) fails only this test — the three tests the reviewer flagged still pass, which is the finding reproduced.
+
+2. **Quoting.** New `quoteIdent`; every runtime-derived identifier is quoted in `addColumnClause`, `copyExpr` and the INSERT column list. `TestDropEdgeColumnsQuotesIdentifiers` rebuilds over a column named `order`; with quoting removed it fails with the reviewer's `near "order": syntax error`.
+
+3. **Self-repair restored.** `Open`'s probe-failure path drops `schema_migrations` before retrying, so the retry runs and re-records everything, as a store with no ledger does. `TestOpenHealsDroppedColumn` drops `pinned` from a closed store and reopens it; with the reset removed it fails with `missing columns in issues: pinned`.
+
+4. The hand-typed `canonicalIssuesColumnNames` is gone; the known-column set is read from `pragma_table_info('issues_new')` right after the table is created.
+
+5. The whole migration pass runs on one `*sql.Conn` behind a new `migrations.DB` handle, so the PRAGMA, `BEGIN EXCLUSIVE`, every migration, every ledger row and the invariant checks share one connection. This changed the parameter type of all 27 migration functions — beyond the bead's `Touches` list, unavoidably, and with no logic change in those files. `foreign_keys=ON` is now restored on that connection before it goes back to the pool.
+
+6. `bd migrate --inspect` reports `applied_migrations` (JSON and human output); the "idempotent, run on every open" comment is corrected.
+
+7. `prior_head.txt` now holds `c6076387c`; `git cat-file -e <it>:internal/storage/sqlite/claim.go` fails, as required.
+
+All five acceptance commands exited 0, logs in `work/w3_atomic-claim/builds/`, report written to the required path.

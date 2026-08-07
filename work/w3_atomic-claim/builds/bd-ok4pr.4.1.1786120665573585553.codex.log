@@ -1,0 +1,15 @@
+Done. bd-ok4pr.4.1 is committed and closed.
+
+**What changed**
+
+`CODEMAP.md` (2 rows, existing table style):
+- `cmd/bd/claim.go` | `bd claim` — atomic ownership take/renew/steal; exit 3 on denial
+- `internal/storage/sqlite/claim.go` | `ClaimIssue` — claim decision ladder + write, inside one `BEGIN IMMEDIATE` transaction
+
+`CONTEXT.md` (Patterns section, matching the dated-note voice of the w2 entry): a note explaining *why* `bd update --status in_progress --assignee` is wrong, not just that it's banned. It walks the actual failure: `update` reads outside the write transaction, so two agents both read "free", both write, the second overwrites the first, and both believe they own the issue. `bd claim` puts read, decision and write in one `BEGIN IMMEDIATE` transaction that SQLite serializes, so one claimant wins. It also records the exit-code contract (3 = denied, `deny_reason=held` retry vs `deny_reason=status` skip; 1 stays a real error), renew-on-self, and that a no-lease claim never expires so scripts that can die should pass `--lease`.
+
+**Gate and acceptance**: `bdc test` passed (full `go build`/`go test`/`go vet`). All four Acceptance greps exit 0, logs at `builds/bd-ok4pr.4.1.1786120665573585553_step{1..4}.log`.
+
+**Commit**: `2fd6cff7b342cb910f209db931376bad3fa88467` — `task(bd-ok4pr.4.1): Update CODEMAP and CONTEXT for the claim verb`. Not pushed, as instructed.
+
+Build report written to `work/w3_atomic-claim/builds/bd-ok4pr.4.1.1786120665573585553.build.json`.

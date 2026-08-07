@@ -1,0 +1,47 @@
+{
+  "schema": 2,
+  "bead_id": "bd-ok4pr.3.1",
+  "run_id": "1786120665171689172",
+  "changes": "committed",
+  "commits": [
+    "c481f02901f3fedd54f7fc92daebef817130c674"
+  ],
+  "acceptance": [
+    {
+      "criterion": "The tree compiles with the lease mapped through the importer",
+      "command": "go build ./...",
+      "exit": 0,
+      "log": "bd-ok4pr.3.1.1786120665171689172_step1.log"
+    },
+    {
+      "criterion": "The lease survives export and import into a fresh store, a store already holding the pre-claim issue, and a lease-only renewal on an external_ref issue",
+      "command": "go test ./cmd/bd/ -run TestClaimRoundTrip",
+      "exit": 0,
+      "log": "bd-ok4pr.3.1.1786120665171689172_step2.log"
+    },
+    {
+      "criterion": "The existing importer suite still passes with the new claim_expires_at comparator",
+      "command": "go test ./internal/importer/...",
+      "exit": 0,
+      "log": "bd-ok4pr.3.1.1786120665171689172_step3.log"
+    },
+    {
+      "criterion": "Both importer files name the lease column",
+      "command": "grep -q 'claim_expires_at' internal/importer/importer.go internal/importer/utils.go",
+      "exit": 0,
+      "log": "bd-ok4pr.3.1.1786120665171689172_step4.log"
+    },
+    {
+      "criterion": "The nil-aware time comparator exists",
+      "command": "grep -q 'equalPtrTime' internal/importer/utils.go",
+      "exit": 0,
+      "log": "bd-ok4pr.3.1.1786120665171689172_step5.log"
+    },
+    {
+      "criterion": "All three explicit update maps carry the lease",
+      "command": "test \"$(grep -c 'claim_expires_at' internal/importer/importer.go)\" -ge 3",
+      "exit": 0,
+      "log": "bd-ok4pr.3.1.1786120665171689172_step6.log"
+    }
+  ]
+}

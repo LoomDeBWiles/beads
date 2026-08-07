@@ -1,0 +1,35 @@
+{
+  "schema": 2,
+  "bead_id": "bd-ok4pr.4.1",
+  "run_id": "1786120665573585553",
+  "changes": "committed",
+  "commits": [
+    "41069aa0c6b59828c04d75fe84a380492b2e32c6"
+  ],
+  "acceptance": [
+    {
+      "criterion": "CODEMAP.md has a row for the claim CLI command file",
+      "command": "grep -q 'cmd/bd/claim.go' CODEMAP.md",
+      "exit": 0,
+      "log": "bd-ok4pr.4.1.1786120665573585553_step1.log"
+    },
+    {
+      "criterion": "CODEMAP.md has a row for the sqlite claim storage file",
+      "command": "grep -q 'internal/storage/sqlite/claim.go' CODEMAP.md",
+      "exit": 0,
+      "log": "bd-ok4pr.4.1.1786120665573585553_step2.log"
+    },
+    {
+      "criterion": "CONTEXT.md names bd claim as the claiming verb",
+      "command": "grep -q 'bd claim' CONTEXT.md",
+      "exit": 0,
+      "log": "bd-ok4pr.4.1.1786120665573585553_step3.log"
+    },
+    {
+      "criterion": "CONTEXT.md names the racy update idiom the note bans",
+      "command": "grep -q 'update --status in_progress' CONTEXT.md",
+      "exit": 0,
+      "log": "bd-ok4pr.4.1.1786120665573585553_step4.log"
+    }
+  ]
+}

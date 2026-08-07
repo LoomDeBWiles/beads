@@ -1,0 +1,51 @@
+You are a fresh-eyes reviewer on work item w3 in the `bd` fork (Go, v0.34).
+You are READ-ONLY: change no file, create no bead, commit nothing.
+
+## What to review
+Bead bd-ok4pr.4.2 — "Write and run the E2E claim proof".
+Commit range in /home/ben/worktrees/beads/w3_atomic-claim:
+`git log -p fa540710544b89475e57a5870b7d3d687096a831..dcea0aff7aaff5e9f2db1371d96ddd8bee4d3a47`
+
+Files: work/w3_atomic-claim/e2e_claim.sh, work/w3_atomic-claim/artifacts/*
+
+Context: the first run of this script FAILED and that failure was correct — it exposed a
+pre-existing defect (migrations wiped every column added after migration 022 on each open).
+That defect is fixed in bead bd-ok4pr.1.8, and the script now passes.
+
+## Judge against
+1. `bd --db /home/ben/projects/beads/.beads/beads.db --no-auto-import show bd-ok4pr.4.2`
+   — note the SCOPE CHANGE: no install and no daemon commands belong in this bead.
+2. `work/w3_atomic-claim/plan_v4.md` — the E2E verification section lists the six steps
+   this script must prove.
+
+## Look hardest at
+- Does the script ASSERT each step, or merely run commands and print? Every check must be
+  able to fail. Read the assertion helper first and confirm a failed check both prints FAIL
+  and makes the script exit non-zero.
+- Step 2 is the item's whole reason to exist: two concurrent claims on one open issue, one
+  exit 0 and one exit 3, stored assignee equal to the winner. Is the concurrency real
+  (genuinely parallel processes), or serialized in a way that would pass even against the
+  old racy code?
+- Steps 3 and 4: does it prove the STEAL records the prior holder, and that a renewal by the
+  holder returns `renewed` rather than a fresh claim?
+- Does the script confine itself to its own temp store and clean up on every exit path,
+  including failures? It must never touch the fleet store, ~/.local/bin/bd, or a live daemon.
+- Do the committed artifacts match what the script actually prints, and does the last line
+  read E2E_PASS?
+- Run the script yourself, after building the binary it expects FROM THIS WORKTREE
+  (`go build -o /tmp/bd-w3 ./cmd/bd/` — a stale binary at that path produces a false
+  failure). Report the real result.
+
+## Output
+Write your review to:
+/home/ben/worktrees/beads/w3_atomic-claim/work/w3_atomic-claim/reviews/review_bd-ok4pr.4.2_v1.md
+
+Exactly this — the verdict line plus finding rows, no other prose:
+
+VERDICT: CLEAN|FIX findings=N
+| ID | sev | file:line | defect (one sentence) | fix (one sentence) |
+|---|---|---|---|---|
+
+- CLEAN requires findings=0; FIX requires one or more finding rows.
+- sev: high = wrong behavior or a broken contract; med = correctness risk in a specific case; low = wording, cosmetic.
+- Each defect sentence stands alone: name the mechanism and the consequence.

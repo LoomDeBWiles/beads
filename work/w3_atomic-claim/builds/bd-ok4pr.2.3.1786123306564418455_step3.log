@@ -1,0 +1,7 @@
+=== RUN   TestClaimExitCodesInDirectMode
+--- PASS: TestClaimExitCodesInDirectMode (1.16s)
+=== RUN   TestClaimExitCodesInDaemonMode
+--- PASS: TestClaimExitCodesInDaemonMode (0.69s)
+PASS
+ok  	github.com/steveyegge/beads/cmd/bd	1.861s
+exit=0

@@ -1,0 +1,84 @@
+You are a builder on work item w3 in the `bd` fork (Go, v0.34). Implement exactly one bead.
+
+## Your bead
+bd-ok4pr.1.7
+
+## Your worktree (the ONLY tree you may write to)
+/home/ben/worktrees/beads/w3_atomic-claim/.runs/bd-ok4pr.1.7.1786123306148603375
+
+Everything below runs from that directory. Do not read or write any other
+worktree, and never run a recursive rg/grep/find outside it.
+
+## Step 1 — read your inputs, in this order
+1. `bd --db /home/ben/projects/beads/.beads/beads.db --no-auto-import show bd-ok4pr.1.7`
+   This bead is the second fix round on already-merged work: its `## Contract` is
+   a reviewer's finding text, each item naming the mechanism and the consequence,
+   with the file and line. Implement it literally. `## Acceptance` is the exact
+   command list you must make pass; `## Touches` is your write allowlist.
+2. `work/w3_atomic-claim/plan_v4.md` — the Design section is the authority on
+   claim semantics.
+3. `~/projects/shared-docs/CODING_PRINCIPLES.md` and
+   `~/projects/shared-docs/TESTING_PRINCIPLES.md`.
+
+## Step 2 — implement
+Item 1 is a real bug, not a test gap: an update that rejects one key currently
+leaves other keys of the same call written, with no dirty mark and no event. Make
+a rejected update a no-op. Item 2's loop over every probed column is what stops
+this class from recurring one column at a time — write the loop, not another
+single-column test.
+
+Read the bead's "Test discipline" section and follow it exactly. It exists because
+this work item has now produced three separate tests that could not fail: an
+assertion compared against a constant from the code under test, an assertion
+seeded true by the fixture, and a coverage claim behind a build tag that never
+ran. A test that passes when the thing it protects is broken is worse than no
+test, because it advertises coverage that does not exist.
+
+## Step 3 — gate and close, in this order
+1. `bdc test <the files you changed>`
+2. every `## Acceptance` command in the bead, in the bead's order, each exiting 0
+3. `bdc bd-ok4pr.1.7 <the files you changed>` — this runs the gate, makes the tagged
+   pathspec commit, and closes the bead. It does not push; do not push.
+
+The repo's gate command is already configured in the tracked `.bdc.conf` at the
+worktree root. Do not create, edit, or delete that file.
+
+## Step 4 — build report (the manager's evidence; a wrong name or field fails the audit)
+Write, at this ABSOLUTE path:
+/home/ben/worktrees/beads/w3_atomic-claim/work/w3_atomic-claim/builds/bd-ok4pr.1.7.1786123306148603375.build.json
+
+one JSON object:
+
+| Field | Value |
+|---|---|
+| `schema` | the number `2` |
+| `bead_id` | `"bd-ok4pr.1.7"` |
+| `run_id` | `"1786123306148603375"` |
+| `changes` | `"committed"` when the run made a tagged commit, `"none"` when it correctly made none. No other value |
+| `commits` | list of commit SHAs, no duplicates. `"committed"` → exactly the one `(bd-ok4pr.1.7)`-tagged commit `bdc` made; `"none"` → `[]` |
+| `acceptance` | list, one entry per bead Acceptance command, in the bead's order, same length |
+
+Each `acceptance` entry has exactly these four keys, no more:
+
+| Key | Value |
+|---|---|
+| `criterion` | string naming what the command proves |
+| `command` | the bead's Acceptance command, character for character |
+| `exit` | the number `0` — a nonzero exit is a failed build, not a report |
+| `log` | the entry's step log filename (grammar below) |
+
+The acceptance step log you write is `bd-ok4pr.1.7.1786123306148603375_step{N}.log`, where `N` is the
+entry's 1-based position in `acceptance`. It is a name relative to
+/home/ben/worktrees/beads/w3_atomic-claim/work/w3_atomic-claim/builds/ (no `builds/` prefix inside the JSON), it must exist in that
+ABSOLUTE directory, and it must be non-empty. Nothing else is accepted:
+`.acceptance1.log`, `.acc1.log`, `.a1.log`, `.accept1.log` and `_step01.log`
+all fail.
+
+Record your mutation checks in the build report as well: what you broke, which
+test failed, and that you restored the file.
+
+## Worker contract
+Your run worktree only. No branch switch, reset, or rebase. No push. No `wt-*`
+scripts. Stay inside `## Touches`. The manager owns the rebase and the merge.
+If the bead cannot be completed as written, stop and write the reason into the
+build report path above instead of improvising past it.

@@ -1,0 +1,87 @@
+{
+  "schema": 2,
+  "bead_id": "bd-ok4pr.2.3",
+  "run_id": "1786123306564418455",
+  "changes": "committed",
+  "commits": [
+    "f1613bdf992f81800613c52aa80156d1ac812442"
+  ],
+  "acceptance": [
+    {
+      "criterion": "The whole module still compiles after the test-file changes",
+      "command": "go build ./...",
+      "exit": 0,
+      "log": "bd-ok4pr.2.3.1786123306564418455_step1.log"
+    },
+    {
+      "criterion": "The claim CLI package and the RPC packages pass together, so the literal exit-code assertions and the renamed-op metrics check hold on both sides of the wire",
+      "command": "go test ./cmd/bd/ ./internal/rpc/...",
+      "exit": 0,
+      "log": "bd-ok4pr.2.3.1786123306564418455_step2.log"
+    },
+    {
+      "criterion": "Both end-to-end exit-code tests (direct mode and daemon mode) run and pass in the default gate, with no build tag hiding them",
+      "command": "go test ./cmd/bd/ -run ClaimExitCodes -v",
+      "exit": 0,
+      "log": "bd-ok4pr.2.3.1786123306564418455_step3.log"
+    },
+    {
+      "criterion": "The full test suite is green, including the new package-level TestMain in cmd/bd",
+      "command": "go test ./...",
+      "exit": 0,
+      "log": "bd-ok4pr.2.3.1786123306564418455_step4.log"
+    }
+  ],
+  "findings": [
+    {
+      "item": 1,
+      "what": "cmd/bd/claim_test.go:355 and :414 compared the observed denial exit status against claimDeniedExit, the package's own constant, so the exit-3 contract was unasserted.",
+      "fix": "Both assertions now compare against the literal 3 (claim_test.go:375 direct mode, :440 daemon mode); claimDeniedExit appears only inside the failure message text."
+    },
+    {
+      "item": "1 (audit)",
+      "what": "Audited the whole file for the same pattern. Two further instances: assertDaemonServedClaims matched the daemon's metrics row on rpc.OpClaim (a rename would have kept the test green), and TestClaimFlagsTruncatesSubSecondRemainder cross-checked the RPC lease against the value claimFlags itself returned.",
+      "fix": "The metrics loop now matches the literal wire name \"claim\" (constant named only in the comment and the failure message); the truncation test asserts the literal 90 seconds. The remaining uses of types.* and rpc.* constants in the file are test inputs, not expected values, and were left alone. Also split two `x == nil || *x != want` guards into a nil Fatal plus a value Errorf, because the combined form printed a pointer address instead of the observed number on failure."
+    },
+    {
+      "item": 2,
+      "what": "claimTestBinary built the 33 MB bd binary into an os.MkdirTemp directory nothing removed, leaking 33 MB per `go test ./cmd/bd/` run.",
+      "fix": "The sync.Once now records the directory in claimBinaryDir, and a new package-level TestMain (claim_test.go:237) removes it after m.Run() returns, before os.Exit, so the removal happens whether the tests pass or fail. cmd/bd had no prior TestMain."
+    },
+    {
+      "item": 3,
+      "what": "The `strings.Contains(res.stderr, \"direct mode\")` fallback guard in TestClaimExitCodesInDaemonMode caught only the unconditional auto-start-timeout warning (daemon_autostart.go:309); the connect-failed and health-failed fallbacks print via emitVerboseWarning (daemon_autostart.go:411), which main.go:739 gates on BD_VERBOSE, which the test did not set.",
+      "fix": "The daemon test's environment is now {BEADS_NO_DAEMON=0, BD_VERBOSE=1}, so every fallback reason prints (all of the emitVerboseWarning messages contain the substring \"direct mode\"). The comment now says the guard fails fast on a fallback and names assertDaemonServedClaims (the daemon's own operation counters) as the primary proof that the RPC route ran."
+    }
+  ],
+  "mutation_checks": [
+    {
+      "protects": "The literal exit-3 denial assertion in both modes (claim_test.go:375, :440)",
+      "broke": "cmd/bd/claim.go:22, `const claimDeniedExit = 3` -> `= 1`",
+      "result": "FAILED as required: TestClaimExitCodesInDirectMode (claim_test.go:376) and TestClaimExitCodesInDaemonMode (claim_test.go:441) both reported `should exit 3 (claimDeniedExit), got 1`. This is exactly the mutation that left the previous gate green.",
+      "restored": "yes - cmd/bd/claim.go restored from backup, `git diff --stat cmd/bd/claim.go` empty"
+    },
+    {
+      "protects": "The literal \"claim\" wire name in assertDaemonServedClaims (claim_test.go:449)",
+      "broke": "internal/rpc/protocol.go:29, `OpClaim = \"claim\"` -> `\"claim_renamed\"` (client and server both use the constant, so the claims still succeeded end to end and every exit-code assertion still passed)",
+      "result": "FAILED as required: TestClaimExitCodesInDaemonMode (claim_test.go:458) reported `the daemon recorded no \"claim\" operation`. The previous rpc.OpClaim form would have passed this mutation.",
+      "restored": "yes - internal/rpc/protocol.go restored from backup, `git diff --stat internal/rpc/protocol.go` empty"
+    },
+    {
+      "protects": "The literal 90-second lease on the RPC route (claim_test.go:108 and :119)",
+      "broke": "cmd/bd/claim.go:140, `seconds := int64(lease.Seconds())` -> `+ 1`",
+      "result": "FAILED as required: TestClaimFlagsTruncatesSubSecondRemainder reported `the RPC route sends 91 seconds, want the same 90` and TestClaimRPCArgsCarryLeaseSeconds reported `LeaseSeconds = 91, want 90`. Re-run after restoring: ok.",
+      "restored": "yes - cmd/bd/claim.go restored from backup, `git diff --stat cmd/bd/claim.go` empty"
+    },
+    {
+      "protects": "The TestMain cleanup (claim_test.go:237), whose subject is disk, not a code path",
+      "broke": "Disabled the removal in TestMain (`if false && claimBinaryDir != \"\"`), then ran `TMPDIR=/tmp/bd-ok4pr23-tmpdir go test ./cmd/bd/ -run TestClaimExitCodesInDirectMode -count=1` in an isolated TMPDIR (a sibling worktree was concurrently running `go test ./cmd/bd/` against the pre-fix file, so the shared /tmp count is not a valid measurement)",
+      "result": "Leak reproduced with the cleanup disabled: one 33 MB /tmp/bd-ok4pr23-tmpdir/bd-claim-e2e-* directory survived. With the cleanup enabled the same run left 0 directories. Failure path also checked: with claimDeniedExit mutated to 1 so the run FAILED, the cleanup still left 0 directories.",
+      "restored": "yes - cmd/bd/claim_test.go restored from backup (no `if false` remains) and cmd/bd/claim.go restored; the leaked scratch directory was trashed via shared-docs/scripts/trash.sh"
+    }
+  ],
+  "notes": [
+    "Only cmd/bd/claim_test.go is modified in the commit, matching the bead's Touches allowlist. All mutations were to files outside the allowlist and were restored before the gate ran; `git status --porcelain` showed only ` M cmd/bd/claim_test.go` before `bdc`, and is empty after.",
+    "The 23 accumulated /tmp/bd-claim-e2e-* directories the bead cites are shared across every worktree of this repo; new ones appeared during this session from a sibling builder running the pre-fix test file, which is why the leak check was done under an isolated TMPDIR."
+  ]
+}

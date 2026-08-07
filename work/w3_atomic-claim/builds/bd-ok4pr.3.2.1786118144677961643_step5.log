@@ -1,0 +1,2 @@
+$ grep -q 'ClaimExpiresAt' internal/merge/merge_test.go
+exit=0

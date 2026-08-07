@@ -1,0 +1,14 @@
+Review written to `work/w3_atomic-claim/reviews/review_bd-ok4pr.2.3_v3.md`.
+
+**VERDICT: FIX findings=2** (both low; all three Contract items are genuinely closed).
+
+Evidence:
+
+- **Gate**: `go build ./...` clean; `go test ./cmd/bd/ ./internal/rpc/...` → `ok cmd/bd 26.4s`, `ok internal/rpc 4.5s`.
+- **Item 1 closed**: with `claimDeniedExit = 1`, both `TestClaimExitCodesInDirectMode` (claim_test.go:382) and `...InDaemonMode` (claim_test.go:447) FAIL. The other former tautology, `op.Operation != rpc.OpClaim`, is now the literal `"claim"`: renaming `OpClaim` to `"claim_renamed"` makes the daemon test FAIL at claim_test.go:464. Audited the rest of the file — no remaining assertion takes its expected value from the code under test.
+- **Item 2 closed**: my passing gate run and a deliberately failing run (`claimDeniedExit=1`) each left zero new `/tmp/bd-claim-e2e-*` directories; only the 4 pre-fix dirs from 19:25-19:27 remain (finding F2). A panic or `SIGKILL` still leaks, which is inherent to the `TestMain` approach the Contract prescribed.
+- **Item 3 closed and load-bearing**: forcing both health checks in main.go to fail makes the daemon test FAIL at the guard with `Warning: Daemon unhealthy. Falling back to direct mode.` — a message that only prints under `BD_VERBOSE`. Removing `BD_VERBOSE=1` under the same mutation, the guard misses it entirely and only the metrics check catches it, which is exactly what the reworded comment now claims.
+- **Mutation coverage of every test in the file** (each broken, confirmed FAIL, restored): flag-rejection, trim, no-lease, sub-second reject, truncate, RPC args, denial message, verb, registration, direct/daemon exit codes, daemon metrics, RPC non-positive lease. No zombie test found.
+- **Control flow**: the only change is splitting two `nil ||` conditions into a `t.Fatal` nil guard plus a value check — no half-applied path.
+
+Tree is clean: `git status --porcelain` shows only the pre-existing untracked `work/w3_atomic-claim/`. Every file I mutated (`cmd/bd/claim.go`, `cmd/bd/main.go`, `internal/rpc/protocol.go`, `internal/rpc/server_issues_epics.go`, `cmd/bd/claim_test.go`) is restored.

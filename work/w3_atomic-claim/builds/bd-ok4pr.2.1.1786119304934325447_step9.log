@@ -1,0 +1,2 @@
+$ go run ./cmd/bd claim --help | grep -q -- '--lease'
+exit=0

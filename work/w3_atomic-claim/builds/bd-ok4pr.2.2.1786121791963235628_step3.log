@@ -1,0 +1,2 @@
+$ go test ./cmd/bd/ -run Claim -v 2>&1 | grep -q PASS
+exit=0

@@ -1,0 +1,10 @@
+VERDICT: FIX findings=1 — review at `work/w3_atomic-claim/reviews/review_bd-ok4pr.3.1_v1.md`.
+
+What I verified (nothing in the worktree was modified; revert experiments ran in a `/tmp` copy, now trashed):
+
+- **All three update maps carry the lease.** `handleRename` :381, external_ref path :578, ID-collision path :676. No fourth silent-drop path exists: the other `handleRename` branches go through `DeleteIssue`+`CreateIssue` (insertIssue carries the column), and `UpdateIssueID` is not called from the importer.
+- **Comparator is correct in both directions.** `equalPtrTime` (utils.go:91-108) is nil-aware on both sides, handles `*time.Time`/`time.Time`/`nil`, and compares with `time.Time.Equal`; the `case "claim_expires_at"` is wired into `checkFieldChanged` :172. No routing through the string helpers, so no unconditional-change churn.
+- **Test covers the three required paths** and is load-bearing. Reverting only `importer.go` fails two subtests ("existing store: claim_expires_at is NULL after import", "lease renewal: … is 19:01 … want 19:21"). Reverting only `utils.go` fails the renewal subtest alone. So yes — the round-trip test would fail if the update-map changes were reverted.
+- **Gate, real results:** `go build ./...` clean; `go test ./internal/importer/... ./cmd/bd/ -run TestClaimRoundTrip` → ok (importer: no tests to run, cmd/bd 0.470s); `go test ./internal/importer/...` → ok 0.951s.
+
+The one finding is a coverage gap, not wrong behavior: the `handleRename` mapping is unguarded — removing it keeps both packages green.

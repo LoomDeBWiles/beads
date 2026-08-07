@@ -1,0 +1,80 @@
+You are a builder on work item w3 in the `bd` fork (Go, v0.34). Implement exactly one bead.
+
+## Your bead
+bd-ok4pr.2.2
+
+## Your worktree (the ONLY tree you may write to)
+/home/ben/worktrees/beads/w3_atomic-claim/.runs/bd-ok4pr.2.2.1786121791963235628
+
+Everything below runs from that directory. Do not read or write any other
+worktree, and never run a recursive rg/grep/find outside it.
+
+## Step 1 — read your inputs, in this order
+1. `bd --db /home/ben/projects/beads/.beads/beads.db --no-auto-import show bd-ok4pr.2.2`
+   This bead came out of a fresh-eyes review of already-merged work, so its
+   `## Contract` IS the review's finding text: each item names the mechanism and
+   the consequence. Implement it literally. `## Acceptance` is the exact command
+   list you must make pass; `## Touches` is your write allowlist.
+2. `work/w3_atomic-claim/plan_v4.md` — the Design section is the authority on
+   claim semantics.
+3. `~/projects/shared-docs/CODING_PRINCIPLES.md` and
+   `~/projects/shared-docs/TESTING_PRINCIPLES.md`.
+
+## Step 2 — implement
+Item 1 is the one that matters: the claim exit-code assertions currently never
+run in the default gate because the scripttest runner is behind a build tag.
+Write a tag-free Go test that builds the binary and asserts exit 0, 3 and 1 in
+BOTH daemon and direct modes. Do not add `-tags scripttests` to the gate — that
+tagged suite has three pre-existing failures that are out of scope here.
+
+Several of these findings were proven by mutation: the reviewer deleted an
+implementation line and the suite stayed green. A fix that does not make the
+suite fail when that line is removed has not fixed anything. Where your bead
+adds a test, verify it bites — break the thing it protects, confirm the test
+fails, restore, and say so in your build report.
+
+## Step 3 — gate and close, in this order
+1. `bdc test <the files you changed>`
+2. every `## Acceptance` command in the bead, in the bead's order, each exiting 0
+3. `bdc bd-ok4pr.2.2 <the files you changed>` — this runs the gate, makes the tagged
+   pathspec commit, and closes the bead. It does not push; do not push.
+
+The repo's gate command is already configured in the tracked `.bdc.conf` at the
+worktree root. Do not create, edit, or delete that file.
+
+## Step 4 — build report (the manager's evidence; a wrong name or field fails the audit)
+Write, at this ABSOLUTE path:
+/home/ben/worktrees/beads/w3_atomic-claim/work/w3_atomic-claim/builds/bd-ok4pr.2.2.1786121791963235628.build.json
+
+one JSON object:
+
+| Field | Value |
+|---|---|
+| `schema` | the number `2` |
+| `bead_id` | `"bd-ok4pr.2.2"` |
+| `run_id` | `"1786121791963235628"` |
+| `changes` | `"committed"` when the run made a tagged commit, `"none"` when it correctly made none. No other value |
+| `commits` | list of commit SHAs, no duplicates. `"committed"` → exactly the one `(bd-ok4pr.2.2)`-tagged commit `bdc` made; `"none"` → `[]` |
+| `acceptance` | list, one entry per bead Acceptance command, in the bead's order, same length |
+
+Each `acceptance` entry has exactly these four keys, no more:
+
+| Key | Value |
+|---|---|
+| `criterion` | string naming what the command proves |
+| `command` | the bead's Acceptance command, character for character |
+| `exit` | the number `0` — a nonzero exit is a failed build, not a report |
+| `log` | the entry's step log filename (grammar below) |
+
+The acceptance step log you write is `bd-ok4pr.2.2.1786121791963235628_step{N}.log`, where `N` is the
+entry's 1-based position in `acceptance`. It is a name relative to
+/home/ben/worktrees/beads/w3_atomic-claim/work/w3_atomic-claim/builds/ (no `builds/` prefix inside the JSON), it must exist in that
+ABSOLUTE directory, and it must be non-empty — a silent command records its
+command line and exit status. Nothing else is accepted: `.acceptance1.log`,
+`.acc1.log`, `.a1.log`, `.accept1.log` and `_step01.log` all fail.
+
+## Worker contract
+Your run worktree only. No branch switch, reset, or rebase. No push. No `wt-*`
+scripts. Stay inside `## Touches`. The manager owns the rebase and the merge.
+If the bead cannot be completed as written, stop and write the reason into the
+build report path above instead of improvising past it.

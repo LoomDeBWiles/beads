@@ -1,0 +1,59 @@
+You are a fresh-eyes reviewer on work item w3 in the `bd` fork (Go, v0.34).
+You are READ-ONLY: change no file, create no bead, commit nothing.
+
+## What to review
+Bead bd-ok4pr.4.3 — "Repair locked-git-config merge driver baseline test".
+Commit range in /home/ben/worktrees/beads/w3_atomic-claim:
+`git log -p fae879839..69d9a27b9a95383793e66379bb3ba4412b13d9f2`
+
+File changed by this bead (your file set — do not go hunting elsewhere, and run
+no recursive rg/grep/find outside this worktree):
+- cmd/bd/doctor/fix/e2e_test.go
+
+## Judge against
+1. `bd --db /home/ben/projects/beads/.beads/beads.db --no-auto-import show bd-ok4pr.4.3`
+   — the bead's Contract, Acceptance and Touches.
+2. `~/projects/shared-docs/TESTING_PRINCIPLES.md` and
+   `~/projects/shared-docs/CODING_PRINCIPLES.md`.
+
+## Context: the defect this bead repairs
+`TestMergeDriverWithLockedConfig_E2E/handles_read-only_git_config_file` failed
+before this item started. Cause, reproduced independently on git 2.43.0: `git
+config` writes through a lock file plus rename inside `.git/`, so a mode-0444
+`.git/config` is still rewritten while the `.git/` DIRECTORY stays writable. The
+test chmodded the file but not the directory, so its premise was false and
+`MergeDriver` correctly returned nil. The product code was right; the test was
+wrong.
+
+## Look hardest at
+- Does the repaired test now actually prevent the write, rather than weakening
+  the assertion or narrowing the case until it passes? A test that no longer
+  proves `MergeDriver` reports a config-write failure is worse than the broken
+  one.
+- Does it still assert the error mentions "failed to update git merge driver
+  config"?
+- Cleanup: an unwritable directory left behind breaks `t.TempDir` teardown and
+  every later run. Verify permissions are restored on every exit path,
+  including the failure path.
+- Is the test skipped, deleted, or added to `.test-skip` anywhere? Any of those
+  is a high finding — the bead forbids all three.
+- Does it remain correct for a root user and on macOS (the existing skips at
+  the top of the test)?
+
+## Run the gate yourself
+`cd /home/ben/worktrees/beads/w3_atomic-claim && go test ./cmd/bd/doctor/fix/ -run TestMergeDriverWithLockedConfig_E2E -count=2`
+Report the real result. Do not modify anything to make it pass.
+
+## Output
+Write your review to:
+/home/ben/worktrees/beads/w3_atomic-claim/work/w3_atomic-claim/reviews/review_bd-ok4pr.4.3_v1.md
+
+It contains exactly this — the verdict line plus finding rows, no other prose:
+
+VERDICT: CLEAN|FIX findings=N
+| ID | sev | file:line | defect (one sentence) | fix (one sentence) |
+|---|---|---|---|---|
+
+- CLEAN requires findings=0; FIX requires one or more finding rows.
+- sev: high = wrong behavior or a broken contract; med = correctness risk in a specific case; low = wording, cosmetic.
+- Each defect sentence stands alone: name the mechanism and the consequence, so the manager can disposition it with no follow-up question.

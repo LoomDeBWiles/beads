@@ -1,0 +1,1 @@
+test -s work/w3_atomic-claim/artifacts/prior_head.txt -> exit 0 (no output); file is 41 bytes

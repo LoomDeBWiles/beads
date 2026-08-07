@@ -1,0 +1,7 @@
+VERDICT: FIX findings=3
+
+| ID | sev | file:line | defect (one sentence) | fix (one sentence) |
+|---|---|---|---|---|
+| F1 | med | internal/storage/sqlite/claim_test.go:105-108 | No test compares the stored `claim_expires_at` against the requested lease duration (only "not NULL" and "after now"), so an implementation that computes `now.Add(*lease * 7)` passes the entire `TestClaim` suite — verified by mutation — and a dead builder's bead would stay unstealable for seven times the contracted lease. | In `TestClaimOpenIssueClaimed`, capture `before := time.Now()` around the claim and assert `stored.ClaimExpiresAt` lies within a small window of `before.Add(30*time.Minute)`. |
+| F2 | med | internal/storage/sqlite/claim_test.go:275-276 | The comment declares "closed and tombstoned issues are errors" but only the closed path is exercised; deleting `|| issue.IsTombstone()` from claim.go's first ladder rung leaves every `TestClaim` test green — verified by mutation — so a tombstoned issue could be silently claimed and resurrected as `in_progress`. | Add a case that soft-deletes an issue and asserts `ClaimIssue` returns an error and leaves the row untouched, or drop "tombstoned" from the comment if the case belongs to another bead. |
+| F3 | low | internal/storage/sqlite/claim_test.go:276 | The plan's exit-1 error set includes "not found", but no test claims a nonexistent ID, so the nil-issue branch in claim.go could be replaced by a denial without any test noticing. | Add a one-line case asserting `ClaimIssue(ctx, "bd-nope", holderA, ...)` returns an error. |

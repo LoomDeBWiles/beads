@@ -1,0 +1,13 @@
+VERDICT: FIX findings=7 — written to `work/w3_atomic-claim/review_codex_v3.md`.
+
+**LANDED: all 11 rows present and complete.** G1's new file rows cite real lines — verified `ready.go:114`/`:250` (column lists ending in `pinned`), `:300`/`:311` (scanner var + Scan args), `dependencies.go:249-274` (both metadata SELECTs), `:513`/`:554` (dep-tree lists), `multirepo.go:302-305` (INSERT list). G4's three importer maps land exactly (`:370-381`, `:561-587`, `:656-682`). Rollback's "old binaries ignore the extra column" holds: zero `SELECT *` in production code.
+
+**The three unreviewed pieces:**
+
+- **Exit-code split** — every status maps to exactly one cell (open, in_progress, blocked, deferred, closed, tombstone, pinned, custom via `GetCustomStatuses` at config.go:104). The *matrix* is total and exclusive; the *caller contract* is not. Exit 3 now means both "someone else holds it, retry" and "blocked/deferred/pinned, will never be claimable this way", and `ClaimOutcome` has a single `denied` value, so a script can't tell them apart. Holder-presence doesn't rescue it: a bead moved to `blocked` keeps its assignee. That's H1, and it's the finding the round existed to catch.
+- **Ladder** — top-down first-match is stated, self-renew precedes expiry-steal, the self-expired case renews. One overlap survives: claimant `""`. Cobra's required-flag check only tests presence, so `--assignee ""` reaches the `assignee==""` CLAIM cell repeatedly and two such claimants both exit 0 — the F1 race reborn (H2).
+- **Propagation** — the risk row is directionally right but over-broad. The hash short-circuit (importer.go:602-606) does starve lease-only renewals, but only for rows without an external_ref; the Phase 0 external_ref path guards on `updated_at`, not hash, so renewals propagate there — and that's the *only* path where the new `checkFieldChanged` case does any work. It ships untested (H5), and the row doesn't specify a `*time.Time` comparator, which the existing `fieldComparator` lacks — reusing `equalPtrStr` makes the field read "changed" on every import (H4).
+
+Two more: `multirepo.go`'s UPDATE branch (:330-347) is a second lease-drop the row misses (H6), and the G2-added status-DENY cell has no test in either matrix row (H3), so implementing it as exit 1 passes every gate.
+
+H1 is a design change (new deny-reason field), so by the round rule this warrants round 4 rather than the gate.

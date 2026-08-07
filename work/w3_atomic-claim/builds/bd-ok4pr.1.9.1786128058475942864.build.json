@@ -1,0 +1,107 @@
+{
+  "schema": 2,
+  "bead_id": "bd-ok4pr.1.9",
+  "run_id": "1786128058475942864",
+  "changes": "committed",
+  "commits": ["29003e307e9f9ea0d5866ff765fbbfea64b6fc43"],
+  "acceptance": [
+    {
+      "criterion": "go build ./...",
+      "command": "go build ./...",
+      "exit": 0,
+      "log": "bd-ok4pr.1.9.1786128058475942864_step1.log"
+    },
+    {
+      "criterion": "go test ./internal/storage/... ./internal/types/...",
+      "command": "go test ./internal/storage/... ./internal/types/...",
+      "exit": 0,
+      "log": "bd-ok4pr.1.9.1786128058475942864_step2.log"
+    },
+    {
+      "criterion": "go vet ./internal/storage/... ./cmd/bd/",
+      "command": "go vet ./internal/storage/... ./cmd/bd/",
+      "exit": 0,
+      "log": "bd-ok4pr.1.9.1786128058475942864_step3.log"
+    },
+    {
+      "criterion": "go test ./...",
+      "command": "go test ./...",
+      "exit": 0,
+      "log": "bd-ok4pr.1.9.1786128058475942864_step4.log"
+    },
+    {
+      "criterion": "! git cat-file -e $(cat work/w3_atomic-claim/artifacts/prior_head.txt):internal/storage/sqlite/claim.go",
+      "command": "! git cat-file -e $(cat work/w3_atomic-claim/artifacts/prior_head.txt):internal/storage/sqlite/claim.go",
+      "exit": 0,
+      "log": "bd-ok4pr.1.9.1786128058475942864_step5.log"
+    }
+  ],
+  "findings": [
+    {
+      "item": "1 - the 022 rewrite had no coverage",
+      "change": "internal/storage/sqlite/migrations_test.go: new TestDropEdgeColumnsRebuildKeepsLaterColumns calls migrations.MigrateDropEdgeColumns directly against a table whose four edge columns were put back, holding pinned=1 and claim_expires_at set, with one index on a surviving column and one on a dropped column.",
+      "code_path": "migrations.MigrateDropEdgeColumns body in 022_drop_edge_columns.go: tableColumns('issues'), the carried-column loop, the ALTER TABLE issues_new ADD COLUMN loop, the INSERT INTO issues_new ... SELECT copy, DROP TABLE issues, the RENAME and the index replay. A RunMigrations pass cannot reach this after the ledger records 022, which is why the call is direct."
+    },
+    {
+      "item": "2 - unquoted identifiers made a store permanently unopenable",
+      "change": "022_drop_edge_columns.go: new quoteIdent; every runtime-derived identifier is now quoted in addColumnClause, copyExpr and the INSERT column list. New TestDropEdgeColumnsQuotesIdentifiers runs the rebuild over a column named \"order\".",
+      "code_path": "addColumnClause -> ALTER TABLE issues_new ADD COLUMN \"order\" TEXT, and copyExpr/names -> INSERT INTO issues_new (..., \"order\") SELECT ..., \"order\" FROM issues."
+    },
+    {
+      "item": "3 - the ledger killed Open's schema self-repair",
+      "change": "internal/storage/sqlite/store.go: the schema-probe failure path now drops schema_migrations before the RunMigrations retry, so the retry runs every migration again and re-records it. New TestOpenHealsDroppedColumn drops the pinned column from a closed store and reopens it.",
+      "code_path": "New() -> verifySchemaCompatibility failure -> DROP TABLE IF EXISTS schema_migrations -> RunMigrations retry -> migration 023 re-adds pinned -> second verifySchemaCompatibility succeeds."
+    },
+    {
+      "item": "4 - hand-typed duplicate column list",
+      "change": "022_drop_edge_columns.go: canonicalIssuesColumnNames deleted. The known-column set is now read with tableColumns(db, \"issues_new\") right after the table is created; liveIssuesColumns became the table-parameterised tableColumns.",
+      "code_path": "Covered by TestDropEdgeColumnsRebuildKeepsLaterColumns and TestDropEdgeColumnsQuotesIdentifiers: both rebuilds decide what to ALTER in from that pragma read. A stale hand list would double-add or skip a column and fail the copy."
+    },
+    {
+      "item": "5 - recordMigration ran on pool luck",
+      "change": "New internal/storage/sqlite/migrations/db.go defines the migrations.DB handle (Exec/Query/QueryRow/Prepare). All 27 migration functions, the invariant checks, appliedMigrations and recordMigration now take it. RunMigrations takes one *sql.Conn from the pool and runs PRAGMA foreign_keys, BEGIN EXCLUSIVE, every migration, every ledger row, the invariants and COMMIT on that one connection, and restores foreign_keys=ON before returning it to the pool.",
+      "code_path": "RunMigrations -> sqlDB.Conn(ctx) -> migrationConn -> migration.Func(db) and recordMigration(db, name). No new test: the old behaviour only misfires on a pool-connection swap, which is not deterministically reproducible; the whole existing suite (go test ./...) exercises the new single-connection pass."
+    },
+    {
+      "item": "6 - false comment and no ledger in --inspect",
+      "change": "cmd/bd/migrate.go: the comment now says a migration runs once per database, not on every open. New exported sqlite.AppliedMigrations reads the ledger; the inspect output gains applied_migrations in JSON and an 'Applied Migrations' list in the human output, with a warning if the ledger cannot be read.",
+      "code_path": "bd migrate --inspect -> sqlite.AppliedMigrations(store.UnderlyingDB()) -> SELECT name, applied_at FROM schema_migrations."
+    },
+    {
+      "item": "7 - rollback anchor pointed at the implementation",
+      "change": "work/w3_atomic-claim/artifacts/prior_head.txt now holds c6076387c5988a099bf2b07c9fa1cb20394be96d, the merge-base with origin/main.",
+      "code_path": "Verified: git merge-base --is-ancestor of HEAD, and git cat-file -e <that commit>:internal/storage/sqlite/claim.go fails (acceptance step 5)."
+    }
+  ],
+  "mutation_checks": [
+    {
+      "broke": "022_drop_edge_columns.go carried-column loop: `if !dropped[col.name] && col.name != \"claim_expires_at\"` - the frozen-list behaviour, a post-022 column silently not carried across.",
+      "result": "FAIL - TestDropEdgeColumnsRebuildKeepsLaterColumns: 'failed to read probe issue after rebuild: no such column: claim_expires_at'. TestIssueColumnsSurviveReopen, TestMigrationLedgerRecordsEveryMigration and TestOpenHealsDroppedColumn all still PASSED, which is exactly finding 1's complaint and shows the new test is the only one reaching the rewrite.",
+      "restored": true
+    },
+    {
+      "broke": "022_drop_edge_columns.go index replay: `for _, stmt := range indexStmts[:0]`.",
+      "result": "FAIL - TestDropEdgeColumnsRebuildKeepsLaterColumns: 'the rebuild lost an index that does not mention a dropped column'.",
+      "restored": true
+    },
+    {
+      "broke": "022_drop_edge_columns.go quoteIdent returns the name unquoted.",
+      "result": "FAIL - TestDropEdgeColumnsQuotesIdentifiers: 'rebuild failed on a column whose name needs quoting: failed to add order column to new issues table: near \"order\": syntax error'. Only that test failed.",
+      "restored": true
+    },
+    {
+      "broke": "store.go probe-failure path: the DROP TABLE IF EXISTS schema_migrations replaced by SELECT 1.",
+      "result": "FAIL - TestOpenHealsDroppedColumn: 'store with a dropped column no longer opens: schema probe failed after migration retry: missing columns in issues: pinned', i.e. the reviewer's regression verbatim.",
+      "restored": true
+    },
+    {
+      "broke": "022_drop_edge_columns.go ALTER loop skip condition forced true (an earlier, non-discriminating attempt).",
+      "result": "FAIL, but at newMigratedDB setup rather than at an assertion, because 022 also runs in a fresh store's first pass. Replaced by the frozen-list mutation above, which is the discriminating one.",
+      "restored": true
+    }
+  ],
+  "notes": [
+    "Scope beyond the bead's Touches list: item 5 required changing the parameter type of all 27 migration functions from *sql.DB to the new migrations.DB, so every internal/storage/sqlite/migrations/0*.go file and migration_invariants.go are in the commit. No migration logic was changed by that edit.",
+    "Restoring foreign_keys=ON on the migration connection before it returns to the pool is new: the old code issued that PRAGMA on whichever connection the pool handed it, so the connection that ran the migrations could stay foreign-keys-off for the rest of the process."
+  ]
+}

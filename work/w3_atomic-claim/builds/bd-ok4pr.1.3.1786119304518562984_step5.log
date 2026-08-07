@@ -1,0 +1,2 @@
+$ test "$(grep -c claim_expires_at internal/storage/sqlite/dependencies.go)" -ge 6
+exit=0

@@ -1,0 +1,33 @@
+{
+  "schema": 2,
+  "bead_id": "bd-ok4pr.4.5",
+  "run_id": "1786124495612483839",
+  "changes": "committed",
+  "commits": ["dcbe1a6121d45d6c2c665641c68b4b27ec08df82"],
+  "acceptance": [
+    {
+      "criterion": "`go build ./...`",
+      "command": "go build ./...",
+      "exit": 0,
+      "log": "bd-ok4pr.4.5.1786124495612483839_step1.log"
+    },
+    {
+      "criterion": "`go vet ./cmd/bd/ ./internal/storage/...`",
+      "command": "go vet ./cmd/bd/ ./internal/storage/...",
+      "exit": 0,
+      "log": "bd-ok4pr.4.5.1786124495612483839_step2.log"
+    },
+    {
+      "criterion": "`go test ./cmd/bd/ -run TestClaimRoundTrip`",
+      "command": "go test ./cmd/bd/ -run TestClaimRoundTrip",
+      "exit": 0,
+      "log": "bd-ok4pr.4.5.1786124495612483839_step3.log"
+    },
+    {
+      "criterion": "`go test ./...`",
+      "command": "go test ./...",
+      "exit": 0,
+      "log": "bd-ok4pr.4.5.1786124495612483839_step4.log"
+    }
+  ]
+}

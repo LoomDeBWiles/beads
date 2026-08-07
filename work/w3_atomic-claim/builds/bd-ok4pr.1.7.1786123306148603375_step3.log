@@ -1,0 +1,1 @@
+go vet ./internal/storage/... exit=0

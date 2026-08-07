@@ -1,0 +1,3 @@
+$ go test ./internal/storage/sqlite/ -run TestClaimMigrationExistingStore
+ok  	github.com/steveyegge/beads/internal/storage/sqlite	0.114s
+exit=0

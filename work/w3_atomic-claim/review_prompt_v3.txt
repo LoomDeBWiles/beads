@@ -1,0 +1,66 @@
+Delta-review plan_v3.md for w3_atomic-claim — round 3 of 4 (final unless a design defect surfaces). Scope: verify the round-2 accepts landed, then review ONLY the three design pieces no round has seen. A miss ships a claim verb whose exit-code contract or ladder ordering is self-consistently wrong — encoded into its own tests, invisible to them, discovered by callers in production.
+
+<instructions>
+1. Read plan_v3.md's "What Changed from v2" table; verify each of the 11 rows (G1-G8, G3r, G5r, G6d) actually appears in plan_v3's sections, exactly and completely.
+2. Then review, against source, only these three pieces:
+   a. The exit-code split: closed ∨ tombstone → ERROR exit 1; any other status → DENY exit 3 naming the status. Walk every status value that can occur in a live store (open, in_progress, blocked, closed, tombstone, custom statuses via GetCustomStatuses, deferred if it exists) through the v3 matrix: exactly one cell each, and the caller contract (exit 3 = "lost the race / not claimable now, retry later" vs exit 1 = "never claimable / error") is coherent for scripts.
+   b. The first-match ladder: any input (status, assignee, lease) hits exactly one outcome; self-renew precedes expiry-steal; no cell pair overlaps.
+   c. The lease-propagation path: with checkFieldChanged("claim_expires_at") added, trace a lease renewal through importer.go — does IssueDataChanged now see it, and does the exact-content-hash short-circuit (:602-606) still starve it as the Risks row states? Is the risk row's claim accurate?
+3. Do not re-open anything else absent a correctness or safety defect with evidence.
+4. Output the canonical verdict line: CLEAN or FIX.
+</instructions>
+
+<files>
+- /home/ben/worktrees/beads/w3_atomic-claim/work/w3_atomic-claim/plan_v3.md — artifact under review
+- /home/ben/worktrees/beads/w3_atomic-claim/work/w3_atomic-claim/plan_v2.md — prior version
+- /home/ben/worktrees/beads/w3_atomic-claim/work/w3_atomic-claim/review_codex_v2.md — round-2 findings
+- /home/ben/worktrees/beads/w3_atomic-claim/work/w3_atomic-claim/plan_delta_v3.md — dispositions and bindings
+- /home/ben/worktrees/beads/w3_atomic-claim/work/w3_atomic-claim/manager_log.md — settled decisions
+Source:
+- /home/ben/worktrees/beads/w3_atomic-claim/internal/types/types.go — Status values, ComputeContentHash
+- /home/ben/worktrees/beads/w3_atomic-claim/internal/storage/sqlite/queries.go — GetCustomStatuses, UpdateIssue validation
+- /home/ben/worktrees/beads/w3_atomic-claim/internal/importer/importer.go — update maps, exact-hash short-circuit (:602-606)
+- /home/ben/worktrees/beads/w3_atomic-claim/internal/importer/utils.go — checkFieldChanged (:124-149)
+- /home/ben/worktrees/beads/w3_atomic-claim/internal/storage/sqlite/ready.go — column lists the G1 rows cite (:114, :250, :300, :311)
+- /home/ben/worktrees/beads/w3_atomic-claim/internal/storage/sqlite/dependencies.go and /home/ben/worktrees/beads/w3_atomic-claim/internal/storage/sqlite/multirepo.go — G1 citations
+</files>
+
+<checklist>
+LANDED — each What-Changed-from-v2 row present and complete; G1's new file rows cite real lines?
+EXIT-CODE CONTRACT — every possible status lands in exactly one cell; exit semantics coherent for a shell caller branching on 0/1/3?
+LADDER — overlap-free, total, first-match stated; the self-expired case renews?
+PROPAGATION — the checkFieldChanged fix + risk row match what the importer code actually does?
+NO NEW CONTRADICTIONS — v3's changed sections consistent with unchanged sections (claim.go row, scripttest row, Rollback)?
+</checklist>
+
+<rejected>
+(none — all findings from rounds 1 and 2 were accepted)
+</rejected>
+
+<output>
+Write review to: /home/ben/worktrees/beads/w3_atomic-claim/work/w3_atomic-claim/review_codex_v3.md
+- Subagent writes the file directly — parent reads it afterward
+</output>
+
+<output-format>
+Output exactly this — the verdict line plus finding rows, no other prose:
+
+VERDICT: CLEAN|FIX findings=N
+| ID | sev | file:line | defect (one sentence) | fix (one sentence) |
+|---|---|---|---|---|
+
+- CLEAN requires findings=0; FIX requires one or more finding rows.
+- sev: high = design or behavior must change; med = correctness risk in a
+  specific case; low = wording, docs, cosmetic.
+- N states the true total; the table lists every finding, no cap.
+- Each defect sentence stands alone; name the mechanism and the consequence, grounded in file:line.
+- Each fix sentence is a concrete change to the artifact under review.
+</output-format>
+
+<constraints>
+- Read every file listed above before evaluating — do not guess
+- Only report issues that will cause rework, wrong behavior, degraded result, data corruption, or miss user intent
+- Do not suggest scope expansion — only evaluate the plan as written
+- Decisions recorded in manager_log.md are settled — do not re-open them absent safety evidence
+- Do not create or modify the artifact under review — only write your review file
+</constraints>

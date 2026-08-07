@@ -1,0 +1,4 @@
+$ go test ./internal/importer/... ./cmd/bd/
+ok  	github.com/steveyegge/beads/internal/importer	(cached)
+ok  	github.com/steveyegge/beads/cmd/bd	(cached)
+exit: 0

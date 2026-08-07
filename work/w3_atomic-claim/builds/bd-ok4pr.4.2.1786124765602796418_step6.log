@@ -1,0 +1,1 @@
+test -s work/w3_atomic-claim/artifacts/e2e_claim_output.txt -> exit 0 (no output); file is 1350 bytes

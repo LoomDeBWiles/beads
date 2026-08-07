@@ -1,0 +1,2 @@
+$ test -x work/w3_atomic-claim/e2e_claim.sh
+exit=0

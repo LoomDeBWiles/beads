@@ -1,0 +1,12 @@
+Both findings closed; committed as `ff94580` and the bead is closed. No push.
+
+**Item 1 (the real bug).** `UpdateIssue` in `internal/storage/memory/memory.go` now resolves the lease value up front through a new `resolveClaimExpiry(updates)`, called before `issue.UpdatedAt` is touched and before the apply loop. The loop's `claim_expires_at` arm just assigns the already-resolved pointer, so the function has no error return inside the loop at all: a bad value means no field write, no `updated_at` bump, no dirty mark, no event.
+
+**Item 2 (the probe test).** `TestProbeSchema_DetectsDroppedClaimExpiresAt` became `TestProbeSchema_DetectsEveryDroppedIssuesColumn`: a subtest per column of `expectedSchema["issues"]` that removes that column and requires `verifySchemaCompatibility` to return `ErrSchemaIncompatible` naming it. `ALTER TABLE ... DROP COLUMN` cannot express this for 10 of the 32 columns — SQLite refuses the primary key and every indexed column, and `is_template` is one of them — so a helper rebuilds the table from `pragma_table_info` minus the target instead. A literal-name anchor asserts the probe still lists `claim_expires_at` and `is_template`, because a column deleted from `expectedSchema` is exactly the one the loop can no longer iterate over.
+
+**Mutation checks** (all three restored, verified by `git diff`):
+- Restored the mid-loop `return` → the new memory test failed on title, notes, assignee, status and `updated_at`.
+- Deleted `"is_template"` from `expectedSchema` → the anchor failed.
+- Made `findMissingColumns` report nothing → every subtest failed with `"database schema is incompatible: "` and no column name.
+
+Acceptance: `go build ./...`, `go test ./internal/storage/... ./internal/types/...`, `go vet ./internal/storage/...`, `go test ./...` — all exit 0, logs in `work/w3_atomic-claim/builds/` as `..._step1.log` through `..._step4.log`, with the build report alongside them.

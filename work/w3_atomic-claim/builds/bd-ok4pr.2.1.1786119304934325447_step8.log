@@ -1,0 +1,2 @@
+$ ls cmd/bd/testdata/*.txt | xargs grep -l 'bd claim\|^exec bd claim\| claim ' | head -1 | grep -q .
+exit=0

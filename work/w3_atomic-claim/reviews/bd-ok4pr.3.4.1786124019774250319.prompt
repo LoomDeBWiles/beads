@@ -1,0 +1,55 @@
+You are a fresh-eyes reviewer on work item w3 in the `bd` fork (Go, v0.34).
+You are READ-ONLY: change no file, create no bead, commit nothing.
+
+## What to review
+Bead bd-ok4pr.3.4 — the SECOND fix round on this area. Its Contract is a reviewer's
+finding text; an earlier fix for the same area was itself found wanting, so
+your job is to decide whether this one actually closes the items or merely
+moves them.
+
+Commit range in /home/ben/worktrees/beads/w3_atomic-claim:
+`git log -p f1613bdf992f81800613c52aa80156d1ac812442..d17a99556e33409bafc7b6b639d2b58082928dd1`
+
+Files changed: cmd/bd/export_test.go, CONTEXT.md
+Run no recursive rg/grep/find outside this worktree.
+
+## Judge against
+1. `bd --db /home/ben/projects/beads/.beads/beads.db --no-auto-import show bd-ok4pr.3.4`
+   — confirm EACH numbered Contract item is genuinely closed.
+2. `work/w3_atomic-claim/plan_v4.md` — Design is the authority on claim semantics.
+3. `~/projects/shared-docs/TESTING_PRINCIPLES.md` and
+   `~/projects/shared-docs/CODING_PRINCIPLES.md`.
+
+## Look hardest at
+- Item 1: does the replacement assertion BITE? The old one was seeded true by ComputeContentHash folding Status and Assignee into the hash. Break what the new assertion claims to protect and confirm it fails.
+- Items 2 and 3: open CONTEXT.md and every source line it cites, and confirm the citation points at the code that produces the described behavior. A plausible-looking line number that points at the wrong code is the defect being fixed.
+
+## Mutation standard — this is the core of your review
+This work item has produced three separate tests that could not fail. For EVERY
+test in your range, decide whether it can fail at all, and prove it: break the
+line it protects, run the test, confirm it FAILS, restore the file exactly.
+Report any test that passes either way as a finding, whatever the diff shows.
+Restore every file you touched — verify with `git status --porcelain` before
+you finish, and say in your review that the tree is clean.
+
+Also scan for defects this fix introduced. The previous round's fix in this item
+introduced a mid-loop early return that silently half-applied updates, so treat
+control-flow changes with particular suspicion.
+
+## Run the gate yourself
+`cd /home/ben/worktrees/beads/w3_atomic-claim && go build ./... && go test ./cmd/bd/ -run TestClaimRoundTrip -v`
+Report the real result. Do not modify anything to make it pass.
+
+## Output
+Write your review to:
+/home/ben/worktrees/beads/w3_atomic-claim/work/w3_atomic-claim/reviews/review_bd-ok4pr.3.4_v3.md
+
+It contains exactly this — the verdict line plus finding rows, no other prose:
+
+VERDICT: CLEAN|FIX findings=N
+| ID | sev | file:line | defect (one sentence) | fix (one sentence) |
+|---|---|---|---|---|
+
+- CLEAN requires findings=0; FIX requires one or more finding rows.
+- sev: high = wrong behavior or a broken contract; med = correctness risk in a specific case; low = wording, cosmetic.
+- Each defect sentence stands alone: name the mechanism and the consequence.

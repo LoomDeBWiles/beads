@@ -1,0 +1,21 @@
+Done. Bead bd-ok4pr.2.2 is implemented, gated, committed (`47c9a66`) and closed. Not pushed.
+
+**What changed**
+
+1. **The exit-code assertions now run in the default gate.** `cmd/bd/claim_test.go` gained three tag-free tests that build the bd binary and drive it as a subprocess: `TestClaimExitCodesInDirectMode`, `TestClaimExitCodesInDaemonMode` and `TestClaimRPCRejectsNonPositiveLease`. Each asserts exit 0 (claim wins), 3 (rival denied, `deny_reason=held`) and 1 (closed issue is an error, not a denial). `testdata/claim.txt` is untouched and no `-tags scripttests` was added anywhere.
+2. **The daemon half proves the RPC route was taken**, two ways: every daemon-mode invocation fails the test if its stderr contains "direct mode" (all the fallback warnings share that phrase), and after the run the test connects to the daemon socket and reads the daemon's own operation counters, requiring at least 2 successful and 1 errored `claim` operations.
+3. **`claimFlags` now truncates the lease to whole seconds**, so `--lease 90s500ms` produces the same expiry whether or not a daemon is running. `claimRPCArgs` is unchanged; the new test asserts both routes carry the same value.
+4. **`handleClaim` rejects `LeaseSeconds < 1`** with the CLI's own message, closing the zero/negative-lease hole the CLI cannot reach.
+
+**Mutation checks (each restored afterwards)**
+
+| Line deleted or changed | Result |
+|---|---|
+| `os.Exit(claimDeniedExit)` → `os.Exit(1)` | both exit-code tests fail: "a rival of a live holder should exit 3" |
+| daemon-mode claims forced to `--no-daemon` while a daemon runs | daemon test fails: "the daemon recorded no \"claim\" operation, so the claims never reached it" — and the exit-code assertions alone still passed, which is exactly the illusion the review named |
+| `lease.Truncate(time.Second)` removed | `TestClaimFlagsTruncatesSubSecondRemainder` fails: `lease = 1m30.5s, want 90s` |
+| handler's `< 1` floor removed | `TestClaimRPCRejectsNonPositiveLease` fails for both 0s and -1s |
+
+**One thing worth flagging:** `BEADS_NO_DAEMON` only gates daemon *auto-start*; it does not stop the CLI from using an already-running daemon. The `--no-daemon` flag is what actually forces the direct path, which is why the direct-mode test passes both.
+
+Acceptance: all four commands exit 0; logs `_step1` through `_step4` are in the builds directory alongside the build report. Cleanup: the scratch daemon I started during probing was stopped by PID and its temp workspace trashed.

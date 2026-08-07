@@ -1,0 +1,77 @@
+Delta-review plan_v2.md for w3_atomic-claim (atomic claim verb + owner lease in the bd fork) — round 2 of 2. Verify the round-1 accepts actually landed, and check the changed sections for newly introduced defects. A miss here ships a claim verb that can still lose a race or silently drop lease data across 17 live stores.
+
+<instructions>
+1. Read plan_v2.md's "What Changed from v1" table, then plan_v1.md and review_codex_v1.md for context.
+2. For each of the 12 What-Changed rows (F1a-F6b): verify the described change actually appears in plan_v2.md's revised sections, exactly and completely.
+3. Review ONLY the changed sections (Design, Changes Phase 1/2/3, Files NOT Affected, Verification) for newly introduced defects — wrong line citations, contradictions with unchanged sections, new undefined behavior cells, broken commands.
+4. Re-open unchanged sections only on new evidence of a correctness or safety defect.
+5. YAGNI both directions: flag any accepted fix that grew beyond the finding it closes; never propose new machinery without a citable failure.
+6. Output the canonical verdict line: CLEAN or FIX.
+</instructions>
+
+<files>
+- /home/ben/worktrees/beads/w3_atomic-claim/work/w3_atomic-claim/plan_v2.md — artifact under review
+- /home/ben/worktrees/beads/w3_atomic-claim/work/w3_atomic-claim/plan_v1.md — prior version
+- /home/ben/worktrees/beads/w3_atomic-claim/work/w3_atomic-claim/review_codex_v1.md — round-1 findings
+- /home/ben/worktrees/beads/w3_atomic-claim/work/w3_atomic-claim/plan_delta_v2.md — dispositions and edit bindings
+- /home/ben/worktrees/beads/w3_atomic-claim/work/w3_atomic-claim/manager_log.md — settled decisions
+Source for spot-verification of the changed rows:
+- /home/ben/worktrees/beads/w3_atomic-claim/internal/importer/importer.go — update maps (:561-587, :656-682)
+- /home/ben/worktrees/beads/w3_atomic-claim/internal/storage/sqlite/issues.go — insertIssue (:44), insertIssues (:74)
+- /home/ben/worktrees/beads/w3_atomic-claim/internal/storage/memory/memory.go — MemoryStorage
+- /home/ben/worktrees/beads/w3_atomic-claim/internal/storage/sqlite/queries.go — allowedUpdateFields (:545)
+- /home/ben/worktrees/beads/w3_atomic-claim/internal/merge/merge.go — Merge3Way (:79-141), mergeIssue (:542)
+- /home/ben/worktrees/beads/w3_atomic-claim/cmd/bd/nodb.go — --no-db backend usage
+</files>
+
+<checklist>
+LANDED
+- Each F1a-F6b change present in plan_v2 exactly as the What Changed row describes? Partial or drifted → FIX.
+- Line citations added in v2 (importer :561-587/:656-682, issues.go :44/:74, allowedUpdateFields :545, merge.go :133-141, nodb.go :44) correct against source?
+
+NEW DEFECTS IN CHANGED SECTIONS
+- Decision matrix after adding the empty-assignee cell: cells still mutually exclusive and total? (open; in_progress empty-assignee; in_progress self; in_progress other-unexpired; in_progress other-expired; every other status)
+- Required --assignee: does any plan command or E2E step still omit it?
+- The reworded Phase 3 gate: still quantitative and runnable?
+- The importer change: does admitting claim_expires_at through allowedUpdateFields create a path where a CLI `bd update` could set it? (plan says import path only — is that enforced or aspirational, and does it matter?)
+- Memory backend row: consistent with the interface row in storage.go (same signature)?
+
+CONSISTENCY
+- What Changed table finding IDs match plan_delta_v2.md rows 1:1?
+- No changed section now contradicts an unchanged section (e.g., Rollback's old-binary claims vs the new import mapping).
+</checklist>
+
+<rejected>
+(none — all six round-1 findings were accepted)
+</rejected>
+
+<output>
+Write review to: /home/ben/worktrees/beads/w3_atomic-claim/work/w3_atomic-claim/review_codex_v2.md
+- Subagent writes the file directly — parent reads it afterward
+</output>
+
+<output-format>
+Output exactly this — the verdict line plus finding rows, no other prose:
+
+VERDICT: CLEAN|FIX findings=N
+| ID | sev | file:line | defect (one sentence) | fix (one sentence) |
+|---|---|---|---|---|
+
+- CLEAN requires findings=0; FIX requires one or more finding rows.
+- sev: high = design or behavior must change; med = correctness risk in a
+  specific case; low = wording, docs, cosmetic.
+- N states the true total; the table lists every finding, no cap.
+- Each defect sentence stands alone — the manager dispositions it with no
+  follow-up round: name the mechanism and the consequence, grounded in
+  file:line and, when needed, a number or a ≤10-word quote.
+- Each fix sentence is a concrete change to the artifact under review.
+</output-format>
+
+<constraints>
+- Read every file listed above before evaluating — do not guess
+- Only report issues that will cause rework, wrong behavior, degraded result, data corruption, or miss user intent
+- Do not suggest scope expansion — only evaluate the plan as written
+- Decisions recorded in manager_log.md are settled — do not re-open them absent safety evidence
+- Do not create or modify the artifact under review — only write your review file
+- Load the coding skill before evaluating; load the testing skill for the test rows
+</constraints>

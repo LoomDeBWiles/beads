@@ -1,0 +1,2 @@
+$ grep -q 'cmd/bd/claim.go' CODEMAP.md
+exit 0

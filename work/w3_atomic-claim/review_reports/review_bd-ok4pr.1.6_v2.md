@@ -1,0 +1,6 @@
+VERDICT: FIX findings=2
+
+| ID | sev | file:line | defect (one sentence) | fix (one sentence) |
+|---|---|---|---|---|
+| F1 | med | internal/storage/memory/memory.go:449 | The new `default` arm returns from inside the update loop, so keys already applied in that randomized map iteration stay written (17 of 20 probe runs kept a mutated `title`/`notes`) while the dirty mark and the event row are skipped, leaving a silently half-updated issue with no audit trail — the first mid-loop error return this function has ever had. | Validate the `claim_expires_at` value type before the apply loop (or apply into a staged copy and commit it only after the loop), so a rejected update changes nothing. |
+| F2 | med | internal/storage/sqlite/schema_probe.go:23 | The `is_template` probe entry added for item 2 has no test behind it: deleting the word leaves `go test ./internal/storage/...` fully green, so the entry can drop back out and a store whose migration 024 never applied again passes startup and fails at every issue read — the exact mechanism item 1 closed for `claim_expires_at`, left open one column over. | Generalize `TestProbeSchema_DetectsDroppedClaimExpiresAt` into a loop that drops each column of `expectedSchema["issues"]` in turn and asserts `verifySchemaCompatibility` returns `ErrSchemaIncompatible` naming it. |

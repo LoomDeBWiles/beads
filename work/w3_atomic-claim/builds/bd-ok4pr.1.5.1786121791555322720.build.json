@@ -1,0 +1,27 @@
+{
+  "schema": 2,
+  "bead_id": "bd-ok4pr.1.5",
+  "run_id": "1786121791555322720",
+  "changes": "committed",
+  "commits": ["9aec04dcf3893f7d3ee2bd0fa8b812a278e510f9"],
+  "acceptance": [
+    {
+      "criterion": "The whole module still compiles with the new claim tests in place",
+      "command": "go build ./...",
+      "exit": 0,
+      "log": "bd-ok4pr.1.5.1786121791555322720_step1.log"
+    },
+    {
+      "criterion": "The claim decision matrix, including the new lease-duration, tombstone and not-found cases, passes five consecutive runs",
+      "command": "go test ./internal/storage/sqlite/ -run TestClaim -count=5",
+      "exit": 0,
+      "log": "bd-ok4pr.1.5.1786121791555322720_step2.log"
+    },
+    {
+      "criterion": "The full repository test suite is green",
+      "command": "go test ./...",
+      "exit": 0,
+      "log": "bd-ok4pr.1.5.1786121791555322720_step3.log"
+    }
+  ]
+}

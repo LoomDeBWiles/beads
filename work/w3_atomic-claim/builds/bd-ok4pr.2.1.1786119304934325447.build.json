@@ -1,0 +1,71 @@
+{
+  "schema": 2,
+  "bead_id": "bd-ok4pr.2.1",
+  "run_id": "1786119304934325447",
+  "changes": "committed",
+  "commits": [
+    "94105d5445b4ac2d97db41888c2e89a3194aa9d0"
+  ],
+  "acceptance": [
+    {
+      "criterion": "The whole module builds with the new claim op, client call, handler and command",
+      "command": "go build ./...",
+      "exit": 0,
+      "log": "bd-ok4pr.2.1.1786119304934325447_step1.log"
+    },
+    {
+      "criterion": "The CLI and RPC packages pass their tests with the claim path added",
+      "command": "go test ./cmd/bd/ ./internal/rpc/...",
+      "exit": 0,
+      "log": "bd-ok4pr.2.1.1786119304934325447_step2.log"
+    },
+    {
+      "criterion": "The claim CLI unit tests pass: required non-empty assignee, lease handling, denial message shapes, command registration",
+      "command": "go test ./cmd/bd/ -run TestClaim",
+      "exit": 0,
+      "log": "bd-ok4pr.2.1.1786119304934325447_step3.log"
+    },
+    {
+      "criterion": "The wire protocol defines the claim operation",
+      "command": "grep -q 'OpClaim' internal/rpc/protocol.go",
+      "exit": 0,
+      "log": "bd-ok4pr.2.1.1786119304934325447_step4.log"
+    },
+    {
+      "criterion": "The RPC client exposes a Claim call",
+      "command": "grep -qE 'func .*Claim\\(' internal/rpc/client.go",
+      "exit": 0,
+      "log": "bd-ok4pr.2.1.1786119304934325447_step5.log"
+    },
+    {
+      "criterion": "The daemon-side handler for the claim op lives with the other issue handlers",
+      "command": "grep -q 'OpClaim' internal/rpc/server_issues_epics.go",
+      "exit": 0,
+      "log": "bd-ok4pr.2.1.1786119304934325447_step6.log"
+    },
+    {
+      "criterion": "The claim command is registered on the root command",
+      "command": "grep -q 'claim' cmd/bd/main.go",
+      "exit": 0,
+      "log": "bd-ok4pr.2.1.1786119304934325447_step7.log"
+    },
+    {
+      "criterion": "A flat scripttest file under cmd/bd/testdata exercises bd claim, so the runner's testdata/*.txt glob picks it up",
+      "command": "ls cmd/bd/testdata/*.txt | xargs grep -l 'bd claim\\|^exec bd claim\\| claim ' | head -1 | grep -q .",
+      "exit": 0,
+      "log": "bd-ok4pr.2.1.1786119304934325447_step8.log"
+    },
+    {
+      "criterion": "The command's help documents the lease flag",
+      "command": "go run ./cmd/bd claim --help | grep -q -- '--lease'",
+      "exit": 0,
+      "log": "bd-ok4pr.2.1.1786119304934325447_step9.log"
+    },
+    {
+      "criterion": "vet is clean on both changed packages",
+      "command": "go vet ./cmd/bd/ ./internal/rpc/...",
+      "exit": 0,
+      "log": "bd-ok4pr.2.1.1786119304934325447_step10.log"
+    }
+  ]
+}

@@ -1,0 +1,106 @@
+{
+  "item": "w3_atomic-claim",
+  "title": "Give bd an atomic claim verb with an owner lease",
+  "gate_id": "w3-v4",
+  "context": [
+    "/home/ben/worktrees/beads/w3_atomic-claim/work/w3_atomic-claim",
+    "/home/ben/projects/tools/beads/work/w3_atomic-claim"
+  ],
+  "plan_path": "/home/ben/worktrees/beads/w3_atomic-claim/work/w3_atomic-claim/plan_v4.md",
+  "what_this_does": "Adds one new command to our bd fork: bd claim <id> --assignee X [--lease 30m]. It assigns a bead and marks it in progress in a single database transaction that first checks nobody else holds it, so when two agents race, exactly one wins and the loser gets a distinct exit code instead of a false success. Claims can carry a lease: a live holder renews it, and a claim whose lease has expired can be taken over safely, with the takeover recorded. The new lease field survives export, import, git merge, and multi-repo copy, and the change deploys to the installed bd binary that all 17 project stores use.",
+  "why_bother": "Two concurrent claims both exit 0 today (reproduced in a sandbox this session), and the fleet has built three generations of buggy lock and sweep machinery around exactly this gap (w29, w702, w788). This removes the race at the root, in code we own, and clears the way to delete that machinery in follow-up items.",
+  "flow": [
+    {
+      "label": "Storage core",
+      "detail": "New claim_expires_at column (migration 027, auto-applies at each store's next open) + ClaimIssue: one BEGIN IMMEDIATE transaction that decides claim / renew / steal / deny.",
+      "actor": "agent"
+    },
+    {
+      "label": "CLI + daemon",
+      "detail": "bd claim command, RPC op for daemon mode; exit 0 won, exit 3 not-claimable-now (with a held-vs-status reason), exit 1 error.",
+      "actor": "agent"
+    },
+    {
+      "label": "Data pipeline",
+      "detail": "Lease survives JSONL export/import (three explicit importer maps + change detector), git merge driver (which also stops dropping assignee), and multi-repo copy.",
+      "actor": "agent"
+    },
+    {
+      "label": "Tests + E2E",
+      "detail": "Race test (8 goroutines, exactly one winner), full outcome matrix, round-trip tests, and an E2E script that replays this session's failing probe and expects one winner + one exit 3.",
+      "actor": "agent"
+    },
+    {
+      "label": "Deploy",
+      "detail": "go install to ~/.local/bin/bd, restart the 6 daemons (documented lifecycle op), live-verify on a scratch store.",
+      "actor": "agent"
+    },
+    {
+      "label": "Decide",
+      "detail": "Approve or send back through the page rail.",
+      "actor": "human"
+    }
+  ],
+  "approving": [
+    {
+      "plain": "Claiming a bead becomes one atomic step: exactly one of two racing agents wins, the other learns it lost.",
+      "detail": "ClaimIssue runs SELECT + decide + UPDATE inside one BEGIN IMMEDIATE transaction (the fork's existing primitive, transaction.go:29). Today's path reads outside any transaction then writes unconditionally (queries.go:637) - reproduced: both racers exit 0, one claim silently lost. After: loser exits 3 with the holder named."
+    },
+    {
+      "plain": "Claims can expire, so a dead builder's bead frees itself instead of sitting stuck forever.",
+      "detail": "--lease sets claim_expires_at; a holder renews by re-claiming; an expired claim is stolen with the previous holder recorded in the event log. No lease = never expires (human claims unchanged). Status transitions out of in_progress clear the lease. This is the primitive that lets follow-up items delete the w29 liveness sweep and w702 mkdir locks."
+    },
+    {
+      "plain": "Scripts can tell 'someone beat me to it, retry' apart from 'this bead is blocked, skip it'.",
+      "detail": "Exit 3 carries deny_reason: held (live unexpired claim - retry) vs status (blocked or other non-claimable status - skip). Closed or tombstone beads are exit 1 errors. Without the split, a migrated supervisor would retry a dependency-blocked bead forever."
+    },
+    {
+      "plain": "The new field survives every path bead data travels, and a pre-existing data-loss bug gets fixed on the way.",
+      "detail": "Column added to every explicit SELECT/INSERT list (queries, issues, ready, dependencies, multirepo incl. its UPDATE branch), all three importer update maps, the import change-detector (new nil-aware time comparator), and the git merge driver - which today silently drops assignee on every row it rewrites; both fields become modeled and tested."
+    },
+    {
+      "plain": "Four review rounds converged: 6 findings, then 8, then 7, then clean.",
+      "detail": "R1 Fable, R2-R4 Opus 5 (Codex quota-down). All 21 findings accepted, zero rejected; severity fell high 2 -> 1 -> 0 -> 0. The core design (one verb, CAS inside an immediate transaction, optional lease) is unchanged since v1; rounds tightened the contract edges and enumeration closure."
+    }
+  ],
+  "rejected": [
+    {
+      "idea": "Migrate to beads_rust (br), which already has an atomic claim",
+      "why": "Its license rider names Anthropic/OpenAI agents as Restricted Parties, grants them no rights, and applies to derivatives - forking does not escape it. The adapter work-list (store-pinning wrapper, five command translations, breaking JSON shape) is also strictly larger than this patch. Decision recorded in context/decisions/2026-08_beads-migration.md."
+    },
+    {
+      "idea": "Bolt a --claim flag onto bd update",
+      "why": "The update path reads the issue outside the transaction; the race would survive. The claim needs its own preconditioned storage method, and update deliberately stays unconditioned."
+    },
+    {
+      "idea": "Default --assignee to the current actor",
+      "why": "Two defaulted claimants on this single-user host resolve to the same name, both land in the renew cell, and both exit 0 - the race reborn. The flag is required and must be non-empty."
+    }
+  ],
+  "risks": [
+    {
+      "risk": "A caller keeps using the old racy update idiom",
+      "response": "CONTEXT.md pattern note plus named follow-up migration items (orchestrator supervisor, w29 sweep, errfix); the verb cannot force adoption."
+    },
+    {
+      "risk": "Lease steal fires on a live-but-slow builder",
+      "response": "Lease duration is the caller's contract (choose it above the heartbeat interval); steals are evented with the prior holder; no-lease claims are never stolen."
+    },
+    {
+      "risk": "Old binary writes during the rollout window",
+      "response": "The old update path stays unconditioned exactly as today, so the window is no worse than the status quo; it closes at daemon restart. The migration is additive-nullable, rollback is reinstalling the prior binary."
+    },
+    {
+      "risk": "A lease-only renewal does not reach synced clones for rows without an external_ref",
+      "response": "The importer's content-hash short-circuit skips it (the hash excludes the lease). Accepted: single-host fleet, claims run against the primary store; risk row in the plan."
+    }
+  ],
+  "prompt_changes": [
+    {
+      "file": "CONTEXT.md (beads repo) - added pattern note",
+      "why": "Agents keep reaching for the old two-field update idiom; this note is the standing instruction that routes them to the atomic verb so the race does not creep back in through habit.",
+      "before": "",
+      "after": "Claiming: always `bd claim <id> --assignee <name>`, never `bd update --status in_progress --assignee`: the update form is the read-then-write race the claim verb removed (w3). Add `--lease <duration>` for any automated claimant so a dead process's bead frees itself."
+    }
+  ]
+}

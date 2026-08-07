@@ -1,0 +1,20 @@
+Review written to `work/w3_atomic-claim/reviews/review_bd-ok4pr.1.7_v3.md`.
+
+**VERDICT: FIX findings=1** (one low, cosmetic). Both Contract items are genuinely closed.
+
+**Item 1 — closed.** Validation moved to `resolveClaimExpiry` called before `issue.UpdatedAt = now` and before the apply loop; no error return remains anywhere inside the loop. Mutation-proven twice with the 50-iteration test:
+- Reintroduced the mid-loop return → FAILS naming `title`, `notes`, `assignee`, `status`, and `updated_at` as mutated.
+- Made the rejection path mark dirty and append an event → FAILS on both the dirty assertion and `event count = 51, want 1`.
+
+**Item 2 — closed.** The probe test now iterates all 31 entries of `expectedSchema["issues"]` as subtests, plus a literal anchor pinning `claim_expires_at` and `is_template`.
+- Deleted `is_template` from `expectedSchema` → FAILS: `probe no longer lists issues column "is_template"; the drop loop cannot protect it`. That is exactly the mechanism the contract reported.
+- Broke `probeSchema`'s missing-column branch → 31 subtests fail.
+- Broke `findMissingColumns` so the error omits the name → 31 "error must name the missing column" failures. Every column in the list is live, not a hard-coded pair.
+
+**Third test in range** (`TestUpdateIssueClaimExpiresAtValueTypes`, unchanged but now running through the refactor): dropped the `time.Time`-by-value arm → FAILS. No test in this range passes both ways.
+
+**Gate, run as given:** `go build ./...` clean; `go test ./internal/storage/... ./internal/types/...` all `ok` (sqlite 20.7s). `go vet ./internal/storage/...` clean.
+
+**Control-flow scan:** the hoist is the only flow change; `err` is a fresh binding, the `status` arm's `hasExplicitLease` check is untouched, and the rejection now also leaves `UpdatedAt` alone (it previously did not). No new half-apply path.
+
+**Tree is clean** for the three files under review — `git status --porcelain` shows only the untracked `work/` directory plus files other reviewers are mutating concurrently in this shared worktree (`cmd/bd/main.go` at the moment; earlier `cmd/bd/claim.go`, `cmd/bd/export_test.go`, `internal/importer/importer.go`). I did not touch those and restored every file I did touch with `git checkout --`.

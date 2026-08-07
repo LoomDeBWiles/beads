@@ -1,0 +1,9 @@
+Applied the six accepted findings by editing the three affected beads in place; no beads created, deleted, or re-wired.
+
+- **bd-ok4pr.4.2** (F1, F8): deploy step is now `GOBIN=$HOME/.local/bin go install ./cmd/bd/` in both the Contract sequence and acceptance, with the reason stated inline; the prior-HEAD step is now `git rev-parse HEAD > work/w3_atomic-claim/artifacts/prior_head.txt` plus the acceptance pair (write + `test -s`), placed after the acceptance line that already runs `mkdir -p work/w3_atomic-claim/artifacts`.
+- **bd-ok4pr.1.1** (F3, F4): Contract now excludes the three `s.scanIssues`-delegating SELECT lists (`queries.go:1644`, `ready.go:114`, `labels.go:156`), and a line above the decision ladder requires `ClaimIssue` to error on an empty or whitespace-only `assignee` **argument**, checked before the row is read, explicitly distinguished from the stored-row ladder cell.
+- **bd-ok4pr.1.3** (F2, F3, F5): Touches gained `labels.go` and `queries.go`; change rows added for the `GetIssuesByLabel` 26-column list (:156-166) and the `SearchIssues` list (:1644, "must change in the same bead as the shared scanner"); the `dependencies.go` row now cites :252, :274, :827-:837, :930-:941 with ":513, :554" removed and an explicit statement that the recursive dep-tree queries at :512 and :553 carry no late columns and stay unchanged; acceptance gained greps for both new files and a label-test run.
+
+Findings 6 and 7 left untouched — no `dep add bd-ok4pr.3.1 bd-ok4pr.2.1`, and `bash scripts/test.sh` stays in bd-ok4pr.4.3. `bd dep cycles` reports none. All three beads still carry `## Contract`, `## Acceptance`, `## Touches`.
+
+Report: `work/w3_atomic-claim/bead_authoring_v3.md` — `manifest: bd-ok4pr.1,bd-ok4pr.2,bd-ok4pr.3,bd-ok4pr.4`

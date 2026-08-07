@@ -1,0 +1,32 @@
+Background tasks still running after 600s; terminating. Set CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=0 to wait indefinitely.
+Still running its test suite. Reporting the confirmed findings now; I'll fold in the counterfactual when it lands.
+
+**Hypothesis confirmed, and it's worse than scoped.** RCA written to `work/w3_atomic-claim/rca_v1.md`.
+
+## The mechanism
+`RunMigrations` (`internal/storage/sqlite/migrations.go:141`) runs **all 27 migrations on every database open**. There is no ledger — no `schema_migrations`, no `user_version`, nothing (grepped repo-wide, zero matches). The comment at `migrations.go:56` states the false assumption out loud: *"all are idempotent."*
+
+019 (`019_messaging_fields.go:29-48`) re-adds `replies_to`/`relates_to`/`duplicate_of`/`superseded_by` whenever missing → 022 (`022_drop_edge_columns.go:56`) sees them, so its early-return never fires → it rebuilds `issues` from a **hard-coded 28-column list** (lines 129-145), `DROP TABLE issues` at 151. `pinned` (023), `is_template` (024), `claim_expires_at` (027) aren't on that list. `updated_at` looks untouched because the rebuild copies it verbatim.
+
+022 is the only migration that rebuilds `issues`. 025 rebuilds `dependencies`.
+
+## Proof it's a rebuild, not a write-back
+One `bd list` against my temp store: sentinel column `zzz_probe` **gone**, trigger on `issues` **gone**, trigger on `events` **survives**. A struct write-back cannot drop a column or a trigger.
+
+Reproduced the reported symptom exactly: after `bd claim --lease 600s`, `assignee` (pre-022) survives, `claim_expires_at` → NULL.
+
+## Blast radius
+- Lost: `pinned`, `is_template`, `claim_expires_at` — precisely the columns added after 022 in `migrationsList`. Any future `issues` column joins automatically.
+- Unconditional: every process, every store, including read-only commands.
+- Collateral: `idx_issues_ephemeral` and `idx_issues_sender` are permanently absent at rest (created by 019, dropped by 022 in the same pass, never recreated) — `gt mail inbox` filters on `sender` unindexed. Plus a full table rewrite on every command.
+- **Predates this work item.** Verified live against the installed `0.34.0 (f31496d65)` baseline: `pinned` and `is_template` set to 1, one `bd list`, both back to 0. First affected release **v0.30.7** (2025-12-19, first tag with both 022 and 023). `bd pin` has been non-functional across processes on this host for eight months.
+- Recoverability: values do reach the JSONL, and an explicit `bd import` restores them — but the next command wipes again, and a post-wipe export clobbers the JSONL (verified: `"pinned":true` count → 0). Harvest from `git log -p .beads/issues.jsonl` before fixing.
+
+## Fix
+Recommend **make 022 build its column list from `pragma_table_info` instead of a frozen literal, then add a migration ledger** — in one change. The ledger's backfill is safe only in the "run all once more, then record all" form; any attempt to detect which migrations already ran risks half-migrated stores.
+
+A constraint I found that kills the obvious fix: `021_migrate_edge_fields.go` queries `replies_to` with **no column guard**, so 019's re-add is load-bearing. Just deleting those columns from 019 breaks every command until 021 is guarded too.
+
+Missing test: a reopen-survival test that writes a sentinel into every column enumerated from `pragma_table_info` (not a hand-written list — a hand-written list would have had the same three columns missing) and re-runs `RunMigrations`. `RunMigrations` currently appears in one test file and never twice on populated data.
+
+One flag: the E2E artifact cited in your brief, `work/w3_atomic-claim/artifacts/e2e_claim_output.txt`, does not exist — there's no `artifacts/` directory. Nothing here depends on it, but if it contains a failure this mechanism doesn't explain, that's the loose end.

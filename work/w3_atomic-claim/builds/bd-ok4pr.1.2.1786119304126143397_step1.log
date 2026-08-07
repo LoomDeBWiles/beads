@@ -1,0 +1,3 @@
+$ go test ./internal/storage/sqlite/ -run TestClaim
+ok  	github.com/steveyegge/beads/internal/storage/sqlite	0.720s
+exit=0

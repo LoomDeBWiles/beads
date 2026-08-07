@@ -1,0 +1,13 @@
+VERDICT: CLEAN findings=0 — written to `work/w3_atomic-claim/reviews/review_bd-ok4pr.1.3_v1.md`.
+
+What I verified:
+
+**Gate (real result):** `go build ./...` clean; `go test ./internal/storage/...` — memory ok, sqlite ok (21.3s), no failures. `go vet ./internal/storage/...` exit 0.
+
+**Closure via the `pinned` grep.** Every `pinned` occurrence that is a column-list entry, bind value, scanner declaration or scan target now has a `claim_expires_at` counterpart in all five files. The occurrences with no counterpart are exactly the ones that should have none: the `i.pinned = 0` filters at ready.go:19 and :423, the `"pinned": true` allowedUpdateFields entry (queries.go:574 — the lease has its own entry at :578), the `pinned = 1` search filters at queries.go:1669-1671, and the post-scan boolean assignments.
+
+**Column list ↔ scanner alignment, counted position by position.** `scanIssues` now takes 27 targets ending in `claimExpiresAt`; all four SELECTs that feed it (ready.go:114, labels.go:162, queries.go:1707, plus transaction.go's own list which bead 1.1 already handled) end in the same 27th column in the same order. `scanIssuesWithDependencyType` matches dependencies.go:252 and :274 (26 issue columns + `d.type`). GetStaleIssues' local scanner matches its own list at :250.
+
+**multirepo.go, both branches.** INSERT is 27 columns / 27 placeholders (counted mechanically), and the full-column UPDATE branch sets `claim_expires_at = ?` with `issue.ClaimExpiresAt` bound in the right argument position ahead of `issue.ID`. The stale-lease-on-copy hazard is closed. `*time.Time` binds correctly — same handling as the adjacent `issue.ClosedAt`.
+
+**Deliberately partial queries left alone.** The two recursive dep-tree CTEs (dependencies.go:512, :553) are untouched by the diff. Worth noting: plan_v4.md line 147 actually pointed the builder *at* those two line numbers; the bead contract overrode the plan and the builder followed the contract, which is the correct call — adding the lease there would have produced a runtime Scan mismatch. I also checked `GetBlockedIssues` (ready.go:403), which is the same class of partial query scanning into `types.BlockedIssue`, and it is correctly untouched.

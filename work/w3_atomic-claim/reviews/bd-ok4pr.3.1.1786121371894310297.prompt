@@ -1,0 +1,57 @@
+You are a fresh-eyes reviewer on work item w3 in the `bd` fork (Go, v0.34).
+You are READ-ONLY: change no file, create no bead, commit nothing.
+
+## What to review
+Bead bd-ok4pr.3.1 — "Carry claim lease through importer update maps and round-trip test".
+Commit range in /home/ben/worktrees/beads/w3_atomic-claim:
+`git log -p a0d51ee71e33a136ad3e6528ebbea880e1ea3bb0..c481f02901f3fedd54f7fc92daebef817130c674`
+
+Files changed: internal/importer/{importer.go,utils.go}, cmd/bd/export_test.go
+Run no recursive rg/grep/find outside this worktree.
+
+## Judge against
+1. `bd --db /home/ben/projects/beads/.beads/beads.db --no-auto-import show bd-ok4pr.3.1`
+2. `work/w3_atomic-claim/plan_v4.md` — the Phase 3 importer rows and the
+   "renewal-only change" risk row.
+3. `~/projects/shared-docs/CODING_PRINCIPLES.md` and
+   `~/projects/shared-docs/TESTING_PRINCIPLES.md`.
+
+## Look hardest at
+- ALL THREE explicit update maps carry the lease, including `handleRename`
+  (:370-381) which also rewrites status and assignee. A field missing from one
+  map is dropped with no error, leaving a synced clone `in_progress` with no
+  expiry that nothing can steal there. Check each map individually; do not
+  assume the diff covered them because it touched the file.
+- The `checkFieldChanged` case: is the comparator nil-aware and built on
+  `time.Time.Equal`? If it routes through the string helpers instead, every
+  import reports an unconditional change — `updated_at` bump, event, dirty mark,
+  export churn on every row. If the case is missing entirely, a lease-only
+  renewal reads as unchanged and never propagates. Both failure directions
+  matter.
+- `TestClaimRoundTrip` must cover three paths: fresh store (exercises
+  `insertIssue`), a store already holding the issue in its pre-claim state
+  (exercises the update maps — where the drop happens), and a lease-only renewal
+  on an `external_ref`-bearing issue (the only import path where the comparator
+  is load-bearing, since its guard is `updated_at`, not the content hash). A
+  test covering only the fresh store proves nothing about this bead.
+- Would the round-trip test fail if the update-map changes were reverted? Say so
+  explicitly.
+
+## Run the gate yourself
+`cd /home/ben/worktrees/beads/w3_atomic-claim && go build ./... && go test ./internal/importer/... ./cmd/bd/ -run TestClaimRoundTrip`
+then `go test ./internal/importer/...`.
+Report the real results. Do not modify anything to make them pass.
+
+## Output
+Write your review to:
+/home/ben/worktrees/beads/w3_atomic-claim/work/w3_atomic-claim/reviews/review_bd-ok4pr.3.1_v1.md
+
+It contains exactly this — the verdict line plus finding rows, no other prose:
+
+VERDICT: CLEAN|FIX findings=N
+| ID | sev | file:line | defect (one sentence) | fix (one sentence) |
+|---|---|---|---|---|
+
+- CLEAN requires findings=0; FIX requires one or more finding rows.
+- sev: high = wrong behavior or a broken contract; med = correctness risk in a specific case; low = wording, cosmetic.
+- Each defect sentence stands alone: name the mechanism and the consequence.

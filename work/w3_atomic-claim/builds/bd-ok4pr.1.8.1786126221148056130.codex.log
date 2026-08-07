@@ -1,0 +1,23 @@
+Done. bd-ok4pr.1.8 is committed (`fa5407105`) and closed. No push.
+
+**What landed**
+
+- **Fix B** in `022_drop_edge_columns.go`: the rebuild reads the live columns from `pragma_table_info`, subtracts the four edge columns, and copies that set. The 28-name literal now only supplies constraints for the columns it knows; anything a later migration added is appended to `issues_new` via `ALTER TABLE ADD COLUMN` with the type and default read from the pragma. It also replays the table's `CREATE INDEX` statements from `sqlite_master`, skipping any that mention a dropped column, so the drop no longer discards `idx_issues_sender` / `idx_issues_ephemeral`.
+- **Fix C** in `migrations.go`: `schema_migrations(name PRIMARY KEY, applied_at)`, skip-if-recorded, record on success in the same EXCLUSIVE transaction. Backfill is literally "run everything, record everything" — no detection, no selective skipping. DDL const sits in `schema.go`.
+- **Regression test** `TestIssueColumnsSurviveReopen`: columns enumerated from `pragma_table_info`, a sentinel in every one, plus a trigger on `issues` to catch the rebuild itself. Verified it fails against pre-fix code on exactly `pinned`, `is_template`, `claim_expires_at` and the trigger.
+
+**Reproduction** (temp stores only, now trashed). Pre-fix binary built from a `git archive HEAD` snapshot:
+
+```
+PRE-FIX BEFORE: repo-old-l63|pinned=1|claim_expires_at=2030-01-01T00:00:00Z, trigger=trg_probe
+PRE-FIX AFTER:  repo-old-l63|pinned=0|claim_expires_at=NULL, trigger=gone
+
+BEFORE: bd-mgx|pinned=1|claim_expires_at=2030-01-01T00:00:00Z
+AFTER:  bd-mgx|pinned=1|claim_expires_at=2030-01-01T00:00:00Z   (trigger still present)
+```
+
+A legacy no-ledger store (the shape of the 17 live ones) survives its one backfill pass intact, and `bd claim`'s lease now persists across processes. Full transcripts are in the build report.
+
+**One thing outside the allowlist:** `internal/storage/sqlite/claim_test.go`. Its pre-027 fixture dropped the column and relied on "migrations re-run at every open", which the ledger makes false, and it failed the bead's own `go test ./...`. The fixture now also deletes the `claim_expires_at_column` ledger row — what a genuine pre-027 store looks like. No assertion weakened; flagged in the report.
+
+**For the deploy:** harvest `"pinned":true` / `"is_template":true` from each store's `git log -p .beads/issues.jsonl` *before* rolling this out, then `bd import`. After this change the restored values stick.

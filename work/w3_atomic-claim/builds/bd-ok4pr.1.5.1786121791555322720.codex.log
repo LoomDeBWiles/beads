@@ -1,0 +1,19 @@
+Done. bd-ok4pr.1.5 closed, commit `9aec04dc`, only `internal/storage/sqlite/claim_test.go` touched.
+
+## What I added
+
+1. **Lease duration window** in `TestClaimOpenIssueClaimed`: captures `before`/`after` around the claim and asserts the stored `claim_expires_at` lies in `[before+30m, after+30m]`. Replaces the old "not NULL and after now" pair.
+2. **`TestClaimTombstonedIssueErrors`**: soft-deletes via `CreateTombstone`, asserts `ClaimIssue` errors and the row keeps `status=tombstone`, empty assignee, NULL lease.
+3. **`TestClaimUnknownIssueErrors`**: `ClaimIssue(ctx, "bd-nope", ...)` returns an error.
+
+## Mutation proof (each mutation applied to `claim.go`, run, then `git checkout --` restored)
+
+| Mutation | Result |
+|---|---|
+| `now.Add(*lease)` → `now.Add(*lease * 7)` | `TestClaimOpenIssueClaimed` FAILS (expiry 3h out, want 30m) |
+| delete `\|\| issue.IsTombstone()` | `TestClaimTombstonedIssueErrors` FAILS (got denied/status, want error) |
+| nil-issue branch → a denial instead of an error | `TestClaimUnknownIssueErrors` FAILS |
+
+Each mutation fails only the test that protects it. `claim.go` is unmodified in the commit; the final `git status` was clean apart from the committed test file.
+
+Acceptance: `go build ./...`, `go test ./internal/storage/sqlite/ -run TestClaim -count=5`, `go test ./...` all exit 0, logged as `_step1/2/3.log` in the builds directory alongside the schema-2 build report. No push, per the contract.

@@ -1,0 +1,2 @@
+$ test "$(grep -c claim_expires_at internal/storage/sqlite/ready.go)" -ge 4
+exit=0

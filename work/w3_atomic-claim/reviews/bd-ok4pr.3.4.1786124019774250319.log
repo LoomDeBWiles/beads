@@ -1,0 +1,27 @@
+VERDICT: FIX findings=1 — one low finding. Review written to `work/w3_atomic-claim/reviews/review_bd-ok4pr.3.4_v3.md`.
+
+**Contract items — all three genuinely closed:**
+
+1. The replacement assertion bites, proved twice. Retargeting the rename update to `incoming.ID` (`importer.go:386` `existing.ID` → `incoming.ID`) fails on the squatter-title check; with that check neutralized the squatter-lease check fires on its own. Both new assertions are independently reachable, unlike the seeded-true one they replaced.
+2. `claim.go:121-125` is correct: those exact lines are `claimed.ClaimExpiresAt = nil` plus the `if lease != nil` override. The old citation 130-136 was the SQL text and error return. I also checked the note's other citation, `queries.go:813` — that is the plain `UPDATE issues SET %s WHERE id = ?`, as described.
+3. Capitalization fixed; I read the whole note and found no other seam.
+
+**Mutation results — all four `TestClaimRoundTrip` subtests can fail:**
+
+| subtest | mutation | result |
+|---|---|---|
+| fresh store | null the lease arg in batch `insertIssues` | FAIL |
+| existing store | drop `claim_expires_at` from the Phase-2 collision update map | FAIL |
+| lease-only renewal | `checkFieldChanged` `case "claim_expires_at": return false` | FAIL |
+| rename collision (lease) | drop `claim_expires_at` from `handleRename`'s update map | FAIL |
+| rename collision (squatter) | retarget the rename update to `incoming.ID` | FAIL |
+
+No test in the range passes both ways.
+
+**Gate:** `go build ./...` clean; `go test ./cmd/bd/ -run TestClaimRoundTrip -v` PASS, all four subtests.
+
+**Control flow:** this commit changes only a test file and CONTEXT.md — no product code, so no new control-flow risk of the kind the previous round introduced.
+
+**Tree state:** every file I mutated (`export_test.go`, `importer/importer.go`, `importer/utils.go`, `sqlite/issues.go`) is restored; `git status --porcelain` on them is empty.
+
+One thing you should know: another agent is mutation-testing in this same worktree concurrently. During my run I watched `cmd/bd/claim.go` (`claimDeniedExit` 3→1), `internal/rpc/protocol.go`, `cmd/bd/main.go`, and `cmd/bd/claim_test.go` appear and disappear from `git status` without any action by me. I left those alone. They do not touch the lease round-trip path, so my results stand, but two agents mutating one worktree can corrupt each other's conclusions.

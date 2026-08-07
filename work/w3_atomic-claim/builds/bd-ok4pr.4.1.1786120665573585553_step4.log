@@ -1,0 +1,2 @@
+$ grep -q 'update --status in_progress' CONTEXT.md
+exit 0

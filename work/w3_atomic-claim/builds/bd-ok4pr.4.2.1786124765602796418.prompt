@@ -1,0 +1,65 @@
+You are a builder on work item w3 in the `bd` fork (Go, v0.34). Implement exactly one bead.
+
+## Your bead
+bd-ok4pr.4.2 — write and run the end-to-end claim proof.
+
+## Your worktree (the ONLY tree you may write to)
+/home/ben/worktrees/beads/w3_atomic-claim/.runs/bd-ok4pr.4.2.1786124765602796418
+
+Everything below runs from that directory.
+
+## Step 1 — read your inputs, in this order
+1. `bd --db /home/ben/projects/beads/.beads/beads.db --no-auto-import show bd-ok4pr.4.2`
+   Read the SCOPE CHANGE note first: the deploy sequence has been removed from this
+   bead and belongs to the manager, after the merge. Run no install command and no
+   daemon command.
+2. `work/w3_atomic-claim/plan_v4.md` — the E2E verification section lists the six
+   steps verbatim; the Design section is the authority on claim semantics.
+3. The implementation you are proving: `cmd/bd/claim.go`,
+   `internal/storage/sqlite/claim.go`.
+
+## Step 2 — implement
+Write `work/w3_atomic-claim/e2e_claim.sh`: a literal, self-contained bash script
+that builds nothing itself but runs the binary the acceptance step builds, in a
+scratch store under its own `mktemp -d`, cleaning that directory up on every exit
+path (trap). It prints `E2E_PASS` as the LAST line only when every step passed, and
+exits non-zero otherwise.
+
+Hard boundaries — this script runs on a shared host:
+- Never touch the fleet store, `~/.local/bin/bd`, or any live daemon. Pass
+  `--no-daemon`, or point every command at your own temp store, throughout.
+- Never call `bd daemon --stop-all` or any other command that affects another
+  workspace.
+- Clean up your temp directory even when a step fails.
+
+Step 2 of the script is the whole point of this work item: two concurrent claims on
+one open issue must produce exactly one exit 0 and one exit 3, with the stored
+assignee equal to the winner. That is the probe scenario that failed before this item
+(both claimants exited 0 and one claim was silently lost). Make the script assert it,
+not merely run it, and print the literal line `one exit=0, one exit=3`.
+
+## Step 3 — gate and close, in this order
+1. `bdc test <the files you changed>`
+2. every `## Acceptance` command in the bead, in the bead's order, each exiting 0
+3. `bdc bd-ok4pr.4.2 <the files you changed>` — gate, tagged pathspec commit, close. No push.
+
+The repo's gate command is configured in the tracked `.bdc.conf`. Do not touch it.
+
+## Step 4 — build report
+Write, at this ABSOLUTE path:
+/home/ben/worktrees/beads/w3_atomic-claim/work/w3_atomic-claim/builds/bd-ok4pr.4.2.1786124765602796418.build.json
+
+One JSON object: `schema` = 2, `bead_id` = "bd-ok4pr.4.2", `run_id` = "1786124765602796418",
+`changes` = "committed" or "none", `commits` = the one (bd-ok4pr.4.2)-tagged commit `bdc`
+made (or [] for "none"), `acceptance` = one entry per bead Acceptance command, in
+the bead's order, same length. Each acceptance entry has exactly four keys:
+`criterion`, `command` (character for character), `exit` (the number 0), and
+`log` = `bd-ok4pr.4.2.1786124765602796418_step{N}.log` with N the 1-based position — a name relative to
+/home/ben/worktrees/beads/w3_atomic-claim/work/w3_atomic-claim/builds/ (no `builds/` prefix inside the JSON), existing in that ABSOLUTE
+directory, non-empty. No other filename form is accepted.
+
+## Worker contract
+Your run worktree only. No branch switch, reset, rebase, push, or `wt-*` scripts.
+Stay inside `## Touches`. The manager owns the rebase, the merge and the deploy.
+If the bead cannot be completed as written, stop and write the reason into the build
+report path above instead of improvising past it.

@@ -1,0 +1,7 @@
+{"findings": [{"id": "F1", "class": "corruption",
+  "tests": {"contract": "intact", "blast_radius": "contained", "trajectory": "clear"},
+  "disposition": "fixed", "rationale": "The shipped verb is unaffected; the defect was the plan's rollback text claiming old binaries merely ignore the new column. The reviewer's mixed-binary probe disproves that: an old binary re-runs migration 022 and blanks pinned, is_template and every lease, and the new binary's self-repair then re-adds them as NULL/0 so the loss leaves no trace. Nothing is destroyed by shipping forward - the damage only occurs if someone follows the wrong rollback procedure - so the blast radius is contained by correcting that procedure, which I did: CONTEXT.md now states that a downgrade destroys those columns and that a rollback must restore the store from .beads/issues.jsonl or git after reinstalling the old binary."},
+ {"id": "F2", "class": "neither",
+  "tests": {"contract": "intact", "blast_radius": "contained", "trajectory": "clear"},
+  "disposition": "residual", "rationale": "The git merge driver re-marshals every rewritten row from merge.Issue, which models a subset of the schema, so unmodeled fields are dropped on merge. Pre-existing, unchanged by this item, and explicitly scoped out by plan_v4's risk row; this item strictly reduced it by modeling assignee and claim_expires_at. Recorded in the work report's residual-risk table with a follow-up item."}],
+ "outcome": "ship"}

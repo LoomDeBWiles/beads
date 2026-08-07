@@ -1,0 +1,13 @@
+Done. Commit `6f0a4a4`, bead closed.
+
+**What I changed** (docs only, both in `## Touches`):
+
+1. `CODEMAP.md:53` — "(26 migrations)" → "(27 migrations)". Verified against the file, not the bead text: `migrationsList` in `internal/storage/sqlite/migrations.go` has exactly 27 entries, the last being `claim_expires_at_column`.
+
+2. `CONTEXT.md:41`, race wording — the old note claimed `update` "reads the issue, decides in Go, then writes", implying an ownership check that loses a race. I read `UpdateIssue` (`internal/storage/sqlite/queries.go:690-865`): it builds `UPDATE issues SET %s WHERE id = ?` and executes it with no ownership predicate at all. The note now says the caller decides "free" from an earlier read while `update` writes unconditionally with no precondition, so there is no check there to harden and both writes land.
+
+3. `CONTEXT.md:41`, renewal — added the missing clause. `writeClaim` (`internal/storage/sqlite/claim.go:130-136`) sets `claim.ClaimExpiresAt = nil` and only repopulates it when the current call passes a lease, so a renewal without `--lease` clears the expiry and makes the claim never-stealable. The note now says every renewal must repeat `--lease`.
+
+**On the mutation check**: this bead adds no test — its Acceptance is four commands (a grep, a guard grep, build, full suite) and it changes only prose in two markdown files. There is no implementation line to delete, so I ran no mutation verification and am not claiming one.
+
+Gate `bdc test CODEMAP.md CONTEXT.md` passed; all four acceptance commands exited 0 with logs at `work/w3_atomic-claim/builds/bd-ok4pr.4.4.1786121793299201539_step{1..4}.log`. Build report written to the specified absolute path. Not pushed, per instructions.

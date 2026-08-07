@@ -1,0 +1,52 @@
+Root-cause investigation. Load Skill(five-why) first; if that fails, read
+~/projects/shared-docs/skills/five-why/five-why.md.
+
+## The failure
+In the `bd` fork at /home/ben/worktrees/beads/w3_atomic-claim, a value written into
+`issues.claim_expires_at` by one `bd` process is NULL by the time the next `bd`
+process reads it, with `updated_at` unchanged. This makes the work item's owner
+lease non-functional across processes: an expired lease is never stealable, because
+the second claimant reads NULL as "never expires" and is denied.
+
+## Reproduced twice, independently
+1. The E2E proof run: /home/ben/worktrees/beads/w3_atomic-claim/work/w3_atomic-claim/artifacts/e2e_claim_output.txt
+   (steps 3, 4 and 6 fail; step 2, the concurrency check, passes).
+2. Manager probe, scratch store, this worktree's binary at /tmp/bd-w3:
+   after `bd claim <id> --assignee holder-A --lease 600s`, sqlite shows
+   `claim_expires_at=2026-08-07T20:09:53...` and `pinned` set to 1 by hand;
+   after a plain `bd --no-daemon list`, the same rows read
+   `claim_expires_at=NULL` and `pinned=0`, and `updated_at` is unchanged.
+
+## The builder's hypothesis, to verify or refute
+Two migrations fight on every database open: `019_messaging_fields.go` re-adds
+`replies_to`, `relates_to`, `duplicate_of`, `superseded_by` whenever they are
+missing, and `022_drop_edge_columns.go` then sees them and rebuilds the `issues`
+table without them, copying only the 28 columns it knows about — so every column
+added by a migration AFTER 022 (`pinned` 023, `is_template` 026,
+`claim_expires_at` 027) is re-created empty on each open. Supporting observation
+the builder reported: a trigger created on the `issues` table disappears after any
+`bd` command, while a trigger on the `events` table survives.
+
+## What to produce
+1. Confirm or refute the hypothesis against the actual source, naming the exact
+   files, functions and line numbers in the loop. If it is wrong, give the real
+   mechanism with the same specificity.
+2. State the BLAST RADIUS precisely: which columns lose data, under what
+   conditions, starting from which version, and whether any data is unrecoverable.
+   This host has 17 live `.beads/` stores; the installed baseline is
+   `bd version 0.34.0 (f31496d65)`. Check whether the defect predates this work
+   item — the builder reports that setting `pinned=1` on the INSTALLED baseline
+   binary and running `bd list` resets it to 0.
+3. Give 2-3 candidate fixes with their trade-offs. Weigh them by risk to existing
+   data: any fix changes migration behavior for every store on this host, and a
+   wrong one could corrupt live trackers. Say which you recommend and why, and name
+   the regression test that would have caught this (a value written into a post-022
+   column must survive a store reopen).
+4. Cross-check your own finding before you write it: state explicitly what evidence
+   would have falsified your conclusion, and confirm you looked for it.
+
+Read only inside /home/ben/worktrees/beads/w3_atomic-claim. Do not modify any file,
+do not run migrations against any store outside your own temp directory, and never
+touch /home/ben/projects/*/.beads/ or ~/.local/bin/bd.
+
+Write RCA to: /home/ben/worktrees/beads/w3_atomic-claim/work/w3_atomic-claim/rca_v1.md

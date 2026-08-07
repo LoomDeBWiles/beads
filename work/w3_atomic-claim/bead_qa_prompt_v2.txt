@@ -1,0 +1,53 @@
+# Check beads are ready for work — round 2 (delta)
+
+<input>
+- /home/ben/worktrees/beads/w3_atomic-claim/work/w3_atomic-claim/plan_v4.md (approved plan)
+- Round-1 findings: /home/ben/worktrees/beads/w3_atomic-claim/work/w3_atomic-claim/bead_review_codex_v1.md
+- Repo: /home/ben/worktrees/beads/w3_atomic-claim (Go, the `bd` fork at v0.34)
+- The item's bead set: run
+  `bd --db /home/ben/projects/beads/.beads/beads.db --no-auto-import dep tree <root> --direction=up`
+  once per manifest root, then `show` every in-scope bead it lists.
+  Manifest roots: bd-ok4pr.1,bd-ok4pr.2,bd-ok4pr.3,bd-ok4pr.4 (top root bd-ok4pr is excluded by design).
+  Use `bd --db /home/ben/projects/beads/.beads/beads.db --no-auto-import ...` in EVERY bd command.
+</input>
+
+<instructions>
+1. Load Skill(beads) first — if that fails, read ~/projects/shared-docs/BEADS.md
+2. All nine round-1 findings were ACCEPTED and the author applied them. Verify each
+   one actually landed in the current beads (F1 dep edge 3.1←1.1; F2 flat
+   `cmd/bd/testdata/*.txt`; F3/F4 per-file grep loops; F5 in-code pre-027 schema,
+   no committed fixture; F6 the `tee` line writing the artifact it asserts;
+   F7 `bd version --json` grepped against short HEAD; F8 daemons list/health
+   record-then-verify; F9 the 1.1 split with bd-ok4pr.1.3 carrying ready.go,
+   dependencies.go, multirepo.go and blocked by 1.1).
+3. Two beads are new since round 1 — review them as fresh beads, in full:
+   bd-ok4pr.1.3 and bd-ok4pr.4.3 (the manager-added baseline repair of
+   TestMergeDriverWithLockedConfig_E2E, a deliberate, logged plan deviation —
+   do NOT raise its absence from plan_v4 as a finding; do check its Contract,
+   Acceptance and Touches like any other bead).
+4. Scan the changed bead text for NEW defects introduced by the fixes.
+5. Fail every bead an agent cannot execute alone (needs approval, host or account
+   access, waits on a person): one high finding each.
+6. This item runs the MANUAL per-bead playbook — no cluster review markers exist
+   and none are expected. Do NOT raise findings about missing review markers.
+7. Do not re-litigate a round-1 finding that landed; report only what is still
+   wrong or newly wrong.
+</instructions>
+
+<output>
+Write review to: /home/ben/worktrees/beads/w3_atomic-claim/work/w3_atomic-claim/bead_review_codex_v2.md
+</output>
+
+<output-format>
+The output file contains exactly this — the verdict line plus finding rows, no other prose:
+
+VERDICT: CLEAN|FIX findings=N
+| ID | sev | bead | defect (one sentence) | fix (one sentence) |
+|---|---|---|---|---|
+
+- CLEAN requires findings=0; FIX requires one or more finding rows.
+- sev: high = bead must change before work starts; med = correctness risk in a specific case; low = wording, cosmetic.
+- N states the true total; the table lists every finding, no cap.
+- Each defect sentence stands alone — the manager dispositions it with no follow-up round: name the bead, the mechanism, and the consequence.
+- Each fix sentence is a concrete change to a bead.
+</output-format>

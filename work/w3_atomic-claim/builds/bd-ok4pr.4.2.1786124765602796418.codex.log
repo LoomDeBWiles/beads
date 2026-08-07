@@ -1,0 +1,19 @@
+**Blocked. The bead is not closed.** The E2E script is written, runs, and fails honestly on a real product defect.
+
+What the proof shows:
+- Step 2, the point of the item, passes: two concurrent claims on one open issue give exactly one exit 0 and one exit 3, the stored assignee equals the winner, and the script prints `one exit=0, one exit=3`. The probe's original failing scenario is fixed.
+- Steps 3, 4 and 6 fail: an owner lease does not survive the next `bd` invocation.
+
+Root cause (verified, not guessed): migration `019_messaging_fields.go` re-adds `replies_to`, `relates_to`, `duplicate_of`, `superseded_by` whenever they are missing, and `022_drop_edge_columns.go` then sees them and rebuilds the `issues` table from a hard-coded 28-column list. That pair runs on **every** database open, so every column added after 022 is re-created empty each time: `pinned` (023), `is_template` (026) and now `claim_expires_at` (027). A lease written by one process reads back NULL in the next, so an expired lease is never stealable — the second claimant sees "no expiry" and gets exit 3.
+
+It is pre-existing, not from w3: on the installed baseline `bd 0.34.0 (f31496d65)`, setting `pinned=1` in a scratch store and running `bd list` resets it to 0. Unit tests miss it because they claim and read inside one open store; only a second process exposes it.
+
+The fix lives in `internal/storage/sqlite/migrations/`, outside this bead's `## Touches`, and changes migration behaviour for every store on the host — it needs its own bead.
+
+Delivered:
+- `work/w3_atomic-claim/e2e_claim.sh` — all six plan steps, scratch stores under its own `mktemp -d`, removed by a trap on EXIT/INT/TERM, `--no-daemon` and an explicit `--db` on every call. No install or daemon command.
+- `work/w3_atomic-claim/artifacts/e2e_claim_output.txt` and `prior_head.txt` (`dcbe1a612`).
+- Commit `3026a5ed0`, a plain pathspec commit, not a `bdc` gate-and-close.
+- Report with root cause, evidence and suggested fix at `work/w3_atomic-claim/builds/bd-ok4pr.4.2.1786124765602796418.build.json`; 10 acceptance entries with real exits (step 4 is exit 1), each log present and non-empty.
+
+`go test ./...`, `TestClaimRace -count=5`, `TestClaimDeniedNoWrite` and the repo gate all pass. Scratch directories trashed.

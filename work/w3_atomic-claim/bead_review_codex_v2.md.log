@@ -1,0 +1,12 @@
+Review written to `work/w3_atomic-claim/bead_review_codex_v2.md`.
+
+**All nine round-1 findings landed** — verified in the live beads: the 3.1←1.1 edge, flat `cmd/bd/testdata/*.txt` (confirmed against `scripttest_test.go:43` and the existing flat scripts), the per-file grep loops in 1.1 and 2.1, the in-code pre-027 schema plus the `git ls-files testdata` guard, the `tee`-then-assert E2E line, `version --json` vs short HEAD, the daemons before/after records, and the 1.1/1.3 split.
+
+**VERDICT: FIX findings=8** (4 high, 4 med), all new:
+
+- **4.2 deploy never reaches the fleet binary**: `GOBIN` is unset and `GOPATH=/home/ben/go`, so `go install` writes `~/go/bin/bd`, not the `~/.local/bin/bd` that PATH resolves — the new `version --json` gate is unpassable as written.
+- **Shared scanner fallout from the 1.1/1.3 split** (two findings): `scanIssues` lives in `dependencies.go` (1.3) but is fed by SELECT lists in `labels.go` (in no bead's Touches) and `queries.go:1644` (1.1's file, which is forbidden to touch the scanner). Either ordering produces a column-count Scan error inside a bead's own gate.
+- **1.1 vs 1.2 contract gap**: 1.2 tests that an empty assignee argument is rejected; 1.1's ladder never says so.
+- Med: 1.3's plan row points at two recursive dep-tree queries that must stay unchanged; 3.1 and 2.1 race on the same Go package; 4.3's full-suite gate runs while other builders edit the tree; 4.2's prior-HEAD record has no path and no assertion.
+
+Bead 4.3 (the manager-added baseline repair) checks out against the real test — the defer, the root/macOS/CI skips, and the sibling subtest are all where the bead says, and the baseline log confirms it is the only failing test.

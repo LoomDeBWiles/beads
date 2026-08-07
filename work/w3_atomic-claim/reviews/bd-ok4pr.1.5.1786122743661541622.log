@@ -1,0 +1,9 @@
+VERDICT: CLEAN findings=0. Review written to `work/w3_atomic-claim/reviews/review_bd-ok4pr.1.5_v2.md`.
+
+Evidence:
+
+- Gate: `go build ./...` clean; `go test ./internal/storage/sqlite/ -run TestClaim -count=5` → `ok 5.095s`. Full package `go test ./internal/storage/sqlite/ -count=1` → `ok 19.632s`; `go vet` clean.
+- Item 1 killed by mutation: `expiry := now.Add(*lease)` → `*lease * 7` fails `TestClaimOpenIssueClaimed` at claim_test.go:116. The window is `[before+lease, after+lease]` (~0.5 ms wide, tightest possible), not a loose bound; stored expiry round-trips at nanosecond precision, so no truncation flake. 50 repeats and `-race` stayed green.
+- Item 2 killed by mutation: deleting `|| issue.IsTombstone()` (claim.go:57) fails `TestClaimTombstonedIssueErrors` at claim_test.go:318 — the tombstone falls into the status rung and returns a denial instead of an error. The test asserts the error *and* the untouched row (status still tombstone, assignee empty, `claim_expires_at` NULL).
+- Item 3 killed by mutation: replacing the nil-issue `return nil, fmt.Errorf(...)` with a `ClaimDenied` outcome fails `TestClaimUnknownIssueErrors` at claim_test.go:341, so error and denial are genuinely distinguished — matching plan_v4.md line 96 ("`1` error (not found, closed, invalid args, DB failure)").
+- `internal/storage/sqlite/claim.go` was mutated three times and restored via `git checkout --` each time; `git status --porcelain internal/storage/sqlite/` is empty. No beads created, nothing committed.

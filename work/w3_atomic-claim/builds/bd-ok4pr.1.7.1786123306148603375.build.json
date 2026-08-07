@@ -1,0 +1,60 @@
+{
+  "schema": 2,
+  "bead_id": "bd-ok4pr.1.7",
+  "run_id": "1786123306148603375",
+  "changes": "committed",
+  "commits": ["ff94580f177753c02ff509abfbcb9a98b79cb4de"],
+  "acceptance": [
+    {
+      "criterion": "The whole module compiles after moving lease validation out of the apply loop",
+      "command": "go build ./...",
+      "exit": 0,
+      "log": "bd-ok4pr.1.7.1786123306148603375_step1.log"
+    },
+    {
+      "criterion": "Storage and types tests pass, including the new rejected-update no-op test and the per-column schema probe loop",
+      "command": "go test ./internal/storage/... ./internal/types/...",
+      "exit": 0,
+      "log": "bd-ok4pr.1.7.1786123306148603375_step2.log"
+    },
+    {
+      "criterion": "go vet is clean over the storage packages",
+      "command": "go vet ./internal/storage/...",
+      "exit": 0,
+      "log": "bd-ok4pr.1.7.1786123306148603375_step3.log"
+    },
+    {
+      "criterion": "The full test suite passes, so no other caller depended on the partial-update behavior",
+      "command": "go test ./...",
+      "exit": 0,
+      "log": "bd-ok4pr.1.7.1786123306148603375_step4.log"
+    }
+  ],
+  "implementation": {
+    "item_1": "internal/storage/memory/memory.go: added resolveClaimExpiry(updates), called before issue.UpdatedAt is touched and before the apply loop. The loop's claim_expires_at arm now only assigns the pre-resolved value, so UpdateIssue has no error return inside the loop and a rejected value changes nothing (no field write, no updated_at bump, no dirty mark, no event).",
+    "item_2": "internal/storage/sqlite/schema_probe_test.go: TestProbeSchema_DetectsDroppedClaimExpiresAt replaced by TestProbeSchema_DetectsEveryDroppedIssuesColumn, a subtest per column of expectedSchema[\"issues\"] that rebuilds the issues table without that column and asserts verifySchemaCompatibility returns ErrSchemaIncompatible naming it. ALTER TABLE DROP COLUMN cannot express this for 10 of the 32 columns (SQLite refuses the primary key and every indexed column, is_template among them), so the helper rebuildIssuesWithout recreates the table from pragma_table_info minus the target. A literal anchor asserts the probe still lists \"claim_expires_at\" and \"is_template\" by name, since a column deleted from expectedSchema is one the loop can no longer iterate."
+  },
+  "mutation_checks": [
+    {
+      "protects": "internal/storage/memory/memory.go — a rejected claim_expires_at value must not leave other keys of the same call written",
+      "test": "TestUpdateIssueRejectedLeavesIssueUntouched (internal/storage/memory/memory_test.go)",
+      "broke": "Reverted memory.go to the reviewed bug: deleted the pre-loop resolveClaimExpiry call and restored the type switch with its `default: return fmt.Errorf(...)` inside the apply loop.",
+      "result": "FAIL — title = \"rejected title\" want \"Lease test issue\"; notes = \"rejected notes\" want empty; assignee = \"agent-b\" want \"agent-a\"; status = \"open\" want \"in_progress\"; updated_at changed.",
+      "restored": "memory.go restored exactly (verified: full package test green, git diff shows only the intended change)."
+    },
+    {
+      "protects": "internal/storage/sqlite/schema_probe.go — the is_template entry in expectedSchema[\"issues\"] must not be deletable unnoticed",
+      "test": "TestProbeSchema_DetectsEveryDroppedIssuesColumn (internal/storage/sqlite/schema_probe_test.go)",
+      "broke": "Deleted \"is_template\" from expectedSchema[\"issues\"] in schema_probe.go.",
+      "result": "FAIL — probe no longer lists issues column \"is_template\"; the drop loop cannot protect it.",
+      "restored": "schema_probe.go restored exactly (verified: git diff empty for that file)."
+    },
+    {
+      "protects": "internal/storage/sqlite/schema_probe.go — the startup error must name the missing column, for every probed column, not just one",
+      "test": "TestProbeSchema_DetectsEveryDroppedIssuesColumn (internal/storage/sqlite/schema_probe_test.go)",
+      "broke": "Made findMissingColumns report nothing (iterated expectedCols[:0]), so the incompatibility error carried no column name.",
+      "result": "FAIL — every subtest failed, e.g. 'error must name the missing column claim_expires_at, got \"database schema is incompatible: \"'.",
+      "restored": "schema_probe.go restored exactly (verified: git diff empty for that file; go test ./internal/storage/sqlite/ green)."
+    }
+  ]
+}

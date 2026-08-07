@@ -1,0 +1,15 @@
+Review written to `work/w3_atomic-claim/reviews/review_bd-ok4pr.3.3_v2.md`.
+
+**VERDICT: FIX findings=1** (one low; the contract item itself is genuinely closed)
+
+Contract item — the `handleRename` collision map lease coverage — is closed:
+- The new subtest does route through `handleRename`. The twin is a same-content (same title/description/status/assignee, so same content hash), different-ID (`test-renametwin`, same `test` prefix), older-`updated_at` copy; the squatter occupies `held.ID` with a differing title, so `importer.go:365` finds the target ID with a mismatched hash and falls into the `incoming.UpdatedAt.After(existing.UpdatedAt)` update-map branch at `importer.go:371-386`.
+- **Mutation confirmed**: deleting `"claim_expires_at": incoming.ClaimExpiresAt` from that map made only the new subtest fail (`rename collision: claim_expires_at is NULL after import`), the other three still passing. Restored with `git checkout --`; the file is byte-identical to my pre-mutation backup and `git status` shows only the untracked `work/` dir.
+
+Gate, run as given, unmodified:
+- `go build ./...` — OK
+- `go test ./cmd/bd/ -run TestClaimRoundTrip -v` — PASS, all 4 subtests
+- `go test ./internal/importer/...` — ok, 1.303s
+- `go test ./cmd/bd/` — ok, 24.162s
+
+The one finding: line 533's `imported.Assignee != held.Assignee || imported.Status != held.Status` check is dead. The twin is seeded as a copy of `held`, and it *has* to be, since Status and Assignee are inside `ComputeContentHash` and the hash match is what selects the rename path. So the twin already satisfies that assertion before the import runs. The equivalent check in subtest 2 bites because there the seed is reset to `open`/`""`; here it cannot. Only the lease assertion carries weight in this subtest, which is what the bead asked for — hence low, not a reopened item.

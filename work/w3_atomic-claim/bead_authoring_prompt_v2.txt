@@ -1,0 +1,69 @@
+# Fix the w3 bead set from QA round 1
+
+<input>
+- Approved plan: /home/ben/worktrees/beads/w3_atomic-claim/work/w3_atomic-claim/plan_v4.md
+- QA findings: /home/ben/worktrees/beads/w3_atomic-claim/work/w3_atomic-claim/bead_review_codex_v1.md
+- Repo: /home/ben/worktrees/beads/w3_atomic-claim (Go, the `bd` fork at v0.34)
+- Beads DB (use in EVERY bd command):
+  `bd --db /home/ben/projects/beads/.beads/beads.db --no-auto-import <verb> ...`
+- Existing tree: root epic bd-ok4pr; phase epics bd-ok4pr.1 .. bd-ok4pr.4;
+  tasks bd-ok4pr.1.1, .1.2, .2.1, .3.1, .3.2, .4.1, .4.2
+</input>
+
+<instructions>
+1. Load Skill(beads) first — if that fails, read ~/projects/shared-docs/BEADS.md
+2. The manager ACCEPTED all nine QA findings. Apply every one of them to the
+   existing beads with `bd update` / `bd dep add` (edit in place; do not recreate
+   the tree). Finding 9 is the one that adds a bead:
+   - F1: `dep add bd-ok4pr.3.1 bd-ok4pr.1.1`.
+   - F2: scripttest files live directly in `cmd/bd/testdata/*.txt` (the runner
+     globs `testdata/*.txt`, cmd/bd/scripttest_test.go:43 — verified). Fix the
+     Contract sentence and the Touches line of bd-ok4pr.2.1.
+   - F3, F4: replace each multi-file `grep -q` acceptance with a per-file loop
+     that fails if ANY file lacks its symbol (multi-file `grep -q` exits 0 on the
+     first match, so it proves nothing about the rest).
+   - F5: bd-ok4pr.1.2's migration test builds the pre-027 schema in-code; add a
+     Contract sentence saying so and forbidding a committed fixture DB.
+   - F6: bd-ok4pr.4.2 acceptance writes the artifact it later asserts, via the
+     single `tee` line the finding spells out.
+   - F7: deployed-identity acceptance becomes
+     `~/.local/bin/bd version --json | grep -q "$(git rev-parse --short HEAD)"`
+     (verified: version.go emits a build-time `commit` field via
+     resolveCommitHash, not a runtime git call).
+   - F8: bd-ok4pr.4.2 Contract records `bd daemons list --json` into the artifact
+     before `bd daemon --stop-all` and re-checks `bd daemons health --json`
+     after, stating that daemons autostart on next invocation.
+   - F9: split bd-ok4pr.1.1. Core bead keeps migration 027, types.go,
+     storage.go interface, sqlite/claim.go, queries.go, issues.go,
+     memory/memory.go, transaction.go and is retitled
+     "Add atomic ClaimIssue storage core". A NEW sibling task under bd-ok4pr.1,
+     blocked by the core, carries the late-column read-path plumbing
+     (`internal/storage/sqlite/ready.go`, `dependencies.go`, `multirepo.go`)
+     with a grep-closure acceptance modeled on the plan's `pinned` precedent.
+     Move bd-ok4pr.1.2's dependency and any downstream edges so nothing is
+     orphaned.
+3. ALSO author one new task under epic bd-ok4pr.4, blocking bd-ok4pr.4.2
+   (manager-added, logged as a deliberate plan deviation): repair the
+   pre-existing baseline test failure
+   `TestMergeDriverWithLockedConfig_E2E/handles_read-only_git_config_file` in
+   `cmd/bd/doctor/fix/e2e_test.go`. Root cause, already probed and confirmed on
+   this host (git 2.43.0): `git config` writes through a lock file plus rename
+   inside `.git/`, so a mode-0444 `.git/config` is still rewritten when the
+   `.git/` directory itself is writable — the test chmods the file but not the
+   directory, so its premise is false and `MergeDriver` correctly returns nil.
+   The bead's Contract: make the test actually lock the config against writes
+   (make `.git/` itself non-writable for the duration, restoring permissions in
+   the existing defer so cleanup still works), keeping the assertion that
+   MergeDriver returns an error mentioning "failed to update git merge driver
+   config"; do not delete or skip the test. Acceptance:
+   `go test ./cmd/bd/doctor/fix/ -run TestMergeDriverWithLockedConfig_E2E -count=2`
+   and `bash scripts/test.sh`. Touches: `cmd/bd/doctor/fix/e2e_test.go`.
+4. Every task must still carry `## Contract`, `## Acceptance` (exact runnable
+   commands, all exit 0, run from the repo root), and `## Touches` (explicit
+   write allowlist).
+5. This item runs the MANUAL per-bead playbook — no cluster review markers.
+</instructions>
+
+<output>
+Write report to: /home/ben/worktrees/beads/w3_atomic-claim/work/w3_atomic-claim/bead_authoring_v2.md — exactly one line: `manifest: <epic-ids>` — comma-separated, every epic that is the DIRECT parent of a task.
+</output>

@@ -1,0 +1,48 @@
+{
+  "schema": 2,
+  "bead_id": "bd-ok4pr.3.4",
+  "run_id": "1786123307028141032",
+  "changes": "committed",
+  "commits": [
+    "d17a99556e33409bafc7b6b639d2b58082928dd1"
+  ],
+  "acceptance": [
+    {
+      "criterion": "The tree compiles after the test and CONTEXT edits",
+      "command": "go build ./...",
+      "exit": 0,
+      "log": "bd-ok4pr.3.4.1786123307028141032_step1.log"
+    },
+    {
+      "criterion": "The claim round-trip matrix, including the rewritten rename-collision subtest, passes",
+      "command": "go test ./cmd/bd/ -run TestClaimRoundTrip -v",
+      "exit": 0,
+      "log": "bd-ok4pr.3.4.1786123307028141032_step2.log"
+    },
+    {
+      "criterion": "The whole test suite still passes",
+      "command": "go test ./...",
+      "exit": 0,
+      "log": "bd-ok4pr.3.4.1786123307028141032_step3.log"
+    }
+  ],
+  "notes": {
+    "changes_made": [
+      "cmd/bd/export_test.go: dropped the seeded-true status/assignee assertion in the rename-collision subtest (the twin is a copy of the claimed issue, so it already carried in_progress/agent-a; ComputeContentHash folds Status and Assignee in, so it had to, or the row would not have routed through handleRename at all). Replaced it with a check that the squatter row at held.ID is left untouched: its title is unchanged and it did not gain a lease. The surviving-ID lease check (assertSameLease on the twin) is unchanged.",
+      "CONTEXT.md:41: corrected the claim.go citation from 130-136 (the UPDATE SQL text and error return) to 121-125, verified in the file as the `claimed.ClaimExpiresAt = nil` followed by the `if lease != nil` override, which is the clearing decision the note describes. Also capitalized the mid-note sentence 'removed. the caller decides' -> 'removed. The caller decides'. Re-read the whole note: the only other citation, internal/storage/sqlite/queries.go:813, was verified and is correct (the unconditioned `UPDATE issues SET %s WHERE id = ?`)."
+    ],
+    "mutation_checks": [
+      {
+        "broke": "internal/importer/importer.go handleRename: changed the merge target from s.UpdateIssue(ctx, existing.ID, updates, ...) to s.UpdateIssue(ctx, incoming.ID, updates, ...), so the incoming fields landed on the squatter instead of the twin.",
+        "result": "go test ./cmd/bd/ -run TestClaimRoundTrip/rename -v FAILED at export_test.go:537: 'squatter title is \"Claimed issue\", want \"Unrelated issue squatting on the incoming ID\"'.",
+        "restored": "git checkout -- internal/importer/importer.go; git status clean for that file."
+      },
+      {
+        "broke": "internal/importer/importer.go handleRename: kept the correct update on existing.ID and added a second s.UpdateIssue(ctx, incoming.ID, {\"claim_expires_at\": incoming.ClaimExpiresAt}, ...), leaking only the lease onto the squatter.",
+        "result": "go test ./cmd/bd/ -run TestClaimRoundTrip/rename -v FAILED at export_test.go:540: 'squatter gained a lease expiring at 2026-08-07 19:54:03 +0200, want none'.",
+        "restored": "git checkout -- internal/importer/importer.go; git status clean for that file."
+      }
+    ],
+    "flake_observed": "The first `bdc test` run reported a gate failure whose failing package was not in the captured tail. Every rerun passed: `bdc test` exit 0, `go test ./...` exit 0, and three consecutive `go test -count=1 ./cmd/bd/` runs all ok (28s, 43s, 40s). Not reproducible; the tree was clean of the mutation at the time. Flagging it rather than claiming it explained."
+  }
+}

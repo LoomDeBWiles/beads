@@ -1,0 +1,35 @@
+{
+  "schema": 2,
+  "bead_id": "bd-ok4pr.1.6",
+  "run_id": "1786121792434235601",
+  "changes": "committed",
+  "commits": [
+    "a4497cb8b0776bc71069e713b35f1f33fc73702f"
+  ],
+  "acceptance": [
+    {
+      "criterion": "The whole module compiles after the claim event payload moved to internal/types",
+      "command": "go build ./...",
+      "exit": 0,
+      "log": "bd-ok4pr.1.6.1786121792434235601_step1.log"
+    },
+    {
+      "criterion": "Storage and types tests pass, including the new probe, schema-drift and lease value-type tests",
+      "command": "go test ./internal/storage/... ./internal/types/...",
+      "exit": 0,
+      "log": "bd-ok4pr.1.6.1786121792434235601_step2.log"
+    },
+    {
+      "criterion": "go vet is clean across both storage backends",
+      "command": "go vet ./internal/storage/...",
+      "exit": 0,
+      "log": "bd-ok4pr.1.6.1786121792434235601_step3.log"
+    },
+    {
+      "criterion": "The full suite passes, so no caller relied on the removed backend-local payload types",
+      "command": "go test ./...",
+      "exit": 0,
+      "log": "bd-ok4pr.1.6.1786121792434235601_step4.log"
+    }
+  ]
+}

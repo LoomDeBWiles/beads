@@ -1,0 +1,3 @@
+$ go test ./internal/storage/sqlite/ -run TestClaimRace -count=5
+ok  	github.com/steveyegge/beads/internal/storage/sqlite	0.339s
+exit=0

@@ -1,0 +1,2 @@
+$ for f in internal/storage/sqlite/ready.go internal/storage/sqlite/dependencies.go internal/storage/sqlite/multirepo.go; do grep -q claim_expires_at "$f" || exit 1; done
+exit=0

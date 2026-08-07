@@ -1,0 +1,57 @@
+{
+  "schema": 2,
+  "bead_id": "bd-ok4pr.1.1",
+  "run_id": "1786118144043329613",
+  "changes": "committed",
+  "commits": ["634e7d8c50bf1f9c4bbe16c28a2d9d556e41d9ee"],
+  "acceptance": [
+    {
+      "criterion": "The whole tree still compiles with the new interface method on both storage backends",
+      "command": "go build ./...",
+      "exit": 0,
+      "log": "bd-ok4pr.1.1.1786118144043329613_step1.log"
+    },
+    {
+      "criterion": "Storage and types test suites pass with the new column, claim core and lease lifecycle",
+      "command": "go test ./internal/storage/... ./internal/types/...",
+      "exit": 0,
+      "log": "bd-ok4pr.1.1.1786118144043329613_step2.log"
+    },
+    {
+      "criterion": "Migration 027 adds the claim_expires_at column",
+      "command": "grep -q 'claim_expires_at' internal/storage/sqlite/migrations/027_claim_expires_at.go",
+      "exit": 0,
+      "log": "bd-ok4pr.1.1.1786118144043329613_step3.log"
+    },
+    {
+      "criterion": "ClaimIssue exists on the interface, the sqlite core, the memory backend and the transaction twin",
+      "command": "for f in internal/storage/storage.go internal/storage/sqlite/claim.go internal/storage/memory/memory.go internal/storage/sqlite/transaction.go; do grep -q ClaimIssue \"$f\" || exit 1; done",
+      "exit": 0,
+      "log": "bd-ok4pr.1.1.1786118144043329613_step4.log"
+    },
+    {
+      "criterion": "types.Issue carries the lease field for JSONL round-trip",
+      "command": "grep -q 'ClaimExpiresAt' internal/types/types.go",
+      "exit": 0,
+      "log": "bd-ok4pr.1.1.1786118144043329613_step5.log"
+    },
+    {
+      "criterion": "The outcome type carries a deny reason so callers can separate retry from skip",
+      "command": "grep -q 'DenyReason' internal/types/types.go",
+      "exit": 0,
+      "log": "bd-ok4pr.1.1.1786118144043329613_step6.log"
+    },
+    {
+      "criterion": "The column is plumbed through the insert, scan and update paths in all three write-path files",
+      "command": "for f in internal/storage/sqlite/issues.go internal/storage/sqlite/queries.go internal/storage/sqlite/transaction.go; do grep -q claim_expires_at \"$f\" || exit 1; done",
+      "exit": 0,
+      "log": "bd-ok4pr.1.1.1786118144043329613_step7.log"
+    },
+    {
+      "criterion": "Vet is clean on the changed packages",
+      "command": "go vet ./internal/storage/... ./internal/types/...",
+      "exit": 0,
+      "log": "bd-ok4pr.1.1.1786118144043329613_step8.log"
+    }
+  ]
+}

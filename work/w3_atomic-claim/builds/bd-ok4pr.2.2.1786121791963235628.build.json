@@ -1,0 +1,35 @@
+{
+  "schema": 2,
+  "bead_id": "bd-ok4pr.2.2",
+  "run_id": "1786121791963235628",
+  "changes": "committed",
+  "commits": [
+    "f2f2c5ecf23e4ede78a6ad279c0af70d28e08046"
+  ],
+  "acceptance": [
+    {
+      "criterion": "The whole module still compiles with the CLI truncation and the RPC lease floor in place",
+      "command": "go build ./...",
+      "exit": 0,
+      "log": "bd-ok4pr.2.2.1786121791963235628_step1.log"
+    },
+    {
+      "criterion": "The claim CLI package and the RPC package pass, including the new tag-free end-to-end exit-code tests",
+      "command": "go test ./cmd/bd/ ./internal/rpc/...",
+      "exit": 0,
+      "log": "bd-ok4pr.2.2.1786121791963235628_step2.log"
+    },
+    {
+      "criterion": "The claim tests actually run and report PASS under the default gate, with no build tag supplied",
+      "command": "go test ./cmd/bd/ -run Claim -v 2>&1 | grep -q PASS",
+      "exit": 0,
+      "log": "bd-ok4pr.2.2.1786121791963235628_step3.log"
+    },
+    {
+      "criterion": "The full suite is green, so the new binary-driving tests break nothing else",
+      "command": "go test ./...",
+      "exit": 0,
+      "log": "bd-ok4pr.2.2.1786121791963235628_step4.log"
+    }
+  ]
+}

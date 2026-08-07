@@ -1,0 +1,17 @@
+Review written to `work/w3_atomic-claim/reviews/review_bd-ok4pr.1.6_v2.md`.
+
+**VERDICT: FIX findings=2**
+
+Gate, run in the worktree, unmodified: `go build ./...` clean; `go test ./internal/storage/... ./internal/types/...` → memory ok, sqlite ok (22.4s), types ok. `go vet` clean.
+
+Contract items, each proven by mutation on a scratch copy at `/tmp` (now trashed):
+
+1. **Closed.** Deleting `claim_expires_at` from `expectedSchema` makes `TestProbeSchema_DetectsDroppedClaimExpiresAt` fail. The test drops the real column and asserts `errors.Is(ErrSchemaIncompatible)` plus the column name in the message.
+2. **Word added, untested** → finding F2. Removing `"is_template"` from the probe leaves the whole sqlite suite green.
+3. **Closed.** `TestSchemaConstantCoversProbedIssueColumns` runs `db.Exec(schema)` and no migrations; deleting the `claim_expires_at` line from the constant fails it with the column named. Verified the two columns this forced into the constant (`source_repo`, `close_reason`) are safe: migrations 012/017 are `pragma_table_info`-guarded, and the fresh-DB index set is byte-identical before and after the change (migration 022 rebuilds `issues` either way).
+4. **Closed.** One copy only — `types.RenderClaimEventValues`, no wrapper. Removing the `ClaimStolen`/`PreviousHolder` rule fails both `memory.TestClaimIssueRecordsAuditPayload` and `sqlite.TestClaimExpiredLeaseStolen`, so both backends genuinely call it. sqlite payload semantics are unchanged: same struct fields, same JSON tags, same marshal-failure fallbacks, same event-type rule.
+5. **Closed.** Removing `case time.Time` fails the new test; removing the `default` arm fails it too.
+
+Two new defects, both in the review file: the `default` arm returns mid-loop and leaves a partially applied update (17/20 probe runs), and the `is_template` probe entry has no guard.
+
+One thing you should know: while I was copying the worktree, `internal/storage/sqlite/claim.go` briefly contained `now.Add(*lease * 7)` — someone else's live mutation test in this shared worktree. The worktree is clean now and my gate run was unaffected (sqlite passed, and that mutation is caught by `TestClaimOpenIssueClaimed`), but another agent is working in here concurrently.

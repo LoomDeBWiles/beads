@@ -1,0 +1,14 @@
+Review written to `work/w3_atomic-claim/reviews/review_bd-ok4pr.2.1_v1.md`.
+
+**VERDICT: FIX findings=5** (1 high, 1 med, 3 low)
+
+Gate, run as given: `go build ./...` OK; `go test ./cmd/bd/ ./internal/rpc/...` both **ok** (25.7s / 5.9s). `go vet` clean. Nothing modified.
+
+What holds up:
+- Exit codes are exactly right: denial → 3 in both routes, every error path (not found, closed, invalid args, unmarshal, DB) → `FatalError` exit 1. No denial exits 1, no error exits 3.
+- `--assignee` is validated by trimming in `claimFlags`, not by cobra's required check; absent, `""` and `"   "` all exit 1, and `claim_test.go:26` locks all three.
+- `DenyReason` is populated by storage, marshaled over the wire, printed in the human message (`deny_reason=held|status`) and present in `--json`; held names holder + expiry, status names the status and adds the holder only when recorded.
+- Daemon and direct paths match: same trim validation, same partial-ID resolution shape as `update`, denial returned as a *successful* RPC response so the client maps it to 3. `CheckReadonly("claim")` is the first statement in `Run`.
+- `testdata/claim.txt` is at the flat path and does assert 0/3/1 in both modes; run with `-tags scripttests` it passes.
+
+The high finding is that last point's catch: `scripttest_test.go` carries `//go:build scripttests`, so `go test ./cmd/bd/` — the bead's acceptance command — never runs a single line of `claim.txt`. The script is correct; the gate covering it is not.

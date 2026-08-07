@@ -1,0 +1,11 @@
+Review written to `work/w3_atomic-claim/final_review_v1.md`.
+
+**FINDINGS n=2**
+
+**F1 — corruption, high, `plan_v4.md:209` (rollback) and `:220` (risk row).** The item's documented rollback says "old binaries ignore the extra column." They don't. I built `main`'s `bd` into `/tmp` (via `git archive`, no checkout) and pointed it at a store the new binary had already claimed and flagged. One old-binary read re-ran migration 022, which rebuilds `issues` from its frozen 28-column list: `claim_expires_at` was dropped outright and `pinned`/`is_template` came back 0 on the next new-binary open, with the new self-repair silently restoring the columns as NULL so nothing surfaces an error. Forward deploy is safe; it's the rollback half that would destroy data. Smallest fix: correct the rollback line to say the store must be restored from `.beads/issues.jsonl` after reinstalling the old binary.
+
+**F2 — neither, med, `internal/merge/merge.go:138`.** Every merged JSONL row is re-marshaled from `merge.Issue`, so fields it doesn't model are dropped — including `pinned` and `is_template`, the same columns this item just stopped 022 from blanking. Pre-existing, and the plan's risk table explicitly scopes it out, so it belongs in the residual column, not in a code change here.
+
+Checks 1 and 4 found nothing. `bd claim` delivers the full ladder, exit 0/3/1, and lease semantics identically on the daemon and direct paths; the `migrations.DB` signature change and the new column are closed across every column list, both `INSERT INTO issues` sites, and the tx update path. Check 2 all green, Check 3 `E2E_PASS` exit 0, Check 5 `go test -count=1 ./...` exit 0 with no failures. `go vet` clean; the 18 gofmt-dirty changed files are the repo's baseline (189 dirty repo-wide, same files dirty on `main`).
+
+Scratch stores, probe scripts and both `/tmp` binaries are trashed (batch `20260807T191823Z-183050`). Nothing outside my own temp dirs was touched, and I made no fixes.

@@ -1,0 +1,13 @@
+Done. bd-ok4pr.3.2 is implemented, gated, committed, and closed.
+
+**What changed** (`internal/merge/merge.go`, `internal/merge/merge_test.go`, commit `e561be3`):
+
+- `merge.Issue` now models `Assignee` (`assignee`) and `ClaimExpiresAt` (`claim_expires_at`), both `omitempty` strings matching the file's existing timestamp-as-string convention. This fixes the pre-existing loss of `assignee` on every row `Merge3Way` rewrites, not just conflicting ones.
+- New `mergeClaim` merges the two fields as one unit: if only one side changed the pair it wins, identical pairs pass through, and a true both-claimed conflict resolves to the side with the later `updated_at`. Merging them independently could otherwise pair one holder's name with another's expiry.
+- `mergeIssue` clears `ClaimExpiresAt` when the merged status is not `in_progress`, keeping the assignee.
+- Added `StatusInProgress` alongside the existing `StatusTombstone` const.
+- Tests: rival claims in both directions, close-beats-claim (lease cleared, assignee kept), unrelated-field pass-through at the `mergeIssue` level, plus `TestMerge3Way_ClaimPassThrough` which runs the real file path and asserts the wire names `"assignee"` and `"claim_expires_at"` appear in the rewritten output line.
+
+All six acceptance commands exited 0; step logs are in `work/w3_atomic-claim/builds/`, and the build report is at the required path. No push, per contract.
+
+One thing to flag: the worktree had no `.bdc.conf`, so `bdc test` refused with "no gate". I wrote an untracked `.bdc.conf` at the run-worktree root with `GATE_CMD=go build ./... && go test ./internal/merge/... && go vet ./internal/merge/...`. It is outside `## Touches` but untracked and not part of the tagged commit (`git status` shows it as `??`). If the work item wants a repo-level gate config, that is a manager decision, not mine to commit.

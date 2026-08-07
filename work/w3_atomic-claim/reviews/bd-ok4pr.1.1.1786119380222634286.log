@@ -1,0 +1,15 @@
+Review written to `work/w3_atomic-claim/reviews/review_bd-ok4pr.1.1_v1.md`.
+
+**Gate, run as given:** `go build ./...` exit 0; `go test ./internal/storage/... ./internal/types/...` exit 0 (memory 0.002s ok, sqlite 22.194s ok, types 0.004s ok). Nothing modified.
+
+**VERDICT: FIX findings=4** — no high findings; the atomic core itself is correct.
+
+What I traced and confirmed good:
+- The precondition is genuinely inside the write transaction: `SQLiteStorage.ClaimIssue` → `RunInTransaction` (BEGIN IMMEDIATE, transaction.go:53) → `sqliteTxStorage.ClaimIssue` → `claimIssue`, whose read is `t.GetIssue` on `t.conn`, the same dedicated connection holding the write lock. `busy_timeout` is set on the connection string, so a rival blocks rather than erroring out.
+- Ladder matches the plan, including self-renew before the expiry-steal (claim.go:87-93), so an expired holder renews. Closed/tombstone is checked ahead of `open`, which is stricter than the plan's literal top-down order and correct — a literal reading would have claimed an open tombstone.
+- All secondary writes on a win are present: `content_hash` recomputed, event inserted (`previous_holder` only on a steal), `markDirty`, and `invalidateBlockedCache` only when status actually changes. Labels are fetched by the tx `GetIssue`, and `ComputeContentHash` excludes labels, so the hash is right.
+- Both DENY branches return before `writeClaim`; the transaction commits with zero writes — no `updated_at` bump, no event, no dirty mark.
+- Empty/whitespace `assignee` argument is rejected before the row is read, in both backends.
+- Migration 027 is column-exists guarded, additive nullable, idempotent, registered last.
+
+The four findings: two `med` (schema probe doesn't cover the new column, so a failed migration becomes a runtime read-path failure instead of a caught startup error; memory's `UpdateIssue` can't accept `claim_expires_at`, which the Phase 3 import path will hit) and two `low` (memory's steal event carries no prior holder; `schema.go` omits the column that its `pinned` precedent includes). Two of them sit in files outside this bead's Touches, flagged as such for follow-up dispositioning.

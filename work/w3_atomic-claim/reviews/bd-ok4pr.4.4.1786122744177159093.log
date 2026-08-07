@@ -1,0 +1,15 @@
+Review written to `work/w3_atomic-claim/reviews/review_bd-ok4pr.4.4_v2.md`.
+
+**VERDICT: FIX findings=2** (both low)
+
+All three contract items are genuinely closed:
+
+1. **Migration count** — I counted `migrationsList` in `internal/storage/sqlite/migrations.go:19-47` by hand: 27 entries, last is `claim_expires_at_column`. CODEMAP.md:53 now reads "(27 migrations)". Correct.
+2. **Race wording** — `UpdateIssue` (queries.go:690) builds `UPDATE issues SET %s WHERE id = ?` at queries.go:813 with no ownership predicate; the new text says exactly that ("no ownership precondition at all ... so there is no check there to harden") and attributes the "free" decision to the caller's prior read. Line 813 citation is accurate. Correct.
+3. **Renewal clears expiry** — `writeClaim` sets `claim_expires_at = nil` unconditionally (claim.go:121) and only overrides when `lease != nil` (claim.go:122-125). The new clause states a renewal without `--lease` clears the expiry and turns a leased claim never-stealable. Correct, and consistent with plan_v4.md's Design ("Absent `--lease` → `claim_expires_at = NULL`").
+
+Gate: `go build ./...` exits 0, no output.
+
+Mutation testing was not applicable — the bead is documentation-only and adds no tests, so there is nothing to break and re-verify. Other assertions in the reworded note check out against code: `DenyHeld`/`DenyStatus` are `"held"`/`"status"` (types.go:537,539) and are set at claim.go:68,90.
+
+The two findings are cosmetic: a citation range that points at the SQL bind rather than the nil-then-lease conditional it describes, and a lowercase sentence start.

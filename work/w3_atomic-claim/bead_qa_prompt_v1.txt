@@ -1,0 +1,50 @@
+# Check beads are ready for work
+
+<input>
+- /home/ben/worktrees/beads/w3_atomic-claim/work/w3_atomic-claim/plan_v4.md (approved plan)
+- Repo: /home/ben/worktrees/beads/w3_atomic-claim (Go, the `bd` fork at v0.34)
+- The item's bead set: run
+  `bd --db /home/ben/projects/beads/.beads/beads.db --no-auto-import dep tree <root> --direction=up`
+  once per comma-separated manifest root (default direction shows blockers, not
+  children), then `show` every in-scope bead it lists.
+  Manifest roots: bd-ok4pr.1,bd-ok4pr.2,bd-ok4pr.3,bd-ok4pr.4
+  (top root is bd-ok4pr; it is not in the manifest by design.)
+  Use `bd --db /home/ben/projects/beads/.beads/beads.db --no-auto-import ...` in EVERY bd command.
+</input>
+
+<instructions>
+1. Load Skill(beads) first — if that fails, read ~/projects/shared-docs/BEADS.md
+2. Review every bead in the manifest against BEADS.md rules and the plan: every
+   plan change covered by a bead; each bead self-contained (Contract, Acceptance
+   as exact runnable commands, Touches as an explicit write allowlist).
+3. Fail every bead an agent cannot execute alone — needs approval, host or
+   account access, or waits on a person: one high finding each; fix = move it to
+   the plan as a USER step and drop it from the manifest.
+4. Fail every bead violating the BEADS.md supervised artifact-path rules
+   (committed file targeting an evidence dir, proof file outside
+   `work/w3_atomic-claim/artifacts/`, no `mkdir -p` on the actual parent,
+   absolute committed-file destination): one high finding each.
+5. This item runs the MANUAL per-bead playbook — no cluster review markers exist
+   and none are expected. Do NOT raise findings about missing review markers.
+6. Check the dependency edges specifically: the plan requires storage before
+   RPC/CLI and everything before deploy+E2E, and any bead whose test code needs a
+   type or method another bead introduces must be blocked by that bead.
+</instructions>
+
+<output>
+Write review to: /home/ben/worktrees/beads/w3_atomic-claim/work/w3_atomic-claim/bead_review_codex_v1.md
+</output>
+
+<output-format>
+The output file contains exactly this — the verdict line plus finding rows, no other prose:
+
+VERDICT: CLEAN|FIX findings=N
+| ID | sev | bead | defect (one sentence) | fix (one sentence) |
+|---|---|---|---|---|
+
+- CLEAN requires findings=0; FIX requires one or more finding rows.
+- sev: high = bead must change before work starts; med = correctness risk in a specific case; low = wording, cosmetic.
+- N states the true total; the table lists every finding, no cap.
+- Each defect sentence stands alone — the manager dispositions it with no follow-up round: name the bead, the mechanism, and the consequence.
+- Each fix sentence is a concrete change to a bead.
+</output-format>

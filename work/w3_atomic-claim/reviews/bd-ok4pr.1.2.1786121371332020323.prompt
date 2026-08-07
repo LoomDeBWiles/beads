@@ -1,0 +1,56 @@
+You are a fresh-eyes reviewer on work item w3 in the `bd` fork (Go, v0.34).
+You are READ-ONLY: change no file, create no bead, commit nothing.
+
+## What to review
+Bead bd-ok4pr.1.2 — "Test claim decision matrix and concurrent-claim race".
+Commit range in /home/ben/worktrees/beads/w3_atomic-claim:
+`git log -p 9c7651f9df1efde06dbddb3fb8ee7654b02fa82d..d4f3b2b1966ff90e777ba1ddc6f6640121c81b53`
+
+File changed: internal/storage/sqlite/claim_test.go
+Read alongside it (do not review them, they belong to other beads):
+internal/storage/sqlite/claim.go, internal/types/types.go.
+Run no recursive rg/grep/find outside this worktree.
+
+## Judge against
+1. `bd --db /home/ben/projects/beads/.beads/beads.db --no-auto-import show bd-ok4pr.1.2`
+2. `work/w3_atomic-claim/plan_v4.md` — the Design decision ladder is the
+   authority on every cell. Tests must assert the PLAN's semantics, not
+   whatever the implementation happens to do.
+3. `~/projects/shared-docs/TESTING_PRINCIPLES.md`.
+
+## Look hardest at
+- The race test is the reason this item exists. Would it actually FAIL against a
+  non-atomic implementation? A test that asserts "no error" or that tolerates
+  two winners proves nothing. Check it asserts exactly one `claimed`, seven
+  denied, and a final stored assignee equal to the winner — and that it runs
+  under `-count=5`.
+- Is every cell of the ladder covered: open→claimed, held-unexpired→denied with
+  `deny_reason=held` and NO write, self→renewed, expired→stolen with the prior
+  holder in the event, `in_progress` with empty stored assignee→claimed,
+  a non-claimable status (e.g. `blocked`)→denied with `deny_reason=status`,
+  empty/whitespace `assignee` argument→error, closed→error, no-lease claim never
+  expires?
+- The "denial writes nothing" test: does it really check `updated_at`, the
+  events table AND `dirty_issues`, or only one of the three?
+- Is the pre-027 migration case built in code rather than as a committed fixture
+  database?
+- Tests that assert on implementation details instead of behavior, or that would
+  pass with the feature deleted.
+
+## Run the gate yourself
+`cd /home/ben/worktrees/beads/w3_atomic-claim && go test ./internal/storage/sqlite/ -run 'TestClaim' -count=5`
+Report the real result. Do not modify anything to make it pass.
+
+## Output
+Write your review to:
+/home/ben/worktrees/beads/w3_atomic-claim/work/w3_atomic-claim/reviews/review_bd-ok4pr.1.2_v1.md
+
+It contains exactly this — the verdict line plus finding rows, no other prose:
+
+VERDICT: CLEAN|FIX findings=N
+| ID | sev | file:line | defect (one sentence) | fix (one sentence) |
+|---|---|---|---|---|
+
+- CLEAN requires findings=0; FIX requires one or more finding rows.
+- sev: high = wrong behavior or a broken contract; med = correctness risk in a specific case; low = wording, cosmetic.
+- Each defect sentence stands alone: name the mechanism and the consequence.

@@ -1,0 +1,133 @@
+=== bd-ok4pr.1
+
+bd-ok4pr.1: w3 Phase 1: Storage + migration
+Status: closed
+Close reason: auto-closed: all children completed (triggered by bd-ok4pr.1.3)
+Priority: P0
+Type: epic
+Created: 2026-08-07 17:33
+Updated: 2026-08-07 18:22
+
+Description:
+
+The atomic claim core: new nullable `claim_expires_at` column, `ClaimIssue` storage method on both backends, and the full late-column touch-point closure.
+Gate: `go test ./internal/storage/... ./internal/types/...` passes; the new race test proves exactly one winner.
+
+
+Depends on (1):
+  → bd-ok4pr: w3: Atomic claim verb with owner lease for bd [P0]
+
+Children (8):
+  ↳ bd-ok4pr.1.1: Add atomic ClaimIssue storage core [P0 - closed]
+  ↳ bd-ok4pr.1.8: Stop migrations wiping post-022 columns on every open [P0 - closed]
+  ↳ bd-ok4pr.1.2: Test claim decision matrix and concurrent-claim race [P1 - closed]
+  ↳ bd-ok4pr.1.3: Plumb claim_expires_at through the late-column read paths [P1 - closed]
+  ↳ bd-ok4pr.1.4: Close claim_expires_at gaps in schema constant, schema probe, and memory backend [P1 - closed]
+  ↳ bd-ok4pr.1.5: Assert lease duration, tombstone and not-found in the claim matrix tests [P1 - closed]
+  ↳ bd-ok4pr.1.6: Test the schema probe and constant, and de-duplicate the claim event payload [P1 - closed]
+  ↳ bd-ok4pr.1.7: Fix mid-loop update abort and generalize the schema probe test [P1 - closed]
+
+
+=== bd-ok4pr.2
+
+bd-ok4pr.2: w3 Phase 2: RPC + CLI
+Status: closed
+Close reason: auto-closed: all children completed (triggered by bd-ok4pr.2.1)
+Priority: P1
+Type: epic
+Created: 2026-08-07 17:33
+Updated: 2026-08-07 18:33
+
+Description:
+
+Expose the storage claim through the daemon RPC and a new `bd claim` cobra command with the Design exit-code map.
+Gate: `go test ./cmd/bd/ ./internal/rpc/...` passes; scripttest covers exit 0/3/1 in both daemon and direct modes.
+
+
+Depends on (1):
+  → bd-ok4pr: w3: Atomic claim verb with owner lease for bd [P0]
+
+Children (3):
+  ↳ bd-ok4pr.2.2: Run claim exit-code assertions in the default gate and align RPC lease rules [P0 - closed]
+  ↳ bd-ok4pr.2.3: Assert the literal denial exit code and stop leaking the test binary [P0 - closed]
+  ↳ bd-ok4pr.2.1: Add claim RPC op and bd claim CLI command [P1 - closed]
+
+
+=== bd-ok4pr.3
+
+bd-ok4pr.3: w3 Phase 3: JSONL round-trip + merge driver
+Status: closed
+Close reason: auto-closed: all children completed (triggered by bd-ok4pr.3.1)
+Priority: P1
+Type: epic
+Created: 2026-08-07 17:33
+Updated: 2026-08-07 18:44
+
+Description:
+
+Make the lease survive export/import into an existing store and survive the git merge driver, which today drops unmodeled fields on every rewritten row.
+Gate: `go test ./internal/merge/... ./cmd/bd/ -run TestClaimRoundTrip` passes.
+
+
+Depends on (1):
+  → bd-ok4pr: w3: Atomic claim verb with owner lease for bd [P0]
+
+Children (4):
+  ↳ bd-ok4pr.3.1: Carry claim lease through importer update maps and round-trip test [P1 - closed]
+  ↳ bd-ok4pr.3.2: Model assignee and lease in the JSONL merge driver [P1 - closed]
+  ↳ bd-ok4pr.3.3: Cover the importer rename-collision lease mapping [P1 - closed]
+  ↳ bd-ok4pr.3.4: Replace the seeded-true rename assertion and correct the CONTEXT note [P2 - closed]
+
+
+=== bd-ok4pr.4
+
+bd-ok4pr.4: w3 Phase 4: Docs + deploy
+Status: closed
+Close reason: auto-closed: all children completed (triggered by bd-ok4pr.4.2)
+Priority: P1
+Type: epic
+Created: 2026-08-07 17:33
+Updated: 2026-08-07 20:27
+
+Description:
+
+Codemap and pattern-note updates, the literal E2E script, and the build/install/verify deploy.
+Gate: E2E script prints `E2E_PASS` against the built binary; installed `bd version` reports new HEAD; live daemons healthy.
+
+
+Depends on (1):
+  → bd-ok4pr: w3: Atomic claim verb with owner lease for bd [P0]
+
+Children (5):
+  ↳ bd-ok4pr.4.2: Write and run the E2E claim proof [P1 - closed]
+  ↳ bd-ok4pr.4.3: Repair locked-git-config merge driver baseline test [P1 - closed]
+  ↳ bd-ok4pr.4.1: Update CODEMAP and CONTEXT for the claim verb [P2 - closed]
+  ↳ bd-ok4pr.4.4: Correct migration count and claim-race wording in CODEMAP and CONTEXT [P2 - closed]
+  ↳ bd-ok4pr.4.5: Correct three misleading test doc comments [P2 - closed]
+
+
+=== bd-ok4pr
+
+bd-ok4pr: w3: Atomic claim verb with owner lease for bd
+Status: closed
+Close reason: auto-closed: all children completed (triggered by bd-ok4pr.4.2)
+Priority: P0
+Type: epic
+Created: 2026-08-07 17:33
+Updated: 2026-08-07 20:27
+
+Description:
+
+Add an atomic `bd claim` verb (compare-and-swap on status inside a BEGIN IMMEDIATE transaction) plus an optional owner lease with expiry, so claiming a bead stops being a read-then-unconditional-write race.
+Plan: /home/ben/worktrees/beads/w3_atomic-claim/work/w3_atomic-claim/plan_v4.md
+---
+Exit criteria: all child beads closed, `go test ./...` passes, `bash work/w3_atomic-claim/e2e_claim.sh` prints E2E_PASS, installed `~/.local/bin/bd version` reports the new build.
+
+
+Children (4):
+  ↳ bd-ok4pr.1: w3 Phase 1: Storage + migration [P0 - closed]
+  ↳ bd-ok4pr.2: w3 Phase 2: RPC + CLI [P1 - closed]
+  ↳ bd-ok4pr.3: w3 Phase 3: JSONL round-trip + merge driver [P1 - closed]
+  ↳ bd-ok4pr.4: w3 Phase 4: Docs + deploy [P1 - closed]
+
+

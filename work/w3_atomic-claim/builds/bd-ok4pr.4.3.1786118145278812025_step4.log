@@ -1,0 +1,2 @@
+$ grep -q 'failed to update git merge driver config' cmd/bd/doctor/fix/e2e_test.go
+exit=0

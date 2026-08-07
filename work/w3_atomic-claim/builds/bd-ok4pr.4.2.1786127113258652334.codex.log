@@ -1,0 +1,19 @@
+Done. bd-ok4pr.4.2 is closed.
+
+**What ran:** all 10 `## Acceptance` commands, in the bead's order, each exit 0. The script was not modified.
+
+**E2E result** (from my run, against `/tmp/bd-w3` rebuilt from this worktree at step 2):
+- Step 2 concurrent claims: agent-A exit=3, agent-B exit=0, stored assignee `agent-B` — the line `one exit=0, one exit=3` is in the artifact.
+- Steps 3-5: stolen after lease expiry with `previous_holder=agent-C`, renewed by the holder, lease cleared on leaving in_progress.
+- Step 6: lease round-trips identically into a fresh store and one already holding the pre-claim issue (`1786129916506664675` both).
+- Last line `E2E_PASS`.
+
+`TestClaimRace -count=5` and `TestClaimDeniedNoWrite` both green; `go test ./...` green.
+
+**Committed:** `dcea0aff7` — `task(bd-ok4pr.4.2): Write and run the E2E claim proof`, pathspec `work/w3_atomic-claim/artifacts/e2e_claim_output.txt` and `.../prior_head.txt` (both regenerated from this run; `prior_head.txt` = `9a59bda9a2ae5419c6ef12302a7490996c7e90fe`). Working tree clean, not pushed.
+
+**Note for you:** closing this bead auto-closed parent epics `bd-ok4pr.4` and `bd-ok4pr` — worth checking, since the deploy phase moved out of this bead and is still yours to run after the merge.
+
+Build report: `/home/ben/worktrees/beads/w3_atomic-claim/work/w3_atomic-claim/builds/bd-ok4pr.4.2.1786127113258652334.build.json`, with 10 non-empty step logs alongside it.
+
+Two guard interactions worth recording: the shell guard blocked redirects to variable-held paths (I used literal paths instead), and blocked overwriting the two tracked artifacts until `ALLOW_FILE_OVERWRITE=1` — which the bead's acceptance commands require, since they regenerate those files by design.

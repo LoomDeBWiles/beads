@@ -1,0 +1,2 @@
+$ grep -q claim_expires_at internal/storage/sqlite/labels.go
+exit=0

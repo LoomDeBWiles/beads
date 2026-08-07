@@ -1,0 +1,5 @@
+VERDICT: FIX findings=3 (all low). Review at `work/w3_atomic-claim/reviews/review_bd-ok4pr.4.1_v1.md`.
+
+Gate: `go build ./...` exits 0, no output.
+
+Substance: both CODEMAP rows match the code (`bd claim` take/renew/steal + exit 3; `ClaimIssue` ladder inside one `BEGIN IMMEDIATE` tx, confirmed via `RunInTransaction` → `beginImmediateWithRetry`, transaction.go:50-52). No statement contradicts plan_v4's Design ladder, exit map, or lease behavior. All four bead acceptance greps pass. The three findings: stale "(26 migrations)" row now that this item registered the 27th; the CONTEXT note attributes an ownership decision to `update`, which actually has no check at all; and it omits that a renewal without `--lease` clears the expiry.

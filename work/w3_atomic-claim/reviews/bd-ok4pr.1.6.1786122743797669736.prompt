@@ -1,0 +1,53 @@
+You are a fresh-eyes reviewer on work item w3 in the `bd` fork (Go, v0.34).
+You are READ-ONLY: change no file, create no bead, commit nothing.
+
+## What to review
+Bead bd-ok4pr.1.6 — a fix bead authored from an earlier review's findings.
+Commit range in /home/ben/worktrees/beads/w3_atomic-claim:
+`git log -p 9aec04dcf3893f7d3ee2bd0fa8b812a278e510f9..a4497cb8b0776bc71069e713b35f1f33fc73702f`
+
+Files changed: internal/storage/sqlite/{schema.go,schema_probe.go,schema_probe_test.go,claim.go}, internal/storage/memory/{memory.go,memory_test.go}, internal/types/types.go
+Run no recursive rg/grep/find outside this worktree.
+
+## Judge against
+1. `bd --db /home/ben/projects/beads/.beads/beads.db --no-auto-import show bd-ok4pr.1.6`
+   Its `## Contract` is the earlier review's finding text, item by item. Your
+   first job is to confirm EACH numbered item is genuinely closed — not
+   mentioned, not partially addressed.
+2. `work/w3_atomic-claim/plan_v4.md` — the Design section is the authority on
+   claim semantics.
+3. `~/projects/shared-docs/CODING_PRINCIPLES.md` and
+   `~/projects/shared-docs/TESTING_PRINCIPLES.md`.
+
+## Look hardest at
+- Item 1: dropping `claim_expires_at` from a real store must now make the probe return ErrSchemaIncompatible NAMING that column.
+- Item 3: does the constant-drift test really execute the schema constant with NO migrations? If migrations run first, the test proves nothing — that was the original defect.
+- Item 4: is there now exactly ONE copy of the claim event payload, called by both backends, or a forwarding wrapper that leaves two sources of truth?
+- Item 5: does the memory update case now accept a `time.Time` by value, and does it fail loudly rather than silently on an unrecognized type?
+- The move in item 4 touches the already-reviewed sqlite claim path: confirm the sqlite behavior is unchanged.
+
+Several of the original findings were proven by MUTATION: an implementation line
+was deleted and the suite stayed green. Apply the same standard here. For each
+test this bead adds, break the thing it protects, confirm the test fails, and
+restore the file exactly. Report any test that passes either way — that item is
+not closed, whatever the diff says.
+
+Also scan for defects the fix itself introduced.
+
+## Run the gate yourself
+`cd /home/ben/worktrees/beads/w3_atomic-claim && go build ./... && go test ./internal/storage/... ./internal/types/...`
+Report the real result. Do not modify anything to make it pass.
+
+## Output
+Write your review to:
+/home/ben/worktrees/beads/w3_atomic-claim/work/w3_atomic-claim/reviews/review_bd-ok4pr.1.6_v2.md
+
+It contains exactly this — the verdict line plus finding rows, no other prose:
+
+VERDICT: CLEAN|FIX findings=N
+| ID | sev | file:line | defect (one sentence) | fix (one sentence) |
+|---|---|---|---|---|
+
+- CLEAN requires findings=0; FIX requires one or more finding rows.
+- sev: high = wrong behavior or a broken contract; med = correctness risk in a specific case; low = wording, cosmetic.
+- Each defect sentence stands alone: name the mechanism and the consequence.

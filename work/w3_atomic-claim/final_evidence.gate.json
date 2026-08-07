@@ -1,0 +1,112 @@
+{
+  "schema": 3,
+  "phase": "gate",
+  "agent_evidence": {
+    "epic_close": "/home/ben/worktrees/beads/w3_atomic-claim/work/w3_atomic-claim/epic-close.log"
+  },
+  "checks": [
+    {
+      "name": "manifest_complete",
+      "passed": true,
+      "missing_evidence": []
+    },
+    {
+      "name": "plan_bead_coverage",
+      "passed": true,
+      "missing_evidence": []
+    },
+    {
+      "name": "supervisor_complete",
+      "passed": true,
+      "missing_evidence": []
+    },
+    {
+      "name": "build_proof",
+      "passed": true,
+      "missing_evidence": []
+    },
+    {
+      "name": "reviewed_final_commit",
+      "passed": true,
+      "missing_evidence": []
+    },
+    {
+      "name": "bug_free",
+      "passed": true,
+      "missing_evidence": []
+    },
+    {
+      "name": "epic_close_evidence",
+      "passed": true,
+      "missing_evidence": []
+    },
+    {
+      "name": "commit_to_marker",
+      "passed": true,
+      "missing_evidence": []
+    },
+    {
+      "name": "three_test_decision",
+      "passed": true,
+      "missing_evidence": []
+    }
+  ],
+  "dispositions": {
+    "bd-ok4pr.1.1": "manual",
+    "bd-ok4pr.1.2": "manual",
+    "bd-ok4pr.1.3": "manual",
+    "bd-ok4pr.1.4": "manual",
+    "bd-ok4pr.1.5": "manual",
+    "bd-ok4pr.1.6": "manual",
+    "bd-ok4pr.1.7": "manual",
+    "bd-ok4pr.1.8": "manual",
+    "bd-ok4pr.1.9": "manual",
+    "bd-ok4pr.2.1": "manual",
+    "bd-ok4pr.2.2": "manual",
+    "bd-ok4pr.2.3": "manual",
+    "bd-ok4pr.3.1": "manual",
+    "bd-ok4pr.3.2": "manual",
+    "bd-ok4pr.3.3": "manual",
+    "bd-ok4pr.3.4": "manual",
+    "bd-ok4pr.4.1": "manual",
+    "bd-ok4pr.4.2": "manual",
+    "bd-ok4pr.4.3": "manual",
+    "bd-ok4pr.4.4": "manual",
+    "bd-ok4pr.4.5": "manual"
+  },
+  "issue_classes": {
+    "bd-ok4pr.1": "epic",
+    "bd-ok4pr.1.1": "implementation",
+    "bd-ok4pr.1.2": "implementation",
+    "bd-ok4pr.1.3": "implementation",
+    "bd-ok4pr.1.4": "implementation",
+    "bd-ok4pr.1.5": "implementation",
+    "bd-ok4pr.1.6": "implementation",
+    "bd-ok4pr.1.7": "implementation",
+    "bd-ok4pr.1.8": "implementation",
+    "bd-ok4pr.1.9": "implementation",
+    "bd-ok4pr.2": "epic",
+    "bd-ok4pr.2.1": "implementation",
+    "bd-ok4pr.2.2": "implementation",
+    "bd-ok4pr.2.3": "implementation",
+    "bd-ok4pr.3": "epic",
+    "bd-ok4pr.3.1": "implementation",
+    "bd-ok4pr.3.2": "implementation",
+    "bd-ok4pr.3.3": "implementation",
+    "bd-ok4pr.3.4": "implementation",
+    "bd-ok4pr.4": "epic",
+    "bd-ok4pr.4.1": "implementation",
+    "bd-ok4pr.4.2": "implementation",
+    "bd-ok4pr.4.3": "implementation",
+    "bd-ok4pr.4.4": "implementation",
+    "bd-ok4pr.4.5": "implementation"
+  },
+  "commit_to_marker": {},
+  "escalations": [],
+  "missing_evidence": [],
+  "summary": {
+    "total": 9,
+    "passed": 9,
+    "failed": 0
+  }
+}

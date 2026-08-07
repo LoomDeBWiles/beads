@@ -1,0 +1,31 @@
+== step 1: init scratch store, create issue
+  ok: store initialized, issue e2e-qgs created open
+== step 2: two concurrent claims on one open issue
+  agent-A exit=3, agent-B exit=0
+one exit=0, one exit=3
+  ok: stored assignee equals the winner = agent-B
+== step 3: expired lease is stolen, event names the prior holder
+  ok: agent-C claim exit = 0
+FAIL: agent-D claim exit: expected [0], got [3]
+FAIL: outcome: expected [stolen], got [denied]
+  ok: displaced holder = agent-C
+FAIL: event previous_holder: expected [agent-C], got [null]
+== step 4: the holder renews
+FAIL: agent-D renewal exit: expected [0], got [3]
+FAIL: outcome: expected [renewed], got [denied]
+== step 5: leaving in_progress clears the lease
+  ok: update exit = 0
+  ok: status = open
+  ok: claim_expires_at present = false
+== step 6: lease round-trips into a fresh store and an existing one
+  ok: pre-claim export exit = 0
+  ok: agent-E claim exit = 0
+  ok: post-claim export exit = 0
+FAIL: source store has no claim_expires_at to round-trip
+  ok: fresh-store import exit = 0
+  ok: pre-claim import exit = 0
+  ok: existing store starts pre-claim = false
+  ok: existing-store import exit = 0
+FAIL: fresh store lease: expected [<a lease the source store never had>], got [none]
+FAIL: existing store lease: expected [<a lease the source store never had>], got [none]
+8 check(s) failed

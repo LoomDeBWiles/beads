@@ -1,0 +1,56 @@
+You are a fresh-eyes reviewer on work item w3 in the `bd` fork (Go, v0.34).
+You are READ-ONLY: change no file, create no bead, commit nothing.
+
+## What to review
+Bead bd-ok4pr.2.1 — "Add claim RPC op and bd claim CLI command".
+Commit range in /home/ben/worktrees/beads/w3_atomic-claim:
+`git log -p d4f3b2b1966ff90e777ba1ddc6f6640121c81b53..94105d5445b4ac2d97db41888c2e89a3194aa9d0`
+
+Files changed: cmd/bd/{claim.go,claim_test.go,main.go,testdata/claim.txt},
+internal/rpc/{protocol.go,client.go,server_issues_epics.go,server_routing_validation_diagnostics.go}
+Run no recursive rg/grep/find outside this worktree.
+
+## Judge against
+1. `bd --db /home/ben/projects/beads/.beads/beads.db --no-auto-import show bd-ok4pr.2.1`
+2. `work/w3_atomic-claim/plan_v4.md` — the Design section's exit-code contract,
+   `DenyReason` vocabulary and `--assignee` rules. The plan is the authority.
+3. `~/projects/shared-docs/CODING_PRINCIPLES.md`.
+
+## Look hardest at
+- Exit codes exactly: `0` claimed/renewed/stolen, `3` denied, `1` error (not
+  found, closed/tombstoned, invalid args, DB failure). A denial that exits 1, or
+  an error that exits 3, breaks every shell caller this verb was built for.
+- `--assignee` non-empty AFTER TRIMMING. Cobra's required check only proves the
+  flag was typed, so `--assignee ""` and `--assignee "   "` must both be usage
+  errors (exit 1). If either slips through it matches the legacy empty-assignee
+  CLAIM cell and two callers win — the exact race this item removes.
+- `DenyReason`: is `held` vs `status` actually populated and surfaced, in both
+  the human message and `--json`? Without it a migrated supervisor retries a
+  dependency-blocked bead forever.
+- Denial output names holder and expiry when present, otherwise the status.
+- Do the daemon (RPC) and direct paths behave IDENTICALLY? Check the handler
+  validates and maps outcomes the same way the direct path does; a divergence
+  means the verb's contract depends on whether a daemon happens to be running.
+- `cmd/bd/testdata/claim.txt`: the runner globs `testdata/*.txt`
+  (`cmd/bd/scripttest_test.go:43`). Confirm the file is at that flat path and
+  that it actually asserts exit 0, 3 and 1 — in both daemon and direct modes.
+- `CheckReadonly("claim")` present, and partial-ID resolution consistent with
+  `update`.
+
+## Run the gate yourself
+`cd /home/ben/worktrees/beads/w3_atomic-claim && go build ./... && go test ./cmd/bd/ ./internal/rpc/...`
+Report the real result. Do not modify anything to make it pass.
+
+## Output
+Write your review to:
+/home/ben/worktrees/beads/w3_atomic-claim/work/w3_atomic-claim/reviews/review_bd-ok4pr.2.1_v1.md
+
+It contains exactly this — the verdict line plus finding rows, no other prose:
+
+VERDICT: CLEAN|FIX findings=N
+| ID | sev | file:line | defect (one sentence) | fix (one sentence) |
+|---|---|---|---|---|
+
+- CLEAN requires findings=0; FIX requires one or more finding rows.
+- sev: high = wrong behavior or a broken contract; med = correctness risk in a specific case; low = wording, cosmetic.
+- Each defect sentence stands alone: name the mechanism and the consequence.

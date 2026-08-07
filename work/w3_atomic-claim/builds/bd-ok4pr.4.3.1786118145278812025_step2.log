@@ -1,0 +1,3 @@
+$ go test ./cmd/bd/doctor/fix/
+ok  	github.com/steveyegge/beads/cmd/bd/doctor/fix	0.573s
+exit=0

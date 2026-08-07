@@ -1,0 +1,53 @@
+{
+  "schema": 2,
+  "bead_id": "bd-ok4pr.1.2",
+  "run_id": "1786119304126143397",
+  "changes": "committed",
+  "commits": [
+    "d4f3b2b1966ff90e777ba1ddc6f6640121c81b53"
+  ],
+  "acceptance": [
+    {
+      "criterion": "The whole claim decision matrix passes: every ladder cell (open, held-unexpired, self-renew, expired-steal, legacy unowned in_progress, blocked status, empty assignee, closed, no-lease) is asserted",
+      "command": "go test ./internal/storage/sqlite/ -run TestClaim",
+      "exit": 0,
+      "log": "bd-ok4pr.1.2.1786119304126143397_step1.log"
+    },
+    {
+      "criterion": "The 8-goroutine compare-and-swap race produces exactly one winner, repeatably across five runs",
+      "command": "go test ./internal/storage/sqlite/ -run TestClaimRace -count=5",
+      "exit": 0,
+      "log": "bd-ok4pr.1.2.1786119304126143397_step2.log"
+    },
+    {
+      "criterion": "A denial writes nothing: updated_at, the events table and the dirty mark are all unchanged",
+      "command": "go test ./internal/storage/sqlite/ -run TestClaimDeniedNoWrite",
+      "exit": 0,
+      "log": "bd-ok4pr.1.2.1786119304126143397_step3.log"
+    },
+    {
+      "criterion": "A pre-027 store built in code migrates cleanly: claim_expires_at appears in PRAGMA table_info and the pre-existing rows are intact",
+      "command": "go test ./internal/storage/sqlite/ -run TestClaimMigrationExistingStore",
+      "exit": 0,
+      "log": "bd-ok4pr.1.2.1786119304126143397_step4.log"
+    },
+    {
+      "criterion": "The new tests break nothing in the storage and types packages",
+      "command": "go test ./internal/storage/... ./internal/types/...",
+      "exit": 0,
+      "log": "bd-ok4pr.1.2.1786119304126143397_step5.log"
+    },
+    {
+      "criterion": "The deny-reason contract is actually asserted in the test file, not merely implied",
+      "command": "grep -q 'deny_reason\\|DenyReason' internal/storage/sqlite/claim_test.go",
+      "exit": 0,
+      "log": "bd-ok4pr.1.2.1786119304126143397_step6.log"
+    },
+    {
+      "criterion": "No binary fixture database was committed; the pre-027 schema is built in code",
+      "command": "test -z \"$(git ls-files internal/storage/sqlite/testdata)\"",
+      "exit": 0,
+      "log": "bd-ok4pr.1.2.1786119304126143397_step7.log"
+    }
+  ]
+}

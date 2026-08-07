@@ -1,0 +1,52 @@
+You are a fresh-eyes reviewer on work item w3 in the `bd` fork (Go, v0.34).
+You are READ-ONLY: change no file, create no bead, commit nothing.
+
+## What to review
+Bead bd-ok4pr.1.4 — "Close claim_expires_at gaps in schema constant, schema probe, and memory backend".
+Commit range in /home/ben/worktrees/beads/w3_atomic-claim:
+`git log -p 94105d5445b4ac2d97db41888c2e89a3194aa9d0..a0d51ee71e33a136ad3e6528ebbea880e1ea3bb0`
+
+Files changed: internal/storage/sqlite/{schema.go,schema_probe.go},
+internal/storage/memory/{memory.go,memory_test.go}
+Run no recursive rg/grep/find outside this worktree.
+
+## Judge against
+1. `bd --db /home/ben/projects/beads/.beads/beads.db --no-auto-import show bd-ok4pr.1.4`
+   — its Contract states all four gaps with the mechanism and consequence of each.
+   This bead came out of a review of the storage core, so its Contract IS the
+   finding text; check each gap is genuinely closed, not merely mentioned.
+2. `~/projects/shared-docs/CODING_PRINCIPLES.md`.
+
+## Look hardest at
+- The schema probe: does a store MISSING the column now actually fail the probe
+  and trigger the migration retry (store.go:158-172)? That is the whole point —
+  a probe that still passes converts a diagnosable startup error into a
+  runtime read-path failure on every `GetIssue`/`SearchIssues`.
+- The memory backend's `UpdateIssue` case: does it accept both a `*time.Time`
+  value AND an explicit nil (clearing the lease)? A case that handles only the
+  set direction leaves a lease that can never be cleared in `--no-db` mode.
+- Does the memory backend's decision matrix now match the sqlite one, including
+  the steal event carrying the prior holder?
+- The schema constant: does it match what migration 027 produces, exactly? A
+  drift between constant and migration is the defect being fixed, so an
+  imprecise fix reintroduces it in a new place.
+- Do the new tests fail if the fix is reverted? Say so explicitly in your
+  verdict, and name any test that would pass either way.
+
+## Run the gate yourself
+`cd /home/ben/worktrees/beads/w3_atomic-claim && go build ./... && go test ./internal/storage/... ./internal/types/...`
+Report the real result. Do not modify anything to make it pass.
+
+## Output
+Write your review to:
+/home/ben/worktrees/beads/w3_atomic-claim/work/w3_atomic-claim/reviews/review_bd-ok4pr.1.4_v1.md
+
+It contains exactly this — the verdict line plus finding rows, no other prose:
+
+VERDICT: CLEAN|FIX findings=N
+| ID | sev | file:line | defect (one sentence) | fix (one sentence) |
+|---|---|---|---|---|
+
+- CLEAN requires findings=0; FIX requires one or more finding rows.
+- sev: high = wrong behavior or a broken contract; med = correctness risk in a specific case; low = wording, cosmetic.
+- Each defect sentence stands alone: name the mechanism and the consequence.

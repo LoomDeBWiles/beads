@@ -1,0 +1,16 @@
+Done. bd-ok4pr.1.1 is implemented, gated, committed (`634e7d8`), and closed.
+
+**What the claim does now.** `ClaimIssue(ctx, id, assignee, lease, actor)` reads the row, decides, and writes inside one `BEGIN IMMEDIATE` transaction. `SQLiteStorage.ClaimIssue` routes through `RunInTransaction` and delegates to the same `claimIssue` core the transaction twin uses, so the direct and transactional paths cannot drift. The ladder is top-down: open claims; `in_progress` with no assignee claims; the same assignee renews (checked before expiry, so an expired holder renews rather than stealing from itself); an expired lease is stolen with the prior holder recorded in the event; a live held claim is denied with reason `held` and no write at all; closed or tombstone errors; any other status is denied with reason `status`. An empty or whitespace-only assignee argument errors before the row is read.
+
+On a win the same transaction refreshes `content_hash`, inserts the event, marks the issue dirty, and invalidates the blocked cache when the status changed. `manageClaimExpiry` clears the lease on any transition out of `in_progress`, wired into both `UpdateIssue` twins; both `CloseIssue` twins clear it in their UPDATE.
+
+**Verification beyond the gate.** I ran a throwaway in-package test (since removed via trash.sh) covering every ladder cell plus an 8-goroutine race under `-race`: exactly one `claimed`, seven `denied`, final assignee equal to the winner, and the denial path provably wrote nothing (`updated_at` unchanged). Formal tests are bd-ok4pr.1.2's scope. Full `go test -short ./...` shows only the pre-existing `TestMergeDriverWithLockedConfig_E2E` failure, identical to the recorded baseline.
+
+**Two things outside `## Touches`, both deliberate:**
+
+1. `internal/storage/sqlite/migrations_test.go` — committed. `TestMigrateContentHashColumn` rebuilds the `issues` table from a hand-written DDL, so `GetIssue` failed with "no such column: claim_expires_at". Adding the column to that fixture is exactly what migrations 023 (`pinned`) and 024 (`is_template`) did; the Touches list just missed the file. Two lines: the column in the CREATE, a `NULL` in the positional INSERT.
+2. `.bdc.conf` at the run-worktree root — **not** committed, still untracked. `bdc test` refuses on this repo without a `GATE_CMD` because the default gate is pytest-only. I set it to the bead's own build/test/vet commands, matching what the sibling builder on bd-ok4pr.3.2 did. Whether the repo should carry a gate config is a manager decision.
+
+I did not touch `ready.go`, `dependencies.go`, `multirepo.go`, or the three SELECT lists that delegate to the shared `s.scanIssues` — those belong to bd-ok4pr.1.3, and adding the column there before that scanner changes would have broken this bead's own test gate. I verified the touch-point closure against the `pinned` grep the bead specifies: every scan, insert, and update class in the three write-path files is covered; the only unmirrored `pinned` class is the WHERE-filter, which has no claim-expiry counterpart in this scope.
+
+Not pushed, per the worker contract.

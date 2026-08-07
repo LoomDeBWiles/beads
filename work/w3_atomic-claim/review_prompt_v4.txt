@@ -1,0 +1,47 @@
+Delta-review plan_v4.md for w3_atomic-claim — round 4 of 4, the hard ceiling. Scope: landing verification only. Confirm the ten round-3 accepts appear in plan_v4 exactly and completely, and check the reworded exit-contract text for internal contradictions. Do not re-open anything else absent a correctness or safety defect with file:line evidence.
+
+<instructions>
+1. Read plan_v4.md's "What Changed from v3" table (H1-H7 rows).
+2. For each row: verify the described change appears in plan_v4's sections, exactly and completely (Design exit-code paragraph, before/after supervisor cell, types.go row, claim.go row, claim_test row, scripttest row, utils.go row, TestClaimRoundTrip row, multirepo row, Risks renewal-lag row).
+3. Check only the changed text for new contradictions (e.g. DenyReason vocabulary consistent across Design, types.go row, test rows; empty-assignee rules consistent between Design and claim.go row).
+4. Output the canonical verdict line: CLEAN or FIX.
+</instructions>
+
+<files>
+- /home/ben/worktrees/beads/w3_atomic-claim/work/w3_atomic-claim/plan_v4.md — artifact under review
+- /home/ben/worktrees/beads/w3_atomic-claim/work/w3_atomic-claim/plan_v3.md — prior version
+- /home/ben/worktrees/beads/w3_atomic-claim/work/w3_atomic-claim/review_codex_v3.md — round-3 findings
+- /home/ben/worktrees/beads/w3_atomic-claim/work/w3_atomic-claim/plan_delta_v4.md — dispositions and bindings
+</files>
+
+<checklist>
+LANDED — each H row's change present and complete in plan_v4?
+CONSISTENCY — DenyReason vocabulary (held | status) identical everywhere it appears; empty-assignee rule identical in Design and claim.go row; no changed sentence contradicts an unchanged one?
+</checklist>
+
+<rejected>
+(none — all findings from rounds 1-3 were accepted)
+</rejected>
+
+<output>
+Write review to: /home/ben/worktrees/beads/w3_atomic-claim/work/w3_atomic-claim/review_codex_v4.md
+- Subagent writes the file directly — parent reads it afterward
+</output>
+
+<output-format>
+Output exactly this — the verdict line plus finding rows, no other prose:
+
+VERDICT: CLEAN|FIX findings=N
+| ID | sev | file:line | defect (one sentence) | fix (one sentence) |
+|---|---|---|---|---|
+
+- CLEAN requires findings=0; FIX requires one or more finding rows.
+- sev: high = design or behavior must change; med = correctness risk in a specific case; low = wording, docs, cosmetic.
+- N states the true total; the table lists every finding, no cap.
+</output-format>
+
+<constraints>
+- Read every file listed above before evaluating — do not guess
+- Landing verification only: no scope expansion, no re-opening settled sections absent safety evidence
+- Do not create or modify the artifact under review — only write your review file
+</constraints>

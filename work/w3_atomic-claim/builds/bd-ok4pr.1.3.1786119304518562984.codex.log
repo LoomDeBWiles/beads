@@ -1,0 +1,16 @@
+Done. bd-ok4pr.1.3 is committed and closed.
+
+**What changed** — `claim_expires_at` now flows through every late-column path that feeds the shared row scanners:
+
+- `dependencies.go`: both shared scanners (`scanIssues`, `scanIssuesWithDependencyType`) gained a `sql.NullTime` declaration, a scan target, and the `*time.Time` mapping; the two `...WithMetadata` SELECT lists gained the column. The recursive dep-tree CTEs at :512/:553 are untouched, as the contract requires.
+- `ready.go`: the `bd ready` SELECT list (feeds `scanIssues`) and the `GetStaleIssues` list plus its own inline scanner.
+- `labels.go` / `queries.go`: the `GetIssuesByLabel` and `SearchIssues` lists, which had to move in the same edit as `scanIssues` or every call would die on a column-count mismatch.
+- `multirepo.go`: both the INSERT copy path and the full-column UPDATE branch, so a copy onto an existing row overwrites the target's stale lease instead of leaving an unstealable `in_progress` row.
+
+**One judgment call worth flagging:** acceptance steps 4-6 count literal `claim_expires_at` lines (≥4, ≥6, ≥4), but the bead's own counterpart list includes scanner declarations and bind-value sites, where the Go identifiers are camelCase (`claimExpiresAt`, `issue.ClaimExpiresAt`). I closed the gap by naming the column in the comment at each of those sites rather than by padding — the comments are load-bearing, since the Go field name genuinely differs from the column name, and the `multirepo.go` UPDATE one records why the lease must be overwritten there.
+
+Gate and all 10 acceptance commands exit 0; commit `9c7651f9`. Not pushed, per the worker contract. Report written to `work/w3_atomic-claim/builds/bd-ok4pr.1.3.1786119304518562984.build.json`.
+
+Two things for you, neither blocking:
+- `bdc` auto-closed the parent epic `bd-ok4pr.1` when this bead closed, but sibling `bd-ok4pr.1.2` (claim decision matrix / race test) still shows `in_progress`. You may want to reopen the epic.
+- `dependencies.go` has a pre-existing gofmt violation around line 140 (indentation, unrelated to the lease). I left it alone since it's outside this bead's scope.

@@ -1,0 +1,14 @@
+Done. bd-ok4pr.1.2 is committed (`2d7223d6`) and closed.
+
+**What I built** — `internal/storage/sqlite/claim_test.go`, 13 tests, one per ladder cell plus the three named tests the bead requires:
+
+- Matrix: open→claimed; held-unexpired→denied with `DenyHeld` and the holder+expiry reported; self→renewed with a refreshed lease; expired→stolen with `previous_holder` in the event row; legacy `in_progress` with empty assignee→claimed; `blocked`→denied with `DenyStatus` (not an error, and the outcome carries the status so a CLI can name it); empty/whitespace assignee→error with no write; closed→error; no-lease claim stays NULL and is never stealable.
+- Extra rung I added because the plan makes the ordering explicit: `TestClaimSelfRenewsExpiredLease` — an expired holder renews rather than self-steals, since the self-match rung sits above the expiry rung.
+- `TestClaimDeniedNoWrite` snapshots `updated_at`, the `events` count and `dirty_issues.marked_at` around a denial and asserts all three are byte-identical.
+- `TestClaimMigrationExistingStore` builds the pre-027 schema in code in a `t.TempDir()` DB (`ALTER TABLE issues DROP COLUMN claim_expires_at`, then reopen so the idempotent migration replays), asserts the column via `PRAGMA table_info`, both rows intact with NULL lease, and that a claim then writes a lease. No fixture DB.
+
+**The race test is real, and I proved it.** I wrote a throwaway test that reimplements the old racy idiom (read outside the transaction, then unconditional `UpdateIssue`) inside the identical harness. On the first version it reported 1, 2, 7, 8, 8 winners across five runs — the cold first run serialized and would have let a broken implementation pass. So I added `warmPool`, which opens N concurrent reads before the barrier drops so nobody pays connection-open cost inside the race. Re-run: 5, 8, 8, 8, 2 winners, every run exposing the bug. Then I trashed the throwaway file (batch `20260807T162005Z-1538925`) and confirmed the real `TestClaimRace` passes at `-count=5` and under `-race`.
+
+**No findings against the implementation** — every plan cell matches `claim.go` as merged.
+
+All seven acceptance commands exit 0; logs are `_step1.log` through `_step7.log` in `work/w3_atomic-claim/builds/`, alongside the build report. Not pushed, per the worker contract.

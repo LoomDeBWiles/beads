@@ -1,0 +1,2 @@
+$ grep -q 'Assignee' internal/merge/merge.go
+exit=0
