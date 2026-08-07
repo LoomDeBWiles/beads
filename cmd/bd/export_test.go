@@ -529,10 +529,18 @@ func TestClaimRoundTrip(t *testing.T) {
 
 		importIssues(t, ctx, target, targetPath, []*types.Issue{incoming})
 
-		imported := mustGetIssue(t, ctx, target, twin.ID)
-		if imported.Assignee != held.Assignee || imported.Status != held.Status {
-			t.Fatalf("renamed issue is %s/%q, want %s/%q", imported.Status, imported.Assignee, held.Status, held.Assignee)
+		// The squatter is a different issue that merely occupies the incoming
+		// ID: the merge must land on the twin and leave the squatter alone,
+		// lease included.
+		collided := mustGetIssue(t, ctx, target, squatter.ID)
+		if collided.Title != squatter.Title {
+			t.Fatalf("squatter title is %q, want %q", collided.Title, squatter.Title)
 		}
+		if collided.ClaimExpiresAt != nil {
+			t.Fatalf("squatter gained a lease expiring at %s, want none", collided.ClaimExpiresAt)
+		}
+
+		imported := mustGetIssue(t, ctx, target, twin.ID)
 		assertSameLease(t, "rename collision", held.ClaimExpiresAt, imported.ClaimExpiresAt)
 	})
 }
