@@ -493,6 +493,48 @@ func TestClaimRoundTrip(t *testing.T) {
 		imported := mustGetIssue(t, ctx, target, held.ID)
 		assertSameLease(t, "lease renewal", held.ClaimExpiresAt, imported.ClaimExpiresAt)
 	})
+
+	t.Run("rename collision keeps the lease on the surviving ID", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		source := newTestStore(t, filepath.Join(tmpDir, "source.db"))
+		held := createClaimedIssue(t, ctx, source, nil)
+		incoming := exportedIssue(t, ctx, source, filepath.Join(tmpDir, "source.jsonl"), held.ID)
+
+		// The rename path needs two rows in the target. The twin carries the
+		// incoming content under a different ID of the same prefix, which is
+		// what makes the importer read the row as a rename; the squatter holds
+		// the incoming ID with different content, which makes handleRename keep
+		// the twin's ID and merge the incoming fields into it. That merge is a
+		// field-by-field update map, so it drops any field it does not name.
+		targetPath := filepath.Join(tmpDir, "target.db")
+		target := newTestStore(t, targetPath)
+
+		twin := *held
+		twin.ID = "test-renametwin"
+		twin.ClaimExpiresAt = nil
+		twin.ContentHash = ""
+		twin.UpdatedAt = held.UpdatedAt.Add(-time.Hour)
+		if err := target.CreateIssue(ctx, &twin, "test-user"); err != nil {
+			t.Fatalf("failed to seed the rename twin: %v", err)
+		}
+
+		squatter := *held
+		squatter.Title = "Unrelated issue squatting on the incoming ID"
+		squatter.ClaimExpiresAt = nil
+		squatter.ContentHash = ""
+		squatter.UpdatedAt = held.UpdatedAt.Add(-time.Hour)
+		if err := target.CreateIssue(ctx, &squatter, "test-user"); err != nil {
+			t.Fatalf("failed to seed the ID-collision issue: %v", err)
+		}
+
+		importIssues(t, ctx, target, targetPath, []*types.Issue{incoming})
+
+		imported := mustGetIssue(t, ctx, target, twin.ID)
+		if imported.Assignee != held.Assignee || imported.Status != held.Status {
+			t.Fatalf("renamed issue is %s/%q, want %s/%q", imported.Status, imported.Assignee, held.Status, held.Assignee)
+		}
+		assertSameLease(t, "rename collision", held.ClaimExpiresAt, imported.ClaimExpiresAt)
+	})
 }
 
 // createClaimedIssue creates an issue and claims it under a lease, returning the
