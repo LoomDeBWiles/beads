@@ -81,8 +81,11 @@ func TestClaimOpenIssueClaimed(t *testing.T) {
 	store, cleanup := setupTestDB(t)
 	defer cleanup()
 
+	const lease = 30 * time.Minute
 	issue := newClaimIssue(t, store, types.StatusOpen, "")
-	outcome := mustClaim(t, store, issue.ID, holderA, leaseOf(30*time.Minute))
+	before := time.Now()
+	outcome := mustClaim(t, store, issue.ID, holderA, leaseOf(lease))
+	after := time.Now()
 
 	if outcome.Outcome != types.ClaimClaimed {
 		t.Errorf("outcome = %q, want %q", outcome.Outcome, types.ClaimClaimed)
@@ -104,8 +107,14 @@ func TestClaimOpenIssueClaimed(t *testing.T) {
 	if stored.ClaimExpiresAt == nil {
 		t.Fatal("claim_expires_at is NULL, want the lease expiry")
 	}
-	if !stored.ClaimExpiresAt.After(time.Now()) {
-		t.Errorf("claim_expires_at %v is not in the future", stored.ClaimExpiresAt)
+	// The expiry must be the REQUESTED lease from the moment of the claim, not some
+	// multiple of it: an over-long lease keeps a dead builder's bead unstealable.
+	// The claim happened between before and after, so the expiry must lie in the
+	// same window shifted by exactly one lease.
+	earliest, latest := before.Add(lease), after.Add(lease)
+	if stored.ClaimExpiresAt.Before(earliest) || stored.ClaimExpiresAt.After(latest) {
+		t.Errorf("claim_expires_at = %v, want within [%v, %v] (now + the requested %v)",
+			stored.ClaimExpiresAt, earliest, latest, lease)
 	}
 }
 
@@ -289,6 +298,47 @@ func TestClaimClosedIssueErrors(t *testing.T) {
 	}
 	if stored := mustGet(t, store, issue.ID); stored.Status != types.StatusClosed {
 		t.Errorf("stored status = %q, want %q untouched", stored.Status, types.StatusClosed)
+	}
+}
+
+// A soft-deleted issue is an error too. Without this the tombstone rung is dead
+// code and a deleted issue could be claimed back to life as in_progress.
+func TestClaimTombstonedIssueErrors(t *testing.T) {
+	store, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	issue := newClaimIssue(t, store, types.StatusOpen, "")
+	if err := store.CreateTombstone(ctx, issue.ID, "test", "deleted"); err != nil {
+		t.Fatalf("CreateTombstone failed: %v", err)
+	}
+
+	outcome, err := store.ClaimIssue(ctx, issue.ID, holderA, leaseOf(time.Hour), holderA)
+	if err == nil {
+		t.Fatalf("claiming a tombstoned issue succeeded with outcome %+v, want an error", outcome)
+	}
+
+	stored := mustGet(t, store, issue.ID)
+	if stored.Status != types.StatusTombstone {
+		t.Errorf("stored status = %q, want %q untouched", stored.Status, types.StatusTombstone)
+	}
+	if stored.Assignee != "" {
+		t.Errorf("stored assignee = %q, want empty: the rejected claim wrote to the row", stored.Assignee)
+	}
+	if stored.ClaimExpiresAt != nil {
+		t.Errorf("claim_expires_at = %v, want NULL: the rejected claim wrote a lease", stored.ClaimExpiresAt)
+	}
+}
+
+// An unknown ID is an error (exit 1), not a denial: there is nothing to retry
+// or skip, the caller named an issue that does not exist.
+func TestClaimUnknownIssueErrors(t *testing.T) {
+	store, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	outcome, err := store.ClaimIssue(context.Background(), "bd-nope", holderA, leaseOf(time.Hour), holderA)
+	if err == nil {
+		t.Fatalf("claiming a nonexistent issue succeeded with outcome %+v, want an error", outcome)
 	}
 }
 
