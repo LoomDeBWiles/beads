@@ -52,3 +52,7 @@ sync-branch: "beads-sync"
 # - linear.api-key
 # - github.org
 # - github.repo
+
+# w28: bd background daemon disabled fleet-wide (see context/entities/bdc.md)
+no-daemon: true
+auto-start-daemon: false
