@@ -1,0 +1,6 @@
+Building bd...
+go build -ldflags="-X main.Build=$(git rev-parse --short HEAD)" -o bd ./cmd/bd
+⚠ Creating issue without description.
+  Issues without descriptions lack context for future work.
+  Consider adding --description="Why this issue exists and what needs to be done"
+Import complete: 0 created, 0 updated, 1 unchanged

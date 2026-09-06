@@ -1,0 +1,4 @@
+Warning: Failed to import bd changes after merge
+Import failed: prefix mismatch detected: database uses 'demo-' but found issues with prefixes: [other- (1 issues)] (use --rename-on-import to automatically fix)
+Run 'bd import -i .beads/issues.jsonl' manually to see the error
+hook exit=0

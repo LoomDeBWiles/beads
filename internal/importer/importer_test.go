@@ -1768,3 +1768,111 @@ func TestImportIssues_LabelRemoval(t *testing.T) {
 		t.Errorf("Expected label 'bug', got %q", labels[0])
 	}
 }
+
+// TestImportHyphenatedLocalIDs covers the defect w4 exists to remove: an ID
+// whose last hyphen segment looks like a hash (bd-w31-p0a) was guessed to have
+// prefix "bd-w31" and refused, even though bd create had accepted it. Membership
+// now asks the same question create asks.
+func TestImportHyphenatedLocalIDs(t *testing.T) {
+	ctx := context.Background()
+
+	tmpDB := t.TempDir() + "/test.db"
+	store, err := sqlite.New(ctx, tmpDB)
+	if err != nil {
+		t.Fatalf("Failed to create store: %v", err)
+	}
+	defer store.Close()
+
+	if err := store.SetConfig(ctx, "issue_prefix", "bd"); err != nil {
+		t.Fatalf("Failed to set prefix: %v", err)
+	}
+
+	issues := []*types.Issue{
+		{ID: "bd-w31-p0a", Title: "Hash-looking tail", Status: types.StatusOpen, Priority: 2, IssueType: types.TypeTask},
+		{ID: "bd-92cl-gate-p0a", Title: "Multi-part with hash tail", Status: types.StatusOpen, Priority: 2, IssueType: types.TypeTask},
+	}
+
+	result, err := ImportIssues(ctx, tmpDB, store, issues, Options{})
+	if err != nil {
+		t.Fatalf("Import should accept locally-created IDs: %v", err)
+	}
+	if result.PrefixMismatch {
+		t.Errorf("Expected no prefix mismatch, got mismatches: %v", result.MismatchPrefixes)
+	}
+	if result.Created != 2 {
+		t.Errorf("Expected 2 created, got %d", result.Created)
+	}
+	for _, id := range []string{"bd-w31-p0a", "bd-92cl-gate-p0a"} {
+		issue, err := store.GetIssue(ctx, id)
+		if err != nil || issue == nil {
+			t.Errorf("Issue %s should exist after import (err=%v)", id, err)
+		}
+	}
+}
+
+// TestImportForeignIDStillRefused confirms the fix did not loosen the rule: an
+// ID that does not start with the configured prefix is still refused.
+func TestImportForeignIDStillRefused(t *testing.T) {
+	ctx := context.Background()
+
+	tmpDB := t.TempDir() + "/test.db"
+	store, err := sqlite.New(ctx, tmpDB)
+	if err != nil {
+		t.Fatalf("Failed to create store: %v", err)
+	}
+	defer store.Close()
+
+	if err := store.SetConfig(ctx, "issue_prefix", "bd"); err != nil {
+		t.Fatalf("Failed to set prefix: %v", err)
+	}
+
+	issues := []*types.Issue{
+		{ID: "other-bad1", Title: "Foreign", Status: types.StatusOpen, Priority: 2, IssueType: types.TypeTask},
+	}
+
+	_, err = ImportIssues(ctx, tmpDB, store, issues, Options{})
+	if err == nil {
+		t.Fatal("Import should refuse a foreign prefix")
+	}
+	if !strings.Contains(err.Error(), "prefix mismatch") {
+		t.Errorf("Expected a prefix mismatch error, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "other") {
+		t.Errorf("Error should name the refused prefix, got: %v", err)
+	}
+}
+
+// TestRenameOnImportLeavesLocalIDsAlone: --rename-on-import must rewrite only
+// foreign IDs. Rewriting bd-w31-p0a to bd-p0a would collide it with bd-w45-p0a.
+func TestRenameOnImportLeavesLocalIDsAlone(t *testing.T) {
+	ctx := context.Background()
+
+	tmpDB := t.TempDir() + "/test.db"
+	store, err := sqlite.New(ctx, tmpDB)
+	if err != nil {
+		t.Fatalf("Failed to create store: %v", err)
+	}
+	defer store.Close()
+
+	if err := store.SetConfig(ctx, "issue_prefix", "bd"); err != nil {
+		t.Fatalf("Failed to set prefix: %v", err)
+	}
+
+	issues := []*types.Issue{
+		{ID: "bd-w31-p0a", Title: "Local", Status: types.StatusOpen, Priority: 2, IssueType: types.TypeTask},
+		{ID: "other-bad1", Title: "Foreign", Status: types.StatusOpen, Priority: 2, IssueType: types.TypeTask},
+	}
+
+	if _, err := ImportIssues(ctx, tmpDB, store, issues, Options{RenameOnImport: true}); err != nil {
+		t.Fatalf("Import with rename should succeed: %v", err)
+	}
+
+	local, err := store.GetIssue(ctx, "bd-w31-p0a")
+	if err != nil || local == nil {
+		t.Errorf("Local ID bd-w31-p0a should be untouched by rename (err=%v)", err)
+	}
+	renamed, err := store.GetIssue(ctx, "bd-bad1")
+	if err != nil || renamed == nil {
+		t.Errorf("Foreign ID other-bad1 should be renamed to bd-bad1 (err=%v)", err)
+	}
+}

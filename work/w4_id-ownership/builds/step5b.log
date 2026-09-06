@@ -1,0 +1,17 @@
+=== rerun excluding pre-existing TestDaemonAutoStart failure (fails identically at HEAD, see step5b.log)
+ok  	github.com/steveyegge/beads/internal/importer	(cached)
+ok  	github.com/steveyegge/beads/internal/utils	(cached)
+--- FAIL: TestDaemonAutoStart (0.02s)
+FAIL
+FAIL	github.com/steveyegge/beads/cmd/bd	26.306s
+ok  	github.com/steveyegge/beads/cmd/bd/doctor	(cached)
+ok  	github.com/steveyegge/beads/cmd/bd/doctor/fix	(cached)
+ok  	github.com/steveyegge/beads/cmd/bd/setup	(cached)
+FAIL
+=== HEAD (clean tree, no w4 changes) reproduces the same failure:
+--- FAIL: TestDaemonAutoStart (0.01s)
+    --- FAIL: TestDaemonAutoStart/shouldAutoStartDaemon_defaults_to_true (0.00s)
+        autostart_test.go:40: Expected auto-start to be enabled by default
+FAIL
+FAIL	github.com/steveyegge/beads/cmd/bd	0.021s
+FAIL

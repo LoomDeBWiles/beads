@@ -216,8 +216,7 @@ func handlePrefixMismatch(ctx context.Context, sqliteStore *sqlite.SQLiteStorage
 	result.ExpectedPrefix = configuredPrefix
 
 	// GH#686: In multi-repo mode, allow all prefixes (nil = allow all)
-	allowedPrefixes := buildAllowedPrefixSet(configuredPrefix)
-	if allowedPrefixes == nil {
+	if buildAllowedPrefixSet(configuredPrefix) == nil {
 		return issues, nil
 	}
 
@@ -231,8 +230,11 @@ func handlePrefixMismatch(ctx context.Context, sqliteStore *sqlite.SQLiteStorage
 	var tombstonesToRemove []string
 
 	for _, issue := range issues {
-		prefix := utils.ExtractIssuePrefix(issue.ID)
-		if !allowedPrefixes[prefix] {
+		// Membership is the same question bd asks on create: does the ID start
+		// with the configured prefix and a hyphen? ExtractIssuePrefix only
+		// labels what we refuse, it no longer decides.
+		if sqlite.ValidateIssueIDPrefix(issue.ID, configuredPrefix) != nil {
+			prefix := utils.ExtractIssuePrefix(issue.ID)
 			if issue.IsTombstone() {
 				tombstoneMismatchPrefixes[prefix]++
 				tombstonesToRemove = append(tombstonesToRemove, issue.ID)
@@ -496,6 +498,15 @@ func upsertIssues(ctx context.Context, sqliteStore *sqlite.SQLiteStorage, issues
 	dbByHash := buildHashMap(dbIssues)
 	dbByID := buildIDMap(dbIssues)
 
+	// The configured prefix decides whether two IDs belong to this project, the
+	// same question bd asks on create. Empty means the database has nothing to
+	// consult, so fall back to guessing.
+	configuredPrefix, err := sqliteStore.GetConfig(ctx, "issue_prefix")
+	if err != nil {
+		return fmt.Errorf("failed to get configured prefix: %w", err)
+	}
+	configuredPrefix = strings.TrimSpace(configuredPrefix)
+
 	// Build external_ref map for O(1) lookup
 	dbByExternalRef := make(map[string]*types.Issue)
 	for _, issue := range dbIssues {
@@ -613,10 +624,15 @@ func upsertIssues(ctx context.Context, sqliteStore *sqlite.SQLiteStorage, issues
 				result.Unchanged++
 			} else {
 				// Same content, different ID - check if this is a rename or cross-prefix duplicate
-				existingPrefix := utils.ExtractIssuePrefix(existing.ID)
-				incomingPrefix := utils.ExtractIssuePrefix(incoming.ID)
+				var sameProject bool
+				if configuredPrefix != "" {
+					sameProject = sqlite.ValidateIssueIDPrefix(existing.ID, configuredPrefix) == nil &&
+						sqlite.ValidateIssueIDPrefix(incoming.ID, configuredPrefix) == nil
+				} else {
+					sameProject = utils.ExtractIssuePrefix(existing.ID) == utils.ExtractIssuePrefix(incoming.ID)
+				}
 
-				if existingPrefix != incomingPrefix {
+				if !sameProject {
 					// Cross-prefix content match: same content but different projects/prefixes.
 					// This is NOT a rename - it's a duplicate from another project.
 					// Skip the incoming issue and keep the existing one unchanged.

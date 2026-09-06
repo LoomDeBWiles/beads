@@ -877,8 +877,9 @@ if [ ! -f "$BEADS_DIR/issues.jsonl" ]; then
 fi
 
 # Import the updated JSONL
-if ! bd import -i "$BEADS_DIR/issues.jsonl" >/dev/null 2>&1; then
+if ! import_error=$(bd import -i "$BEADS_DIR/issues.jsonl" 2>&1); then
 		  echo "Warning: Failed to import bd changes after merge" >&2
+		  echo "$import_error" >&2
 		  echo "Run 'bd import -i $BEADS_DIR/issues.jsonl' manually to see the error" >&2
 fi
 
@@ -931,8 +932,9 @@ fi
 # Import the updated JSONL
 # The auto-import feature should handle this, but we force it here
 # to ensure immediate sync after merge
-if ! bd import -i "$BEADS_DIR/issues.jsonl" >/dev/null 2>&1; then
+if ! import_error=$(bd import -i "$BEADS_DIR/issues.jsonl" 2>&1); then
 		  echo "Warning: Failed to import bd changes after merge" >&2
+		  echo "$import_error" >&2
 		  echo "Run 'bd import -i $BEADS_DIR/issues.jsonl' manually to see the error" >&2
 		  # Don't fail the merge, just warn
 fi

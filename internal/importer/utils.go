@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/steveyegge/beads/internal/storage/sqlite"
 	"github.com/steveyegge/beads/internal/types"
 	"github.com/steveyegge/beads/internal/utils"
 )
@@ -194,23 +195,27 @@ func RenameImportedIssuePrefixes(issues []*types.Issue, targetPrefix string) err
 	idMapping := make(map[string]string)
 
 	for _, issue := range issues {
+		// Already ours: the ID starts with the target prefix and a hyphen, the
+		// same test create applies. Renaming it would strip its middle segment
+		// and collide bd-w31-p0a with bd-w45-p0a on bd-p0a.
+		if sqlite.ValidateIssueIDPrefix(issue.ID, targetPrefix) == nil {
+			continue
+		}
+
 		oldPrefix := utils.ExtractIssuePrefix(issue.ID)
 		if oldPrefix == "" {
 			return fmt.Errorf("cannot rename issue %s: malformed ID (no hyphen found)", issue.ID)
 		}
 
-		if oldPrefix != targetPrefix {
-			// Extract the suffix part (supports both numeric "123" and hash "abc1" and hierarchical "abc.1.2")
-			suffix := strings.TrimPrefix(issue.ID, oldPrefix+"-")
+		// Extract the suffix part (supports both numeric "123" and hash "abc1" and hierarchical "abc.1.2")
+		suffix := strings.TrimPrefix(issue.ID, oldPrefix+"-")
 
-			// Validate that the suffix is valid (alphanumeric + dots for hierarchy)
-			if suffix == "" || !isValidIDSuffix(suffix) {
-				return fmt.Errorf("cannot rename issue %s: invalid suffix '%s'", issue.ID, suffix)
-			}
-
-			newID := fmt.Sprintf("%s-%s", targetPrefix, suffix)
-			idMapping[issue.ID] = newID
+		// Validate that the suffix is valid (alphanumeric + dots for hierarchy)
+		if suffix == "" || !isValidIDSuffix(suffix) {
+			return fmt.Errorf("cannot rename issue %s: invalid suffix '%s'", issue.ID, suffix)
 		}
+
+		idMapping[issue.ID] = fmt.Sprintf("%s-%s", targetPrefix, suffix)
 	}
 
 	// Now update all issues and their references

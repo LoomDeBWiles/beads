@@ -236,7 +236,10 @@ func repairPrefixes(ctx context.Context, st storage.Storage, actorName string, t
 		prefix := utils.ExtractIssuePrefix(issue.ID)
 		number := utils.ExtractIssueNumber(issue.ID)
 
-		if prefix == targetPrefix {
+		// Ownership is the create-time test: an ID starting with the target
+		// prefix and a hyphen is already correct, whatever ExtractIssuePrefix
+		// guesses its prefix to be.
+		if sqlite.ValidateIssueIDPrefix(issue.ID, targetPrefix) == nil {
 			correctIssues = append(correctIssues, issue)
 		} else {
 			incorrectIssues = append(incorrectIssues, issueSort{

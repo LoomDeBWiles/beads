@@ -1,0 +1,65 @@
+{
+  "schema": 1,
+  "plan": "work/w4_id-ownership/plan_v2.md",
+  "plan_sha256": "750ecea4f1c4caea52d52843e882afd10e07ab3e1f4263c27973ab7216c4d03d",
+  "source": "plan",
+  "requirements": [
+    {
+      "id": "R1",
+      "statement": "A bead named the way w31 named its beads can be created and loaded back",
+      "checks": [
+        {
+          "command": "set -e\nexport BEADS_NO_DAEMON=1 BD_NO_DAEMON=true\nroot=\"$(git rev-parse --show-toplevel)\"\ncd \"$root\" && make build\nd=$(mktemp -d) && cd \"$d\" && git init -q .\n\"$root/bd\" init --quiet --prefix demo\n\"$root/bd\" create \"phase 0 rev\" --id demo-w1-p0a -t task >/dev/null\n\"$root/bd\" export -o .beads/issues.jsonl\n\"$root/bd\" import -i .beads/issues.jsonl",
+          "expected": "Import complete",
+          "cwd": "."
+        }
+      ]
+    },
+    {
+      "id": "R2",
+      "statement": "Issues from another project are still refused",
+      "checks": [
+        {
+          "command": "set -e\nexport BEADS_NO_DAEMON=1 BD_NO_DAEMON=true\nroot=\"$(git rev-parse --show-toplevel)\"\nd=$(mktemp -d) && cd \"$d\" && git init -q .\n\"$root/bd\" init --quiet --prefix demo\nprintf '%s\\n' '{\"id\":\"other-bad1\",\"title\":\"foreign\",\"status\":\"open\",\"priority\":2,\"issue_type\":\"task\"}' > foreign.jsonl\n\"$root/bd\" import -i foreign.jsonl 2>&1 || true",
+          "expected": "prefix mismatch",
+          "cwd": "."
+        }
+      ]
+    },
+    {
+      "id": "R3",
+      "statement": "The four repos still carrying these ids load without renaming anything",
+      "checks": [
+        {
+          "command": "set -e\nexport BEADS_NO_DAEMON=1 BD_NO_DAEMON=true\nbd_bin=\"$(git rev-parse --show-toplevel)/bd\"\nfor r in farmplanner duke investing teaching; do\n  d=$(mktemp -d)\n  cp -r \"$HOME/projects/$r/.beads\" \"$d/.beads\"\n  ( cd \"$d\" && git init -q . && \"$bd_bin\" import -i .beads/issues.jsonl )\ndone",
+          "expected": "Import complete",
+          "cwd": "."
+        }
+      ]
+    },
+    {
+      "id": "R4",
+      "statement": "A failed import after a merge prints what actually went wrong",
+      "checks": [
+        {
+          "command": "set -e\nexport BEADS_NO_DAEMON=1 BD_NO_DAEMON=true\nroot=\"$(git rev-parse --show-toplevel)\"\nd=$(mktemp -d) && cd \"$d\" && git init -q .\nPATH=\"$root:$PATH\"\nbd init --quiet --prefix demo\nprintf '%s\\n' '{\"id\":\"other-bad1\",\"title\":\"foreign\",\"status\":\"open\",\"priority\":2,\"issue_type\":\"task\"}' > .beads/issues.jsonl\nsh .git/hooks/post-merge 2>&1 >/dev/null",
+          "expected": "prefix mismatch",
+          "cwd": "."
+        }
+      ]
+    },
+    {
+      "id": "R5",
+      "statement": "Nothing else in bd regressed",
+      "checks": [
+        {
+          "command": "cd \"$(git rev-parse --show-toplevel)\" && go test ./internal/importer/... ./internal/utils/... ./cmd/bd/...",
+          "expected": "ok",
+          "cwd": "."
+        }
+      ]
+    }
+  ],
+  "residues": [],
+  "revisions": []
+}
