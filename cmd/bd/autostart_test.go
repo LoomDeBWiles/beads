@@ -9,11 +9,44 @@ import (
 	"github.com/steveyegge/beads/internal/config"
 )
 
-func TestDaemonAutoStart(t *testing.T) {
-	// Initialize config for tests
+// isolateConfig points config discovery at an empty project config in a temp
+// directory, so a test that asserts a built-in default is not reading whichever
+// .beads/config.yaml happens to sit above it - this repo's own config sets
+// auto-start-daemon: false, and so may the developer's ~/.config/bd/config.yaml.
+// The empty file stops the upward walk in config.Initialize() before either.
+// Restores the working directory and the config singleton on cleanup.
+func isolateConfig(t *testing.T) {
+	t.Helper()
+
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, ".beads"), 0755); err != nil {
+		t.Fatalf("Failed to create temp .beads directory: %v", err)
+	}
+	configPath := filepath.Join(dir, ".beads", "config.yaml")
+	if err := os.WriteFile(configPath, []byte("# intentionally empty: tests here assert bd's built-in defaults\n"), 0644); err != nil {
+		t.Fatalf("Failed to write temp config: %v", err)
+	}
+
+	origDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("Failed to get working directory: %v", err)
+	}
+	if err := os.Chdir(dir); err != nil {
+		t.Fatalf("Failed to change to temp dir: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(origDir)
+		_ = config.Initialize()
+	})
+
 	if err := config.Initialize(); err != nil {
 		t.Fatalf("Failed to initialize config: %v", err)
 	}
+}
+
+func TestDaemonAutoStart(t *testing.T) {
+	// Read the built-in defaults, not the host repo's config (see isolateConfig).
+	isolateConfig(t)
 	
 	// Save original env
 	origAutoStart := os.Getenv("BEADS_AUTO_START_DAEMON")

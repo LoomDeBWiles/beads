@@ -180,6 +180,26 @@ func (fm *FlushManager) run() {
 		}
 	}()
 
+	// drainMarkDirty absorbs markDirty events that are already queued.
+	// MarkDirty only hands its event to a buffered channel, so a mutation
+	// immediately followed by FlushNow or Shutdown leaves two ready channels and
+	// select picks between them at random. Losing that race would flush nothing
+	// and drop the mutation, so both paths drain the queue before deciding
+	// whether the database is dirty.
+	drainMarkDirty := func() {
+		for {
+			select {
+			case event := <-fm.markDirtyCh:
+				isDirty = true
+				if event.fullExport {
+					needsFullExport = true
+				}
+			default:
+				return
+			}
+		}
+	}
+
 	for {
 		select {
 		case event := <-fm.markDirtyCh:
@@ -220,6 +240,7 @@ func (fm *FlushManager) run() {
 				debounceTimer.Stop()
 				debounceTimer = nil
 			}
+			drainMarkDirty()
 
 			if !isDirty {
 				// Nothing to flush
@@ -239,6 +260,7 @@ func (fm *FlushManager) run() {
 			if debounceTimer != nil {
 				debounceTimer.Stop()
 			}
+			drainMarkDirty()
 
 			// Perform final flush if dirty
 			if isDirty {

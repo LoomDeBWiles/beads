@@ -64,3 +64,39 @@ None in behaviour. Two mechanical differences worth recording:
   `buildAllowedPrefixSet` is still called, purely for its nil (multi-repo) test.
 - `RenameImportedIssuePrefixes` skips already-local ids with an early `continue`
   rather than nesting the rename in a condition, which keeps the loop flat.
+
+## Run r2: test isolation fix
+
+| Criterion | Command | Log | Pass |
+| --- | --- | --- | --- |
+| 1. TestDaemonAutoStart passes | `cd cmd/bd && go test -run 'TestDaemonAutoStart' ./` | `builds/r2-step1.log` | yes (exit 0) |
+| 2. Ship Gate row 5 suite is green | `go test ./internal/importer/... ./internal/utils/... ./cmd/bd/...` (with `BEADS_NO_DAEMON=1 BD_NO_DAEMON=true`) | `builds/r2-step2.log` | yes (exit 0, all six packages `ok`) |
+
+Three files changed. `cmd/bd/autostart_test.go` gains an `isolateConfig(t)`
+helper that `TestDaemonAutoStart` now calls in place of a bare
+`config.Initialize()`: it creates a temp directory holding an empty
+`.beads/config.yaml`, chdirs into it, re-initializes config, and restores both
+the working directory and the config singleton on cleanup. A bare `t.TempDir()`
+would not have been enough - `config.Initialize()` walks up from the working
+directory and then falls back to `~/.config/bd/config.yaml`, which on this
+machine also carries w28's `auto-start-daemon: false`, so the empty project file
+is what stops the search and lets the test see bd's built-in default. The repo's
+own `.beads/config.yaml` and the test's assertion are both untouched.
+`cmd/bd/claim_test.go` is the same defect one layer out:
+`TestClaimExitCodesInDaemonMode` builds its child environment from
+`os.Environ()`, so the `BD_NO_DAEMON=true` the Ship Gate itself sets leaked into
+the spawned bd and routed every claim through direct mode, failing the
+"daemon recorded no claim operation" assertion; the test now pins
+`BD_NO_DAEMON=false` in the env it passes, next to the `BEADS_NO_DAEMON=0` that
+was already there. Sweeping the rest of `cmd/bd` for the same host-config
+dependency turned up no other failures, but it did expose a pre-existing flake,
+`TestAutoFlushOnExit`, which fails roughly one run in three at HEAD with the
+test files reverted, so it is not caused by this item. Its cause is a real
+data-loss race in `cmd/bd/flush_manager.go`, not a test bug: `MarkDirty` only
+queues its event on a buffered channel, so a mutation immediately followed by
+`Shutdown` (exactly what `PersistentPostRun` does on exit) leaves the run
+loop's `select` with two ready channels, and when it picks shutdown first
+`isDirty` is still false and the final flush is skipped, losing the mutation.
+The run loop now drains any queued `markDirty` events before deciding whether to
+flush, in both the `flushNow` and the `shutdown` branches. `TestAutoFlushOnExit`
+passed 20 consecutive runs after the fix, and the flush tests pass under `-race`.

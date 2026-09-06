@@ -407,7 +407,11 @@ func TestClaimExitCodesInDaemonMode(t *testing.T) {
 	// BD_VERBOSE makes every fallback reason print. Only the auto-start timeout warns
 	// unconditionally (daemon_autostart.go:309); the connect-failed and health-failed
 	// fallbacks go through emitVerboseWarning, which main.go:739 gates on BD_VERBOSE.
-	env := []string{"BEADS_NO_DAEMON=0", "BD_VERBOSE=1"}
+	// BD_NO_DAEMON=false neutralizes an inherited BD_NO_DAEMON=true from the
+	// caller's shell: runBDBinary passes os.Environ() through, and viper reads
+	// BD_NO_DAEMON as the no-daemon config key, which would route every claim
+	// below through direct mode and prove nothing about the RPC handler.
+	env := []string{"BEADS_NO_DAEMON=0", "BD_NO_DAEMON=false", "BD_VERBOSE=1"}
 	repo := newClaimTestRepo(t, bin)
 
 	if res := runBDBinary(t, bin, repo, env, "daemon", "--start", "--local"); res.exit != 0 {
