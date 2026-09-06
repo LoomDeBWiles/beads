@@ -624,8 +624,12 @@ func upsertIssues(ctx context.Context, sqliteStore *sqlite.SQLiteStorage, issues
 				result.Unchanged++
 			} else {
 				// Same content, different ID - check if this is a rename or cross-prefix duplicate
+				// In multi-repo mode every repo brings its own prefix, so the
+				// configured prefix says nothing about membership (GH#686, same
+				// short-circuit as buildAllowedPrefixSet); compare the IDs'
+				// own prefixes instead, as we do when none is configured.
 				var sameProject bool
-				if configuredPrefix != "" {
+				if configuredPrefix != "" && config.GetMultiRepoConfig() == nil {
 					sameProject = sqlite.ValidateIssueIDPrefix(existing.ID, configuredPrefix) == nil &&
 						sqlite.ValidateIssueIDPrefix(incoming.ID, configuredPrefix) == nil
 				} else {

@@ -3,9 +3,62 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
+
+// isolateConfig points config discovery at an empty project config in a temp
+// directory, so a test that asserts a built-in default is not reading whichever
+// .beads/config.yaml happens to sit above it - this repo's own config sets
+// no-daemon: true and auto-start-daemon: false, and so may the developer's
+// ~/.config/bd/config.yaml. The empty file stops the upward walk in Initialize()
+// before either. Restores the working directory and the config singleton on
+// cleanup. (Copy of the cmd/bd helper of the same name; package main cannot be
+// imported.)
+func isolateConfig(t *testing.T) {
+	t.Helper()
+
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, ".beads"), 0755); err != nil {
+		t.Fatalf("Failed to create temp .beads directory: %v", err)
+	}
+	configPath := filepath.Join(dir, ".beads", "config.yaml")
+	if err := os.WriteFile(configPath, []byte("# intentionally empty: tests here assert bd's built-in defaults\n"), 0644); err != nil {
+		t.Fatalf("Failed to write temp config: %v", err)
+	}
+
+	// Same story for the environment: viper binds BD_* automatically and a few
+	// BEADS_* names explicitly, so a shell that exports BD_NO_DAEMON=true (as
+	// agent harnesses do) would also mask the defaults. Clear them here.
+	for _, entry := range os.Environ() {
+		name, _, _ := strings.Cut(entry, "=")
+		if !strings.HasPrefix(name, "BD_") && !strings.HasPrefix(name, "BEADS_") {
+			continue
+		}
+		value := os.Getenv(name)
+		if err := os.Unsetenv(name); err != nil {
+			t.Fatalf("Failed to unset %s: %v", name, err)
+		}
+		t.Cleanup(func() { _ = os.Setenv(name, value) })
+	}
+
+	origDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("Failed to get working directory: %v", err)
+	}
+	if err := os.Chdir(dir); err != nil {
+		t.Fatalf("Failed to change to temp dir: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(origDir)
+		_ = Initialize()
+	})
+
+	if err := Initialize(); err != nil {
+		t.Fatalf("Failed to initialize config: %v", err)
+	}
+}
 
 func TestInitialize(t *testing.T) {
 	// Test that initialization doesn't error
@@ -20,11 +73,8 @@ func TestInitialize(t *testing.T) {
 }
 
 func TestDefaults(t *testing.T) {
-	// Reset viper for test isolation
-	err := Initialize()
-	if err != nil {
-		t.Fatalf("Initialize() returned error: %v", err)
-	}
+	// Read the built-in defaults, not the host repo's config (see isolateConfig).
+	isolateConfig(t)
 	
 	tests := []struct {
 		key      string
@@ -291,10 +341,8 @@ repos:
 }
 
 func TestGetMultiRepoConfig(t *testing.T) {
-	err := Initialize()
-	if err != nil {
-		t.Fatalf("Initialize() returned error: %v", err)
-	}
+	// The single-repo case below asserts a default (see isolateConfig).
+	isolateConfig(t)
 
 	// Test when repos.primary is not set (single-repo mode)
 	config := GetMultiRepoConfig()
@@ -452,10 +500,8 @@ func TestGetIdentity(t *testing.T) {
 }
 
 func TestGetExternalProjects(t *testing.T) {
-	err := Initialize()
-	if err != nil {
-		t.Fatalf("Initialize() returned error: %v", err)
-	}
+	// The empty-map case below asserts a default (see isolateConfig).
+	isolateConfig(t)
 
 	// Test default (empty map)
 	got := GetExternalProjects()
