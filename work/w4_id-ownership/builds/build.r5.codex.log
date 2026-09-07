@@ -1,0 +1,18 @@
+Done. Commits `02e0ab0fe` (fixes + report) and `a74b47d6a` (acceptance logs) on `w4_id-ownership`.
+
+**H1** — Moved isolateConfig's nine-line paragraph from above `clearBeadsEnv` to directly above `func isolateConfig` in `internal/config/config_test.go`; clearBeadsEnv keeps only its own five lines. gofmt on the file also stripped pre-existing trailing whitespace, which is why that diff is 60 lines.
+
+**H2** — `runBDBinary` (`cmd/bd/claim_test.go`) now builds the child env as `append(withoutBeadsEnv(os.Environ()), env...)`; the new helper drops every `BD_*`/`BEADS_*` entry, so the per-test slice is the only source of bd config for the spawned binary. That made the `BD_NO_DAEMON=false` pin at line ~430 redundant, so it and its four explanatory comment lines are removed — acceptance 1 ran with `BD_NO_DAEMON=true` exported and passed without it. `BEADS_NO_DAEMON=0` stays as a genuine per-test setting.
+
+**H3** — The `!sameProject` branch in `upsertIssues` (`internal/importer/importer.go:644`) now prints `Skipping <incoming>: same content as <existing> but not a rename within prefix '<configured>'` to stderr before `result.Skipped++`; with no configured prefix it names the two IDs' own prefixes instead.
+
+Acceptance:
+
+| # | Result |
+|---|---|
+| 1 | PASS, exit 0 (`r5-step1.log`) |
+| 2 | PASS, exit 0, 33 packages ok (`r5-step2.log`) |
+| 3 | Clean for the three files touched; 105 other files in those directories were already unformatted at HEAD (`r5-step3.log`) |
+| 4 | `bd version 0.34.0 (02e0ab0fe)` = new HEAD (`r5-step4.log`) |
+
+One deviation to flag: acceptance 3 as written cannot pass. `gofmt -l internal/config cmd/bd internal/importer` lists 105 files that were already unformatted before this run (confirmed via `git show HEAD:cmd/bd/main.go | gofmt -l /dev/stdin`); reformatting them is a repo-wide whitespace change outside this item, so I logged both the full list and a scoped check over the three changed files, which prints nothing. I also reverted an incidental whitespace-only gofmt of `internal/config/config.go` for the same reason. `bd-real.bak-w4` untouched; new binary installed via atomic `mv`.

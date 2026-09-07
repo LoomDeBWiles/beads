@@ -1,0 +1,21 @@
+You are a Builder agent doing a follow-up on an item already implemented in this worktree: /home/ben/worktrees/beads/w4_id-ownership (Go repo, the bd CLI). Plan: /home/ben/worktrees/beads/w4_id-ownership/work/w4_id-ownership/plan_v2.md. Prior build report: /home/ben/worktrees/beads/w4_id-ownership/work/w4_id-ownership/builds/build.md. Review with the two findings you are fixing: /home/ben/worktrees/beads/w4_id-ownership/work/w4_id-ownership/final_review_v2.md (G1 and G2). HEAD (cd69c6dda) already carries the plan; do not re-implement it.
+
+**Worker contract:** edit this repo only through the worktree path above. Commit by pathspec on the current branch. Done = commit + report, then stop. Never run wt-new / wt-merge / wt-janitor / git checkout. Export `BEADS_NO_DAEMON=1 BD_NO_DAEMON=true` for every bd invocation.
+
+## Fix 1 (G1): undo the multi-repo clause added in 3ce83d0c6
+In `internal/importer/importer.go` ~line 632 the condition is now `configuredPrefix != "" && config.GetMultiRepoConfig() == nil`. Remove the `&& config.GetMultiRepoConfig() == nil` part so the branch is selected by `configuredPrefix != ""` alone, exactly as commit 836ed2c07 had it. Reason, which the replacement comment must state plainly: `handleRename` creates the incoming id through `CreateIssue`, which validates it against the configured prefix regardless of multi-repo mode, so the configured-prefix test here is the same question that call will ask. Steering a foreign id past it (as 3ce83d0c6 did for multi-repo) reaches a create that cannot succeed and aborts the whole batch; the skip branch below is the only outcome that works, and its own comment already says so. Replace the four-line GH#686 comment with two or three lines saying that. If `config` is no longer used in this file after the change, remove the import.
+
+## Fix 2 (G2): host env still masks two file-driven tests
+In `internal/config/config_test.go`, `TestConfigFile` (~line 142) and `TestConfigPrecedence` (~line 198) write their own config file and `t.Chdir` into it, but viper ranks env above the file, so a host `BD_ACTOR=x`, `BD_JSON=true` or `BEADS_FLUSH_DEBOUNCE=99s` makes them fail. Split the env-clearing loop out of `isolateConfig` into its own helper (e.g. `clearBeadsEnv(t)`), have `isolateConfig` call it, and call it from those two tests before they `Initialize()`. No other behaviour change.
+
+## Rebuild and reinstall
+After the commit: `make build`, copy the binary beside `~/.local/libexec/bd-real` and atomically `mv` it into place, as before. Do NOT touch `~/.local/libexec/bd-real.bak-w4`.
+
+## Acceptance
+1. `go test ./internal/config/...` passes with `BD_ACTOR=hostactor BD_JSON=true BEADS_FLUSH_DEBOUNCE=99s` exported. Log: `/home/ben/worktrees/beads/w4_id-ownership/work/w4_id-ownership/builds/r4-step1.log`.
+2. `go test ./...` from the worktree root exits 0. Log: `/home/ben/worktrees/beads/w4_id-ownership/work/w4_id-ownership/builds/r4-step2.log` (summary lines).
+3. `git diff 836ed2c07 HEAD -- internal/importer/importer.go` is empty except comment text. Log: `/home/ben/worktrees/beads/w4_id-ownership/work/w4_id-ownership/builds/r4-step3.log`.
+4. `bd version` via `~/.local/bin/bd` reports the new HEAD hash. Log: `/home/ben/worktrees/beads/w4_id-ownership/work/w4_id-ownership/builds/r4-step4.log`.
+
+## Report
+Append `## Run r4: multi-repo clause reverted, env helper split, reinstall` to `/home/ben/worktrees/beads/w4_id-ownership/work/w4_id-ownership/builds/build.md` with the acceptance table and one paragraph per fix. `git add` the changed files and build.md by name and commit.

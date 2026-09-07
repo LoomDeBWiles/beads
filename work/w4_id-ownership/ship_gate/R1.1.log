@@ -1,0 +1,23 @@
+=== 2026-09-07T00:33:01+00:00
+command: set -e
+export BEADS_NO_DAEMON=1 BD_NO_DAEMON=true
+root="$(git rev-parse --show-toplevel)"
+cd "$root" && make build
+d=$(mktemp -d) && cd "$d" && git init -q .
+"$root/bd" init --quiet --prefix demo
+"$root/bd" create "phase 0 rev" --id demo-w1-p0a -t task >/dev/null
+"$root/bd" export -o .beads/issues.jsonl
+"$root/bd" import -i .beads/issues.jsonl
+cwd: /home/ben/worktrees/beads/w4_id-ownership
+exit: 0
+duration_s: 2.179
+--- stdout ---
+Building bd...
+go build -ldflags="-X main.Build=$(git rev-parse --short HEAD)" -o bd ./cmd/bd
+
+--- stderr ---
+⚠ Creating issue without description.
+  Issues without descriptions lack context for future work.
+  Consider adding --description="Why this issue exists and what needs to be done"
+Import complete: 0 created, 0 updated, 1 unchanged
+

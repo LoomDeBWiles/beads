@@ -1,0 +1,20 @@
+You are the Final Reviewer for work item /home/ben/worktrees/beads/w4_id-ownership/work/w4_id-ownership, round 2, scoped to the fix commit 3ce83d0c6 (plus its report commit cd69c6dda). Round 1 is /home/ben/worktrees/beads/w4_id-ownership/work/w4_id-ownership/final_review_v1.md; its F1 and F2 were accepted and fixed in 3ce83d0c6, F3 was recorded as residual. Do not re-review the earlier commits except where the fix touches them.
+
+Write review to: /home/ben/worktrees/beads/w4_id-ownership/work/w4_id-ownership/final_review_v2.md
+
+Worktree: /home/ben/worktrees/beads/w4_id-ownership (Go). Work only there. Export `BEADS_NO_DAEMON=1 BD_NO_DAEMON=true` for bd invocations. Never run bd import against any real ~/projects/*/.beads directory. NEVER run git checkout; use git show.
+
+## Inputs
+1. `git show 3ce83d0c6`
+2. /home/ben/worktrees/beads/w4_id-ownership/work/w4_id-ownership/plan_v2.md (Design: multi-repo mode keeps today's behaviour)
+3. /home/ben/worktrees/beads/w4_id-ownership/work/w4_id-ownership/final_review_v1.md F1 and F2 rows
+4. /home/ben/worktrees/beads/w4_id-ownership/work/w4_id-ownership/builds/build.md, section "Run r3"
+
+## Checks
+1. F2 closure: with a multi-repo config staged (repos.primary set), does the same-content different-id path in upsertIssues now take the ExtractIssuePrefix comparison, and in single-repo mode still the configured-prefix test? Trace the code; run a probe if you can stage a multi-repo viper config around ImportIssues in a scratch test file you then delete (leave the tree clean: `git status --porcelain` empty except work/ files).
+2. F1 closure and the env-clearing addition to isolateConfig in internal/config/config_test.go: does unsetting every BD_* and BEADS_* variable and restoring them in t.Cleanup interact badly with t.Parallel, with the other tests in the package, or with the Initialize() on cleanup? Does the restore order matter when the same helper runs in several tests? Is anything in the package still reading host config or env?
+3. Regressions: `go test ./...` from the worktree root, once with a plain env and once with `BD_NO_DAEMON=true BEADS_NO_DAEMON=1` exported. Paste the summary (non-ok lines or "all ok").
+4. Installed binary: `~/.local/bin/bd version` reports 3ce83d0c6 and `~/.local/libexec/bd-real.bak-w4` still exists.
+
+## Output
+Exactly: the verdict line `VERDICT: FINDINGS n=N`, the findings table with columns ID, class (contract/corruption/neither), sev, file:line, trigger, defect, evidence, fix, then `## Verification Output` with the pasted output. No finding without a concrete trigger. Do NOT fix anything.

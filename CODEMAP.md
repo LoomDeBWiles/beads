@@ -58,7 +58,7 @@ Storage layer:
 | `internal/rpc/client.go` | RPC client used by CLI commands |
 | `internal/rpc/server.go` | RPC server running inside daemon |
 | `internal/hooks/hooks.go` | Hook runner — executes `.beads/hooks/on_{create,update,close}` |
-| `internal/importer/importer.go` | JSONL import with orphan handling strategies |
+| `internal/importer/importer.go` | JSONL import with orphan handling strategies; id membership = `sqlite.ValidateIssueIDPrefix` (configured prefix + hyphen), `ExtractIssuePrefix` only labels refusals |
 | `internal/export/executor.go` | Export with retry/policy (strict, lenient) |
 | `internal/molecules/molecules.go` | Hierarchical template molecule loading |
 | `internal/compact/compactor.go` | AI-powered issue summarization (Haiku) |

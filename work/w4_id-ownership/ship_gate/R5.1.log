@@ -1,0 +1,15 @@
+=== 2026-09-07T00:33:25+00:00
+command: cd "$(git rev-parse --show-toplevel)" && go test ./internal/importer/... ./internal/utils/... ./cmd/bd/...
+cwd: /home/ben/worktrees/beads/w4_id-ownership
+exit: 0
+duration_s: 22.245
+--- stdout ---
+ok  	github.com/steveyegge/beads/internal/importer	(cached)
+ok  	github.com/steveyegge/beads/internal/utils	0.004s
+ok  	github.com/steveyegge/beads/cmd/bd	20.321s
+ok  	github.com/steveyegge/beads/cmd/bd/doctor	1.285s
+ok  	github.com/steveyegge/beads/cmd/bd/doctor/fix	0.610s
+ok  	github.com/steveyegge/beads/cmd/bd/setup	(cached)
+
+--- stderr ---
+

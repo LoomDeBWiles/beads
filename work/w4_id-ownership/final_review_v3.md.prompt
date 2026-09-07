@@ -1,0 +1,19 @@
+You are the Final Reviewer for work item /home/ben/worktrees/beads/w4_id-ownership/work/w4_id-ownership, round 3, scoped to commit 529b6dc9a (plus report commit f73377305). Round 2 is /home/ben/worktrees/beads/w4_id-ownership/work/w4_id-ownership/final_review_v3.md's predecessor /home/ben/worktrees/beads/w4_id-ownership/work/w4_id-ownership/final_review_v2.md; its G1 and G2 were accepted and fixed in 529b6dc9a. Do not re-review earlier commits except where the fix touches them.
+
+Write review to: /home/ben/worktrees/beads/w4_id-ownership/work/w4_id-ownership/final_review_v3.md
+
+Worktree: /home/ben/worktrees/beads/w4_id-ownership (Go). Work only there. Export `BEADS_NO_DAEMON=1 BD_NO_DAEMON=true` for bd invocations. Never run bd import against any real ~/projects/*/.beads directory. NEVER run git checkout; use git show. Leave the tree clean (any scratch probe file removed with trash.sh; `git status --porcelain` shows only work/ files).
+
+## Inputs
+1. `git show 529b6dc9a`
+2. /home/ben/worktrees/beads/w4_id-ownership/work/w4_id-ownership/final_review_v2.md G1 and G2 rows and their evidence
+3. /home/ben/worktrees/beads/w4_id-ownership/work/w4_id-ownership/builds/build.md, section "Run r4"
+
+## Checks
+1. G1 closure: `git diff 836ed2c07 HEAD -- internal/importer/importer.go` must be comment-only. Re-run round 2's multi-repo probe (db prefix bd, DB holds other-1, import [bd-100, other-2 same content as other-1, bd-200] with repos.primary set): the expected outcome is that the import completes with other-2 skipped and bd-100, bd-200 created. Paste the result.
+2. G2 closure: `go test ./internal/config/...` with `BD_ACTOR=hostactor BD_JSON=true BEADS_FLUSH_DEBOUNCE=99s BD_NO_DAEMON=true` exported, and once with `-shuffle=on -count=3 -race`. Does TestConfigPrecedence's own BD_JSON=true set/defer interact correctly with clearBeadsEnv's cleanup restore (LIFO order)?
+3. Regressions: `go test ./...` from the worktree root, plain env. Paste summary.
+4. Installed binary: `~/.local/bin/bd version` reports 529b6dc9a; `~/.local/libexec/bd-real.bak-w4` still exists.
+
+## Output
+Exactly: `VERDICT: FINDINGS n=N`, the findings table with columns ID, class (contract/corruption/neither), sev, file:line, trigger, defect, evidence, fix, then `## Verification Output`. No finding without a concrete trigger. Do NOT fix anything.

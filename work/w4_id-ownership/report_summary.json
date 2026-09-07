@@ -1,0 +1,37 @@
+{
+  "item": "w4_id-ownership",
+  "title": "One rule for which project an issue id belongs to",
+  "report_path": "/home/ben/worktrees/beads/w4_id-ownership/work/w4_id-ownership/work_report.md",
+  "context": ["/home/ben/worktrees/beads/w4_id-ownership/work/w4_id-ownership", "/home/ben/projects/beads/work/w4_id-ownership"],
+  "what_shipped": "bd import now decides whether an issue id belongs to the database the same way bd create does: the id starts with the configured prefix and a hyphen. The guessing heuristic that split ids at their last hyphen no longer decides membership in the importer, the rename check, --rename-on-import, or bd rename-prefix --repair, so an export holding ids like ben-w31-p0a loads back instead of refusing the whole file. The post-merge hook bd installs now prints the import error instead of discarding it. The installed bd was rebuilt from the final tree, and a shutdown flush race that could drop the last mutation was fixed along the way.",
+  "how_verified": [
+    {"check": "Ship gate R1: demo-w1-p0a round-trips through a fresh database", "result": "Import complete: 0 created, 0 updated, 1 unchanged"},
+    {"check": "Ship gate R2: foreign id other-bad1 into a demo database", "result": "prefix mismatch detected: database uses 'demo-' but found issues with prefixes: [other- (1 issues)]"},
+    {"check": "Ship gate R3: real import against copies of farmplanner, duke, investing, teaching", "result": "All four Import complete with 0 created, 0 updated; duke and teaching were refused files on the old binary"},
+    {"check": "Ship gate R4: bd's own generated post-merge hook against a refused file", "result": "Prints bd's prefix mismatch line between the two warnings, exits 0"},
+    {"check": "Ship gate R5 and go test ./...", "result": "Every package ok, also under BD_JSON=true BD_ACTOR=x BEADS_FLUSH_DEBOUNCE=99s BD_NO_DAEMON=true"},
+    {"check": "Flush race reproduced by reverting the hunk", "result": "TestAutoFlushOnExit fails without the drain; passes 30x and under -race with it"},
+    {"check": "Installed binary", "result": "bd version 0.34.0 (02e0ab0fe); bd-real.bak-w4 kept for rollback"}
+  ],
+  "numbers": [
+    {"label": "Source files changed", "value": "9"},
+    {"label": "Builder runs", "value": "5"},
+    {"label": "Review rounds", "value": "3"},
+    {"label": "Findings fixed / residual", "value": "7 / 1"},
+    {"label": "Ids across five repos that need no rename", "value": "267"}
+  ],
+  "deviations": [
+    {"planned": "Builder r2 fixes test isolation only", "actual": "Also fixed the shutdown flush race in cmd/bd/flush_manager.go", "why": "It was the real cause of the TestAutoFlushOnExit flake and a data-loss bug; reviewer reproduced and confirmed the fix"},
+    {"planned": "cp the new binary over ~/.local/libexec/bd-real", "actual": "Copy beside it, atomic mv into place", "why": "cp failed with Text file busy while a bd process ran; mv has no truncation window"},
+    {"planned": "No test changes beyond the three importer tests", "actual": "Three test files isolated from the host repo config and BD_*/BEADS_* env", "why": "The suite was red on main because w28's committed config masked built-in defaults the tests asserted"}
+  ],
+  "key_decisions": [
+    {"decision": "Reverted the accepted F2 multi-repo clause after review v2 showed it aborted whole import batches", "why": "handleRename's CreateIssue validates the configured prefix in every mode, so the configured-prefix test is the only predicate that leads to a create that can succeed"},
+    {"decision": "Fixed review v3's three low findings without a fourth review", "why": "The review cap is 3; the fixes were a comment move, a test-env filter and one stderr line, verified by the manager with tests, gofmt and diff"}
+  ],
+  "follow_up": [
+    {"issue": "The beads repo's own export has 22 rows with issue type event that bd cannot load", "suggestion": "Decide whether event becomes a type or the rows are converted, then import"},
+    {"issue": "105 Go files in the touched packages were already unformatted at HEAD", "suggestion": "One repo-wide gofmt -w commit"},
+    {"issue": "17 repos' on-disk post-merge hooks still discard the import error", "suggestion": "They pick up the fixed template when bd init next writes their hooks"}
+  ]
+}

@@ -1,0 +1,9 @@
+VERDICT: FINDINGS n=2 — written to `work/w4_id-ownership/final_review_v2.md`.
+
+**G1 (contract, med, `internal/importer/importer.go:632`)** — F2's branch selection is now correct, but the outcome is worse. In multi-repo mode the fix steers foreign renames into `handleRename`, which the comment three lines below already warns cannot work: `CreateIssue` still validates against the single configured prefix. A scratch probe importing `[bd-100, other-2, bd-200]` with `repos.primary` set aborted the whole batch with `failed to create renamed issue other-2: ... does not match configured prefix 'bd'`; single-repo on identical input gave `created=2 skipped=1`. At the parent commit the same input completed with one skip. Nothing landed on abort (no partial state — the failure precedes the batch create).
+
+**G2 (neither, low, `config_test.go:142` and `:198`)** — `TestConfigFile` and `TestConfigPrecedence` write their own config file but viper ranks env above it, so a host export still masks them: `BD_ACTOR` → `GetString(actor) = "hostactor", want "configuser"`, `BD_JSON` → `TestConfigPrecedence` fails, `BEADS_FLUSH_DEBOUNCE` → `want 15s`. The run report's claim that the remaining tests were "already isolated" holds for config discovery, not for the env half this commit added. Not triggered by `BD_NO_DAEMON`/`BEADS_NO_DAEMON`.
+
+F1 is closed. The `isolateConfig` env clearing has no bad interaction: no `t.Parallel` in the package, cleanups are per-variable with loop-local closures, and the LIFO `Initialize()`-before-restore is harmless because viper reads env lazily (no `os.Getenv` anywhere in `config.go`). Verified with `go test -race -count=3 -shuffle=on` x3, all ok.
+
+`go test ./...` exits 0 both plain and with `BD_NO_DAEMON=true BEADS_NO_DAEMON=1`. Installed binary reports `0.34.0 (3ce83d0c6)` and `bd-real.bak-w4` is intact. Probe file trashed; `git status --porcelain` shows only `work/` files. F3 remains residual, not re-raised.
