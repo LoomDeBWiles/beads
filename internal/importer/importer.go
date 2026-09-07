@@ -641,6 +641,11 @@ func upsertIssues(ctx context.Context, sqliteStore *sqlite.SQLiteStorage, issues
 					// This is NOT a rename - it's a duplicate from another project.
 					// Skip the incoming issue and keep the existing one unchanged.
 					// Calling handleRename would fail because CreateIssue validates prefix.
+					scope := fmt.Sprintf("prefix '%s'", configuredPrefix)
+					if configuredPrefix == "" {
+						scope = fmt.Sprintf("prefixes '%s' and '%s'", utils.ExtractIssuePrefix(existing.ID), utils.ExtractIssuePrefix(incoming.ID))
+					}
+					fmt.Fprintf(os.Stderr, "Skipping %s: same content as %s but not a rename within %s\n", incoming.ID, existing.ID, scope)
 					result.Skipped++
 				} else if !opts.SkipUpdate {
 					// Same prefix, different ID suffix - this is a true rename

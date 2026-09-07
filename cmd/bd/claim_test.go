@@ -285,11 +285,27 @@ func (r bdResult) String() string {
 	return fmt.Sprintf("exit=%d\nstdout:\n%s\nstderr:\n%s", r.exit, r.stdout, r.stderr)
 }
 
+// withoutBeadsEnv returns environ with every BD_* and BEADS_* entry removed, so a
+// test's own env slice is the only source of bd configuration for the child.
+func withoutBeadsEnv(environ []string) []string {
+	filtered := make([]string, 0, len(environ))
+	for _, entry := range environ {
+		name, _, _ := strings.Cut(entry, "=")
+		if strings.HasPrefix(name, "BD_") || strings.HasPrefix(name, "BEADS_") {
+			continue
+		}
+		filtered = append(filtered, entry)
+	}
+	return filtered
+}
+
 func runBDBinary(t *testing.T, bin, dir string, env []string, args ...string) bdResult {
 	t.Helper()
 	cmd := exec.Command(bin, args...)
 	cmd.Dir = dir
-	cmd.Env = append(os.Environ(), env...)
+	// Drop the caller's BD_*/BEADS_* variables: viper reads them as config keys, so a
+	// shell exporting BD_JSON or BD_NO_DAEMON would reconfigure the bd under test.
+	cmd.Env = append(withoutBeadsEnv(os.Environ()), env...)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
@@ -407,11 +423,7 @@ func TestClaimExitCodesInDaemonMode(t *testing.T) {
 	// BD_VERBOSE makes every fallback reason print. Only the auto-start timeout warns
 	// unconditionally (daemon_autostart.go:309); the connect-failed and health-failed
 	// fallbacks go through emitVerboseWarning, which main.go:739 gates on BD_VERBOSE.
-	// BD_NO_DAEMON=false neutralizes an inherited BD_NO_DAEMON=true from the
-	// caller's shell: runBDBinary passes os.Environ() through, and viper reads
-	// BD_NO_DAEMON as the no-daemon config key, which would route every claim
-	// below through direct mode and prove nothing about the RPC handler.
-	env := []string{"BEADS_NO_DAEMON=0", "BD_NO_DAEMON=false", "BD_VERBOSE=1"}
+	env := []string{"BEADS_NO_DAEMON=0", "BD_VERBOSE=1"}
 	repo := newClaimTestRepo(t, bin)
 
 	if res := runBDBinary(t, bin, repo, env, "daemon", "--start", "--local"); res.exit != 0 {
