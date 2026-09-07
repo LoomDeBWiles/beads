@@ -16,6 +16,27 @@ import (
 // before either. Restores the working directory and the config singleton on
 // cleanup. (Copy of the cmd/bd helper of the same name; package main cannot be
 // imported.)
+// clearBeadsEnv unsets every BD_* and BEADS_* variable for the duration of the
+// test, restoring them afterwards. viper binds BD_* automatically and a few
+// BEADS_* names explicitly, and env outranks the config file, so a shell that
+// exports BD_ACTOR or BD_NO_DAEMON (as agent harnesses do) would mask both the
+// built-in defaults and any config file a test writes for itself.
+func clearBeadsEnv(t *testing.T) {
+	t.Helper()
+
+	for _, entry := range os.Environ() {
+		name, _, _ := strings.Cut(entry, "=")
+		if !strings.HasPrefix(name, "BD_") && !strings.HasPrefix(name, "BEADS_") {
+			continue
+		}
+		value := os.Getenv(name)
+		if err := os.Unsetenv(name); err != nil {
+			t.Fatalf("Failed to unset %s: %v", name, err)
+		}
+		t.Cleanup(func() { _ = os.Setenv(name, value) })
+	}
+}
+
 func isolateConfig(t *testing.T) {
 	t.Helper()
 
@@ -28,20 +49,7 @@ func isolateConfig(t *testing.T) {
 		t.Fatalf("Failed to write temp config: %v", err)
 	}
 
-	// Same story for the environment: viper binds BD_* automatically and a few
-	// BEADS_* names explicitly, so a shell that exports BD_NO_DAEMON=true (as
-	// agent harnesses do) would also mask the defaults. Clear them here.
-	for _, entry := range os.Environ() {
-		name, _, _ := strings.Cut(entry, "=")
-		if !strings.HasPrefix(name, "BD_") && !strings.HasPrefix(name, "BEADS_") {
-			continue
-		}
-		value := os.Getenv(name)
-		if err := os.Unsetenv(name); err != nil {
-			t.Fatalf("Failed to unset %s: %v", name, err)
-		}
-		t.Cleanup(func() { _ = os.Setenv(name, value) })
-	}
+	clearBeadsEnv(t)
 
 	origDir, err := os.Getwd()
 	if err != nil {
@@ -169,6 +177,7 @@ flush-debounce: 15s
 
 	// Change to tmp directory so config file is discovered
 	t.Chdir(tmpDir)
+	clearBeadsEnv(t)
 
 	// Initialize viper
 	var err error
@@ -213,6 +222,7 @@ func TestConfigPrecedence(t *testing.T) {
 	
 	// Change to tmp directory
 	t.Chdir(tmpDir)
+	clearBeadsEnv(t)
 
 	// Test 1: Config file value (json: false)
 	var err error

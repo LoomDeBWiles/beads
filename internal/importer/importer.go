@@ -624,12 +624,12 @@ func upsertIssues(ctx context.Context, sqliteStore *sqlite.SQLiteStorage, issues
 				result.Unchanged++
 			} else {
 				// Same content, different ID - check if this is a rename or cross-prefix duplicate
-				// In multi-repo mode every repo brings its own prefix, so the
-				// configured prefix says nothing about membership (GH#686, same
-				// short-circuit as buildAllowedPrefixSet); compare the IDs'
-				// own prefixes instead, as we do when none is configured.
+				// The rename path below calls CreateIssue, which validates the incoming
+				// ID against the configured prefix in every mode, so membership must be
+				// tested the same way here. Steering a foreign ID into a rename would
+				// reach a create that cannot succeed and abort the whole batch.
 				var sameProject bool
-				if configuredPrefix != "" && config.GetMultiRepoConfig() == nil {
+				if configuredPrefix != "" {
 					sameProject = sqlite.ValidateIssueIDPrefix(existing.ID, configuredPrefix) == nil &&
 						sqlite.ValidateIssueIDPrefix(incoming.ID, configuredPrefix) == nil
 				} else {
