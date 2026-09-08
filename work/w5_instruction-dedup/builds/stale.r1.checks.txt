@@ -1,0 +1,73 @@
+Beads stale instruction removal evidence
+Run: stale.r1
+Candidate: /home/ben/worktrees/beads/w5_instruction-dedup
+Manifest: /home/ben/worktrees/shared-docs/w903_instruction-dedup/work/w903_instruction-dedup/approved_manifest_v9.json
+Result: PASS
+
+Manifest obligation
+- action: trash
+- destination: /home/ben/projects/tools/beads/cmd/bd/@AGENTS.md
+- candidate mapping: /home/ben/worktrees/beads/w5_instruction-dedup/cmd/bd/@AGENTS.md
+- before_sha256: bf83e48f58204bea5bee22b987a833b36deedd15253ddafd6bac106a78c1ded2
+
+Pre-removal checks
+- `sha256sum cmd/bd/@AGENTS.md`
+  PASS bf83e48f58204bea5bee22b987a833b36deedd15253ddafd6bac106a78c1ded2
+- `git show HEAD:cmd/bd/@AGENTS.md | sha256sum`
+  PASS bf83e48f58204bea5bee22b987a833b36deedd15253ddafd6bac106a78c1ded2
+- `git ls-files -s -- cmd/bd/@AGENTS.md`
+  PASS tracked regular file, mode 100644, blob df7a4af984b329ed7a5eec9482dd415f60fbcd43
+- `git diff --quiet -- <target and six mirror paths>`
+  PASS
+- `git diff --cached --quiet -- <target and six mirror paths>`
+  PASS
+
+Removal
+- Command: `UBS_NO_AUTO_UPDATE=1 trash.sh /home/ben/worktrees/beads/w5_instruction-dedup/cmd/bd/@AGENTS.md`
+- Batch: /home/ben/.local/share/agent-trash/beads/20260908T161407Z-14615
+- Saved file SHA-256: bf83e48f58204bea5bee22b987a833b36deedd15253ddafd6bac106a78c1ded2
+- Restore source: /home/ben/.local/share/agent-trash/beads/20260908T161407Z-14615/home/ben/worktrees/beads/w5_instruction-dedup/cmd/bd/@AGENTS.md
+
+Post-removal checks before commit
+- `test ! -e cmd/bd/@AGENTS.md`
+  PASS
+- `git diff --name-status -- <target and six mirror paths>`
+  PASS, only `D cmd/bd/@AGENTS.md`
+- `sha256sum CLAUDE.md AGENTS.md cmd/bd/CLAUDE.md cmd/bd/AGENTS.md docs/CLAUDE.md docs/AGENTS.md`
+  PASS root source and mirror: 1cf4e952083829fa05bc9c101fccaabd74cc4a586ab8c0cd1088759391569201
+  PASS cmd/bd source and mirror: acc3b29f13976f898628166a6c0f1a9d31c3a7390bbb78a4074d0c78771eeaf1
+  PASS docs source and mirror: d356f50cfac06a5e8b9336ce901a04fa61c6afb00c3e5ffbe591333a3b678fcd
+- `test "$(readlink <mirror>)" = CLAUDE.md` for AGENTS.md, cmd/bd/AGENTS.md, and docs/AGENTS.md
+  PASS, all three targets are the literal relative path `CLAUDE.md`
+
+Implementation commit
+- Command: `UBS_NO_AUTO_UPDATE=1 git commit -m 'Remove stale nested agent instructions' -- cmd/bd/@AGENTS.md`
+- Commit: a50bf02c9c96d48c69354368d7fc596ad1f2f0fb
+- Result: 1 file changed, 40 deletions, delete mode 100644
+
+Committed-tree checks
+- `git cat-file -e HEAD:cmd/bd/@AGENTS.md`
+  PASS, the command failed as expected because the path is absent from HEAD
+- `git ls-files --error-unmatch -- cmd/bd/@AGENTS.md`
+  PASS, the command failed as expected because the path is no longer tracked
+- `git ls-tree -r --name-only HEAD -- cmd/bd/@AGENTS.md`
+  PASS, empty output
+- `git diff HEAD^ HEAD --check`
+  PASS
+- `git diff HEAD^ HEAD --name-status`
+  PASS, only `D cmd/bd/@AGENTS.md`
+- Repeated mirror SHA-256 and relative-target checks after commit
+  PASS, all six approved files and all three symlink targets are unchanged
+
+Tests
+- Application tests were not run, as required for this stale duplicate removal.
+
+Mistakes and corrections
+- The first combined required-document read exceeded the output limit while reading plan_v17.md. The plan was reread in two bounded chunks before mutation.
+- The first combined inventory command searched existing dispatch logs and exceeded the output limit. Relevant manifest, Git, hash, link, and status checks were rerun directly before mutation.
+- Neither mistake changed repository state.
+
+Cleanup
+- No temporary files, processes, services, ports, sessions, or worktrees were created.
+- The trash batch is intentionally retained for the two-day recovery window.
+- Existing untracked dispatch and supervisor artifacts were preserved.
