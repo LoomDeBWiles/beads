@@ -1,12 +1,6 @@
-# CLAUDE.md
+# Beads architecture
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-
-## Project Overview
-
-**beads** (command: `bd`) is a git-backed issue tracker for AI-supervised coding workflows. We dogfood our own tool.
-
-**IMPORTANT**: See [AGENTS.md](../AGENTS.md) for complete workflow instructions, bd commands, and development guidelines.
+Beads stores issues in SQLite and exchanges them through JSONL. Root repo rules apply in this directory.
 
 ## Architecture Overview
 
@@ -32,7 +26,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ### Distributed Database Pattern
 
-The "magic" is in the auto-sync between SQLite and JSONL:
+SQLite and JSONL synchronize through these paths:
 
 ```
 SQLite DB (.beads/beads.db, gitignored)
@@ -67,7 +61,7 @@ Each workspace gets its own daemon process:
 - Handles auto-sync, batching, and background operations
 - Socket at `.beads/bd.sock` (or `.beads/bd.pipe` on Windows)
 - Version checking prevents mismatches after upgrades
-- Manage with `bd daemons` command (see AGENTS.md)
+- Manage with `bd daemons` command (see BD_AGENT_REFERENCE.md)
 
 ## Common Development Commands
 
@@ -98,16 +92,14 @@ golangci-lint run ./...
 
 ## Important Notes
 
-- **Always read AGENTS.md first** - it has the complete workflow
-- Use `bd --no-daemon` in git worktrees (see AGENTS.md for why)
-- Install git hooks for zero-lag sync: `./examples/git-hooks/install.sh`
-- Run `bd sync` at end of agent sessions to force immediate flush/commit/push
-- Check for duplicates proactively: `bd duplicates --auto-merge`
-- Use `--json` flags for all programmatic use
+- Use `bd --no-daemon` in git worktrees (see WORKTREES.md for why)
+- Preview duplicates with `bd duplicates --dry-run`; read `BD_ISSUE_GUIDE.md` before merging them.
 
 ## Key Files
 
-- **AGENTS.md** - Complete workflow and development guide (READ THIS!)
+- **BD_AGENT_REFERENCE.md** - Running bd: commands, MCP, configuration, daemons
+- **BD_ISSUE_GUIDE.md** - Writing issues: descriptions, types, priorities, dependencies
+- **../AGENT_INSTRUCTIONS.md** - Development and release procedures
 - **README.md** - User-facing documentation
 - **ADVANCED.md** - Advanced features (rename, merge, compaction)
 - **EXTENDING.md** - How to add custom tables to the database
@@ -116,4 +108,4 @@ golangci-lint run ./...
 
 ## When Adding Features
 
-See AGENTS.md "Adding a New Command" and "Adding Storage Features" sections for step-by-step guidance.
+See ../AGENT_INSTRUCTIONS.md "Adding a New Command" and "Adding Storage Features" sections for step-by-step guidance.

@@ -13,7 +13,7 @@
 
 ## Tech Stack
 
-- **Language**: Go 1.21+
+- **Language**: Go 1.24+
 - **Storage**: SQLite (internal/storage/sqlite/)
 - **CLI Framework**: Cobra
 - **Testing**: Go standard testing + table-driven tests
@@ -36,8 +36,8 @@
 
 ### Git Workflow
 - Always commit `.beads/issues.jsonl` with code changes
-- Run `bd sync` at end of work sessions
-- Install git hooks: `bd hooks install` (ensures DB ↔ JSONL consistency)
+- Run `bd sync --flush-only` at the end of work sessions so the JSONL matches the database
+- Never run `bd hooks install` in this checkout; its pre-commit hook is a bd shim wrapped by the host's `wt-ensure` validator
 
 ## Issue Tracking with bd
 
@@ -59,8 +59,8 @@ bd close <id> --reason "Done" --json
 bd list --status open --priority 1 --json
 bd show <id> --json
 
-# Sync (CRITICAL at end of session!)
-bd sync  # Force immediate export/commit/push
+# Flush (do this at end of session)
+bd sync --flush-only  # Export pending changes to JSONL, no git operations
 ```
 
 ### Workflow
@@ -70,7 +70,7 @@ bd sync  # Force immediate export/commit/push
 3. **Work on it**: Implement, test, document
 4. **Discover new work?** `bd create "Found bug" --description="What was found and why" -p 1 --deps discovered-from:<parent-id> --json`
 5. **Complete**: `bd close <id> --reason "Done" --json`
-6. **Sync**: `bd sync` (flushes changes to git immediately)
+6. **Flush**: `bd sync --flush-only` (exports pending changes to JSONL immediately)
 
 **IMPORTANT**: Always include `--description` when creating issues. Issues without descriptions lack context for future work.
 
@@ -114,7 +114,9 @@ Use the beads MCP server for native function calls instead of shell commands:
 - `./scripts/update-homebrew.sh <version>` - Update Homebrew formula
 
 ### Key Documentation
-- **AGENTS.md** - Comprehensive AI agent guide (detailed workflows, advanced features)
+- **CLAUDE.md** - Repo rules and entry points (`AGENTS.md` is a symlink to it)
+- **docs/BD_AGENT_REFERENCE.md** - Running bd: commands, MCP, configuration, daemons
+- **docs/BD_ISSUE_GUIDE.md** - Writing issues: descriptions, types, priorities, dependencies
 - **AGENT_INSTRUCTIONS.md** - Development procedures, testing, releases
 - **README.md** - User-facing documentation
 - **docs/CLI_REFERENCE.md** - Complete command reference
@@ -123,7 +125,7 @@ Use the beads MCP server for native function calls instead of shell commands:
 
 - ✅ Use bd for ALL task tracking
 - ✅ Always use `--json` flag for programmatic use
-- ✅ Run `bd sync` at end of sessions
+- ✅ Run `bd sync --flush-only` at end of sessions
 - ✅ Test with `BEADS_DB=/tmp/test.db`
 - ❌ Do NOT create markdown TODO lists
 - ❌ Do NOT create test issues in production DB
@@ -131,4 +133,4 @@ Use the beads MCP server for native function calls instead of shell commands:
 
 ---
 
-**For detailed workflows and advanced features, see [AGENTS.md](../AGENTS.md)**
+**For detailed workflows and advanced features, see [CLAUDE.md](../CLAUDE.md)**

@@ -25,6 +25,9 @@ Storage layer:
 
 | File | Responsibility |
 |------|----------------|
+| `context/INDEX.md` | Reading triggers for repo context, commands, architecture, development, and work history |
+| `docs/BD_AGENT_REFERENCE.md` | Running bd: commands, import configuration, daemons, MCP server, and templates |
+| `docs/BD_ISSUE_GUIDE.md` | Writing issues: descriptions, priorities, dependencies, and duplicate merging |
 | `beads.go` | Public Go API — re-exports Storage, types, constants |
 | `cmd/bd/main.go` | CLI root, daemon/direct routing, store initialization |
 | `cmd/bd/daemon.go` | Daemon start/stop, event-driven mode |

@@ -24,7 +24,7 @@ Daemon modes:
 
 ## Gotchas
 
-`daemon_event_loop.go`: Stale daemons can accumulate. `bd daemon --stop` only kills daemon for current workspace. Use `bd daemon --stop-all` to kill all system-wide, then `bd daemon --start` fresh. Symptoms: code changes don't take effect, hooks don't fire.
+`daemon_event_loop.go`: If code changes do not take effect or hooks do not fire, inspect the workspace daemon for a stale binary. Use `bd --no-daemon` in worktrees. Stop only a process this session created and recorded; another session's daemon requires the user's approval of the exact command. Do not stop all system-wide daemons.
 
 `init.go` hook initializer RETIRED (w731, 2026-07-17): the `createHooks()` auto-render helper and the daemon auto-restart block were deleted from `bd init`. `bd init` no longer plants `.beads/hooks/{on_create,on_update,on_close}` (they ran `spec render -o output`, which dirtied tracked `.beads/output/` and blocked wt-merge) and no longer restarts the daemon. The daemon still *runs* whatever hooks exist in `.beads/hooks/`; init just stops creating them. Regression test: `TestInitDoesNotCreateHooks` (`cmd/bd/init_test.go`) asserts `.beads/hooks/` absent after init. A future upstream sync that reintroduces auto-render breaks that test; keep the deletion.
 
