@@ -25,3 +25,28 @@ Pass: Y = proved by fresh evidence at revision 41c089c68 (gates 1-9, 11-13 run a
 
 ## Tests
 `go test ./... -short` passes whole-repo, `failures=0` (exit 0), `go vet ./...` clean. New coverage: `child_issues_test.go` (11 cases: stale/absent floor, closed+tombstone occupancy, loud duplicate, parent mismatch, row+edge atomicity, epic rejection, no-reissue, 8-way concurrency, LIKE escaping), `batch_floor_test.go` (batch-max floor, orphan-first seeding, hydration floor), `memory/child_issues_test.go` (3 cases), importer rename-race + orphan-no-counter tests. Rewrote `TestGetNextChildID*`/`TestGetNextChildNumber*`/migration/`ready_blocked_nodb`/RPC both-flags cases against the new API. During development, fixed two wrong expectations in my own rewritten allocate tests (nested parents are themselves children, so the scan correctly allocates above them) — no production-code change.
+
+## Round 2
+
+**Outcome: no code change. F1's premise is refuted by measured evidence — applying the prescribed fix would create the backend divergence it claims to close.**
+
+The change made: none to production code or tests. `git status --porcelain -- . ':!work'` is empty and `git diff --stat HEAD -- . ':!work'` is empty; the tree is the shipped commit 571434a8f.
+
+What F1 claims: SQLite `CreateChildIssue` accepts an explicit non-numeric child ID (`p.arm-ace` under parent `p`) because it "validates with `IsHierarchicalID`, not the numeric suffix policy", while memory rejects it via `parseChildSuffixStrict`.
+
+What the code and both backends actually do (measured 2026-09-17 on a scratch repo with a binary built from this tree):
+
+- `IsHierarchicalID` (`internal/storage/sqlite/ids.go:44-64`) IS a numeric-suffix policy: ids.go:56-60 requires every character after the last dot to be a digit. `IsHierarchicalID("repro-abc.arm-ace")` returns `(false, "")`, so `createChildOnConn` (`internal/storage/sqlite/child_issues.go:336-339`) rejects it — the review's "not the numeric suffix policy" reading contradicts the function body.
+- SQLite, live: `create --silent --id repro-abc.arm-ace --parent repro-abc` → `Error: explicit ID repro-abc.arm-ace is not a child of parent repro-abc`, rc=1.
+- Memory, live (temporary probe test, since removed): `CreateChildIssue` returns `explicit ID repro-abc.arm-ace is not a child of parent repro-abc` — the identical message.
+- Molecule children (`parent.childref`, `cmd/bd/template.go:482-501`) never traverse `CreateChildIssue`: the bonded clone path calls `tx.CreateIssue` (`template.go:597`), which accepts such IDs on both backends (SQLite measured rc=0 for `--id repro-abc.arm-ace` without `--parent`; memory `CreateIssue` has no hierarchical check at all). So molecule bonding already behaves identically on both backends.
+
+Why the prescribed fix was not applied: making memory accept `parentID + "." + <non-empty dotless non-numeric remainder>` while SQLite (unchanged, per the order) keeps rejecting it would make `bd create --id p.arm-ace --parent p` succeed under `--no-db` and fail against a database — manufacturing the exact divergence F1 complains about, and contradicting the plan's before-and-after row ("succeeds when the ID's parent is that parent": under SQLite's `IsHierarchicalID`, a non-numeric dotted ID has no parent, so "errors before any write" is the conforming behavior on both sides today).
+
+Tests: `go build ./... && go vet ./...` clean; `go test ./... -short` passes whole-repo, exit status 0, 33 packages ok, 0 FAIL — log at `work/w6_bd-parent-echo/builds/r2_test.log`.
+
+Gate blocks: none re-run as scenarios, all 13 rows carried forward at their round-1 revision (`work/w6_bd-parent-echo/builds/gate*.log`, code revision 41c089c68, binary commit 571434a8f). Reason: with zero production change no gate result could be altered; re-running the table would only re-prove an untouched tree. The gate-9 equivalent (full short suite) was run fresh above, and the gate-10 condition was re-verified read-only: `~/.local/bin/bd version --json` reports commit `571434a8f7f9f2edb6c7bdf56bb397b3d34bce8c`, equal to `git rev-parse HEAD` at the time of writing.
+
+Deploy deviation (deliberate): step 4's redeploy was skipped. Its purpose is to keep the fleet binary at HEAD after a code change; there is no code change, the binary already runs the shipped commit, and rebuilding it at a work/-only commit would overwrite `gate10.log`'s valid evidence with a behavior-identical binary. `gate10.log` is therefore left intact. After `wt-merge.sh` the binary still must be rebuilt at the merge commit per the plan.
+
+Exit status: FAILURE per the dispatch contract (the accepted finding could not be fixed because its defect does not exist) — reported, not claimed as success. Recommended manager follow-up: close F1 as contradicted, or re-scope it if backend parity for non-numeric `--id`+`--parent` (i.e. changing SQLite too) is actually desired; that would be a design change, not this bugfix.
