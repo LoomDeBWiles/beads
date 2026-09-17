@@ -1,0 +1,17 @@
+=== 2026-09-17T03:33:48+00:00
+command: D=$(ls -dt /tmp/bd-w6-gate.* | head -1); DB="$D/.beads/beads.db"
+bdx() { /tmp/bd-w6 --no-daemon --no-auto-import --no-auto-flush --db "$DB" "$@"; }
+H=$(sqlite3 "$DB" "SELECT max(CAST(substr(id, length('repro-abc.')+1) AS INTEGER)) FROM issues WHERE id LIKE 'repro-abc.%' AND id NOT LIKE 'repro-abc.%.%';")
+sqlite3 "$DB" "UPDATE child_counters SET last_child=1 WHERE parent_id='repro-abc';"
+NEW=$(bdx create --silent --parent repro-abc --title 'After forced stale floor' --description scratch)
+echo "highest=$H forced_floor=1 next=$NEW"
+if [ "$NEW" = "repro-abc.$((H+1))" ]; then echo "repaired=yes"; else echo "repaired=no"; fi
+cwd: /home/ben/worktrees/beads/w6_bd-parent-echo
+exit: 0
+duration_s: 0.119
+--- stdout ---
+highest=19 forced_floor=1 next=repro-abc.20
+repaired=yes
+
+--- stderr ---
+

@@ -1,0 +1,30 @@
+=== 2026-09-17T03:33:45+00:00
+command: set -e
+cd "$(git rev-parse --show-toplevel)"
+go build -o /tmp/bd-w6 ./cmd/bd/
+D=$(mktemp -d /tmp/bd-w6-gate.XXXXXX); cd "$D"
+git init -q .
+/tmp/bd-w6 --no-daemon --db "$D/.beads/beads.db" init --quiet --prefix repro --skip-hooks --skip-merge-driver
+bdx() { /tmp/bd-w6 --no-daemon --no-auto-import --no-auto-flush --db "$D/.beads/beads.db" "$@"; }
+bdx create --silent --id repro-abc --type epic --title 'Parent epic' --description scratch
+bdx create --silent --parent repro-abc --title 'Old child 1' --description scratch
+for n in 2 3 4; do bdx create --silent --id repro-abc.$n --title "Old child $n" --description scratch; bdx close repro-abc.$n; done
+sqlite3 "$D/.beads/beads.db" "SELECT 'floor=' || last_child FROM child_counters;"
+bdx create --silent --type bug --priority 1 --parent repro-abc --deps repro-abc --title 'New bug' --description scratch
+cwd: /home/ben/worktrees/beads/w6_bd-parent-echo
+exit: 0
+duration_s: 0.645
+--- stdout ---
+repro-abc
+repro-abc.1
+repro-abc.2
+✓ Closed repro-abc.2: Closed
+repro-abc.3
+✓ Closed repro-abc.3: Closed
+repro-abc.4
+✓ Closed repro-abc.4: Closed
+floor=4
+repro-abc.5
+
+--- stderr ---
+

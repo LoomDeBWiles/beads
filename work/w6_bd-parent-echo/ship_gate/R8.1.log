@@ -1,0 +1,20 @@
+=== 2026-09-17T03:33:46+00:00
+command: D=$(ls -dt /tmp/bd-w6-gate.* | head -1)
+DB="$D/.beads/beads.db"; C=$(mktemp /tmp/bd-w6-conc.XXXXXX)
+for i in 1 2 3 4 5 6 7 8; do
+  ( /tmp/bd-w6 --no-daemon --no-auto-import --no-auto-flush --db "$DB" create --silent --parent repro-abc --title "Concurrent $i" --description scratch >> "$C" 2>/dev/null ) &
+done
+wait
+total=$(grep -c . "$C" || true)
+uniq=$(sort -u "$C" | grep -c . || true)
+echo "created=$total distinct=$uniq"
+if [ "$total" = 8 ] && [ "$total" = "$uniq" ]; then echo "unique=yes"; else echo "unique=no"; fi
+cwd: /home/ben/worktrees/beads/w6_bd-parent-echo
+exit: 0
+duration_s: 0.233
+--- stdout ---
+created=8 distinct=8
+unique=yes
+
+--- stderr ---
+

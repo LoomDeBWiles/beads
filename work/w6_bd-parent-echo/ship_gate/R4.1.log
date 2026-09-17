@@ -1,0 +1,11 @@
+=== 2026-09-17T03:33:45+00:00
+command: D=$(ls -dt /tmp/bd-w6-gate.* | head -1)
+sqlite3 "$D/.beads/beads.db" "SELECT title || ' events=' || (SELECT count(*) FROM events WHERE issue_id='repro-abc.2' AND event_type='created') FROM issues WHERE id='repro-abc.2';"
+cwd: /home/ben/worktrees/beads/w6_bd-parent-echo
+exit: 0
+duration_s: 0.055
+--- stdout ---
+Old child 2 events=1
+
+--- stderr ---
+

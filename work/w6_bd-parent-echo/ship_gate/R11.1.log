@@ -1,0 +1,20 @@
+=== 2026-09-17T03:33:47+00:00
+command: D=$(ls -dt /tmp/bd-w6-gate.* | head -1); DB="$D/.beads/beads.db"
+bdx() { /tmp/bd-w6 --no-daemon --no-auto-import --no-auto-flush --db "$DB" "$@"; }
+H=$(sqlite3 "$DB" "SELECT max(CAST(substr(id, length('repro-abc.')+1) AS INTEGER)) FROM issues WHERE id LIKE 'repro-abc.%' AND id NOT LIKE 'repro-abc.%.%';")
+N=$((H+1))
+bdx create --silent --id "repro-abc.$N" --title 'Doomed child' --description scratch
+sqlite3 "$DB" "DELETE FROM issues WHERE id='repro-abc.$N';"
+NEW=$(bdx create --silent --parent repro-abc --title 'After hard delete' --description scratch)
+echo "highest=$H deleted=repro-abc.$N next=$NEW"
+if [ "$NEW" = "repro-abc.$N" ]; then echo "reused=yes"; else echo "reused=no"; fi
+cwd: /home/ben/worktrees/beads/w6_bd-parent-echo
+exit: 0
+duration_s: 0.182
+--- stdout ---
+repro-abc.18
+highest=17 deleted=repro-abc.18 next=repro-abc.19
+reused=no
+
+--- stderr ---
+

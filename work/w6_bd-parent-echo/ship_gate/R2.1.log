@@ -1,0 +1,11 @@
+=== 2026-09-17T03:33:45+00:00
+command: D=$(ls -dt /tmp/bd-w6-gate.* | head -1)
+sqlite3 "$D/.beads/beads.db" "SELECT title FROM issues WHERE id='repro-abc.5';"
+cwd: /home/ben/worktrees/beads/w6_bd-parent-echo
+exit: 0
+duration_s: 0.057
+--- stdout ---
+New bug
+
+--- stderr ---
+

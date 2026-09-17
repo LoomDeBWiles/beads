@@ -175,3 +175,11 @@ Reviewer: Claude Opus medium on the review lane. VERDICT FINDINGS n=2, both clas
 - Deploy ordering: the fleet binary is rebuilt at this final commit before the ship gate runs, because gate 10 compares `bd version --json`'s commit against HEAD. The merge is a fast-forward, so the SHA the gate tested is the SHA that lands on main and the binary stays correct across the merge.
 - Expected merge: `wt-merge.sh` fast-forwards w6_bd-parent-echo onto main and deletes the branch and worktree. This worktree is gone after that step; wt-merge's printed receipt is the merge record.
 - Next: commit, deploy, ship-gate run, merge, Inbox post.
+
+## 2026-09-17T05:34+02:00 — Ship gate executed at the final tree: passed
+- `ship-gate.py run --no-manifest` exited 0 against tip 5c9375f2f660617fd312b12484c58ac843d9ca3b. All 14 requirements `proved` (R1-R13 with R3a), no residues, no revisions. Core checks all green: decision validates and ships, every requirement has a check and every check ran, bead-free manifest, revisions well-formed. I executed the table myself at the final tree rather than reading the builder's r1 logs.
+- Gate 10 passed because the fleet binary was rebuilt at 5c9375f2f first; the earlier r1 evidence named 571434a8f and would have failed here.
+- wrapup.sh: all mechanical rows PASS. The one MANUAL row is satisfied — CODEMAP.md and CONTEXT.md were updated by the builder in the same commit as the file move and reviewed by me; this repo keeps durable topic knowledge in root CONTEXT.md and CODEMAP.md rather than the context/ tree, per context/WORK_INDEX.md's own header.
+- Timestamp correction for anyone reading this log: the three entries above stamped `-04:00` were written with the wrong offset. The machine is on +02:00, and all of this item's work happened between 05:00 and 05:34 +02:00 on 2026-09-17. Appending the correction rather than rewriting the entries.
+- Committing the gate result, then merging. The merge is a fast-forward, so main's tip becomes 5c9375f2f's successor; the fleet binary is rebuilt at that tip immediately after the merge and gate 10's command re-verified, because this commit moves HEAD past the SHA the binary names.
+- Next: wt-merge.sh, redeploy at the merged tip, Inbox post.

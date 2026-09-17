@@ -1,0 +1,14 @@
+=== 2026-09-17T03:33:45+00:00
+command: D=$(ls -dt /tmp/bd-w6-gate.* | head -1)
+bdx() { /tmp/bd-w6 --no-daemon --no-auto-import --no-auto-flush --db "$D/.beads/beads.db" "$@"; }
+out=$(bdx create --silent --id repro-abc.2 --title 'Should fail' --description scratch 2>&1); rc=$?
+printf 'rc=%s\n' "$rc" > "$D/dup-rc"
+echo "$out" | tail -1
+cwd: /home/ben/worktrees/beads/w6_bd-parent-echo
+exit: 0
+duration_s: 0.089
+--- stdout ---
+Error: insert issue: issue repro-abc.2 already exists: sqlite3: constraint failed: UNIQUE constraint failed: issues.id
+
+--- stderr ---
+

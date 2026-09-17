@@ -1,0 +1,12 @@
+=== 2026-09-17T03:33:46+00:00
+command: D=$(ls -dt /tmp/bd-w6-gate.* | head -1)
+bdx() { /tmp/bd-w6 --no-daemon --no-auto-import --no-auto-flush --db "$D/.beads/beads.db" "$@"; }
+bdx create --silent --id repro-abc.9 --parent repro-abc --title 'Explicit child' --description scratch
+cwd: /home/ben/worktrees/beads/w6_bd-parent-echo
+exit: 0
+duration_s: 0.104
+--- stdout ---
+repro-abc.9
+
+--- stderr ---
+

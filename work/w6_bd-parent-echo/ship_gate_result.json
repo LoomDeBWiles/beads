@@ -1,0 +1,199 @@
+{
+  "schema": 1,
+  "passed": true,
+  "tip": "5c9375f2f660617fd312b12484c58ac843d9ca3b",
+  "requirements": [
+    {
+      "id": "R1",
+      "status": "proved",
+      "checks": [
+        {
+          "command": "set -e\ncd \"$(git rev-parse --show-toplevel)\"\ngo build -o /tmp/bd-w6 ./cmd/bd/\nD=$(mktemp -d /tmp/bd-w6-gate.XXXXXX); cd \"$D\"\ngit init -q .\n/tmp/bd-w6 --no-daemon --db \"$D/.beads/beads.db\" init --quiet --prefix repro --skip-hooks --skip-merge-driver\nbdx() { /tmp/bd-w6 --no-daemon --no-auto-import --no-auto-flush --db \"$D/.beads/beads.db\" \"$@\"; }\nbdx create --silent --id repro-abc --type epic --title 'Parent epic' --description scratch\nbdx create --silent --parent repro-abc --title 'Old child 1' --description scratch\nfor n in 2 3 4; do bdx create --silent --id repro-abc.$n --title \"Old child $n\" --description scratch; bdx close repro-abc.$n; done\nsqlite3 \"$D/.beads/beads.db\" \"SELECT 'floor=' || last_child FROM child_counters;\"\nbdx create --silent --type bug --priority 1 --parent repro-abc --deps repro-abc --title 'New bug' --description scratch",
+          "exit": 0,
+          "log": "ship_gate/R1.1.log",
+          "matched": true
+        }
+      ]
+    },
+    {
+      "id": "R2",
+      "status": "proved",
+      "checks": [
+        {
+          "command": "D=$(ls -dt /tmp/bd-w6-gate.* | head -1)\nsqlite3 \"$D/.beads/beads.db\" \"SELECT title FROM issues WHERE id='repro-abc.5';\"",
+          "exit": 0,
+          "log": "ship_gate/R2.1.log",
+          "matched": true
+        }
+      ]
+    },
+    {
+      "id": "R3",
+      "status": "proved",
+      "checks": [
+        {
+          "command": "D=$(ls -dt /tmp/bd-w6-gate.* | head -1)\nbdx() { /tmp/bd-w6 --no-daemon --no-auto-import --no-auto-flush --db \"$D/.beads/beads.db\" \"$@\"; }\nout=$(bdx create --silent --id repro-abc.2 --title 'Should fail' --description scratch 2>&1); rc=$?\nprintf 'rc=%s\\n' \"$rc\" > \"$D/dup-rc\"\necho \"$out\" | tail -1",
+          "exit": 0,
+          "log": "ship_gate/R3.1.log",
+          "matched": true
+        }
+      ]
+    },
+    {
+      "id": "R3a",
+      "status": "proved",
+      "checks": [
+        {
+          "command": "D=$(ls -dt /tmp/bd-w6-gate.* | head -1)\ncat \"$D/dup-rc\"",
+          "exit": 0,
+          "log": "ship_gate/R3a.1.log",
+          "matched": true
+        }
+      ]
+    },
+    {
+      "id": "R4",
+      "status": "proved",
+      "checks": [
+        {
+          "command": "D=$(ls -dt /tmp/bd-w6-gate.* | head -1)\nsqlite3 \"$D/.beads/beads.db\" \"SELECT title || ' events=' || (SELECT count(*) FROM events WHERE issue_id='repro-abc.2' AND event_type='created') FROM issues WHERE id='repro-abc.2';\"",
+          "exit": 0,
+          "log": "ship_gate/R4.1.log",
+          "matched": true
+        }
+      ]
+    },
+    {
+      "id": "R5",
+      "status": "proved",
+      "checks": [
+        {
+          "command": "D=$(ls -dt /tmp/bd-w6-gate.* | head -1)\nbdx() { /tmp/bd-w6 --no-daemon --no-auto-import --no-auto-flush --db \"$D/.beads/beads.db\" \"$@\"; }\nbdx create --silent --id repro-abc.9 --parent repro-abc --title 'Explicit child' --description scratch",
+          "exit": 0,
+          "log": "ship_gate/R5.1.log",
+          "matched": true
+        }
+      ]
+    },
+    {
+      "id": "R6",
+      "status": "proved",
+      "checks": [
+        {
+          "command": "D=$(ls -dt /tmp/bd-w6-gate.* | head -1)\nbdx() { /tmp/bd-w6 --no-daemon --no-auto-import --no-auto-flush --db \"$D/.beads/beads.db\" \"$@\"; }\nbdx create --silent --id repro-abc.10 --parent repro-abc.1 --title 'Wrong parent' --description scratch 2>&1 | tail -1",
+          "exit": 0,
+          "log": "ship_gate/R6.1.log",
+          "matched": true
+        }
+      ]
+    },
+    {
+      "id": "R7",
+      "status": "proved",
+      "checks": [
+        {
+          "command": "set -e\nS=$(mktemp -d /tmp/bd-w6-src.XXXXXX); I=$(mktemp -d /tmp/bd-w6-imp.XXXXXX); X=$(mktemp /tmp/bd-w6-export.XXXXXX)\ncd \"$S\" && git init -q .\n/tmp/bd-w6 --no-daemon --db \"$S/.beads/beads.db\" init --quiet --prefix repro --skip-hooks --skip-merge-driver\nbds() { /tmp/bd-w6 --no-daemon --no-auto-import --no-auto-flush --db \"$S/.beads/beads.db\" \"$@\"; }\nbds create --silent --id repro-imp --type epic --title 'Import epic' --description scratch\nbds create --silent --id repro-imp.1 --title 'Imported child 1' --description scratch\nbds create --silent --id repro-imp.2 --title 'Imported child 2' --description scratch\nbds export -o \"$X\"\ncd \"$I\" && git init -q .\n/tmp/bd-w6 --no-daemon --db \"$I/.beads/beads.db\" init --quiet --prefix repro --skip-hooks --skip-merge-driver\nbdi() { /tmp/bd-w6 --no-daemon --no-auto-import --no-auto-flush --db \"$I/.beads/beads.db\" \"$@\"; }\nbdi import -i \"$X\"\nsqlite3 \"$I/.beads/beads.db\" \"SELECT 'counter_rows=' || count(*) FROM child_counters;\"\nbdi create --silent --parent repro-imp --title 'After import' --description scratch",
+          "exit": 0,
+          "log": "ship_gate/R7.1.log",
+          "matched": true
+        }
+      ]
+    },
+    {
+      "id": "R8",
+      "status": "proved",
+      "checks": [
+        {
+          "command": "D=$(ls -dt /tmp/bd-w6-gate.* | head -1)\nDB=\"$D/.beads/beads.db\"; C=$(mktemp /tmp/bd-w6-conc.XXXXXX)\nfor i in 1 2 3 4 5 6 7 8; do\n  ( /tmp/bd-w6 --no-daemon --no-auto-import --no-auto-flush --db \"$DB\" create --silent --parent repro-abc --title \"Concurrent $i\" --description scratch >> \"$C\" 2>/dev/null ) &\ndone\nwait\ntotal=$(grep -c . \"$C\" || true)\nuniq=$(sort -u \"$C\" | grep -c . || true)\necho \"created=$total distinct=$uniq\"\nif [ \"$total\" = 8 ] && [ \"$total\" = \"$uniq\" ]; then echo \"unique=yes\"; else echo \"unique=no\"; fi",
+          "exit": 0,
+          "log": "ship_gate/R8.1.log",
+          "matched": true
+        }
+      ]
+    },
+    {
+      "id": "R9",
+      "status": "proved",
+      "checks": [
+        {
+          "command": "cd \"$(git rev-parse --show-toplevel)\"\ntest -f go.mod || { echo \"failures=no-module-root\"; exit 0; }\nL=$(mktemp /tmp/bd-w6-test.XXXXXX)\ngo test ./... -short > \"$L\" 2>&1; rc=$?\ntail -5 \"$L\"\necho \"failures=$rc\"",
+          "exit": 0,
+          "log": "ship_gate/R9.1.log",
+          "matched": true
+        }
+      ]
+    },
+    {
+      "id": "R10",
+      "status": "proved",
+      "checks": [
+        {
+          "command": "cd \"$(git rev-parse --show-toplevel)\"\nBD_COMMIT=$(~/.local/bin/bd version --json | python3 -c 'import json,sys; print(json.load(sys.stdin).get(\"commit\",\"\"))')\ntest -n \"$BD_COMMIT\" && git rev-parse HEAD | grep -q \"^$BD_COMMIT\" && echo commit-match",
+          "exit": 0,
+          "log": "ship_gate/R10.1.log",
+          "matched": true
+        }
+      ]
+    },
+    {
+      "id": "R11",
+      "status": "proved",
+      "checks": [
+        {
+          "command": "D=$(ls -dt /tmp/bd-w6-gate.* | head -1); DB=\"$D/.beads/beads.db\"\nbdx() { /tmp/bd-w6 --no-daemon --no-auto-import --no-auto-flush --db \"$DB\" \"$@\"; }\nH=$(sqlite3 \"$DB\" \"SELECT max(CAST(substr(id, length('repro-abc.')+1) AS INTEGER)) FROM issues WHERE id LIKE 'repro-abc.%' AND id NOT LIKE 'repro-abc.%.%';\")\nN=$((H+1))\nbdx create --silent --id \"repro-abc.$N\" --title 'Doomed child' --description scratch\nsqlite3 \"$DB\" \"DELETE FROM issues WHERE id='repro-abc.$N';\"\nNEW=$(bdx create --silent --parent repro-abc --title 'After hard delete' --description scratch)\necho \"highest=$H deleted=repro-abc.$N next=$NEW\"\nif [ \"$NEW\" = \"repro-abc.$N\" ]; then echo \"reused=yes\"; else echo \"reused=no\"; fi",
+          "exit": 0,
+          "log": "ship_gate/R11.1.log",
+          "matched": true
+        }
+      ]
+    },
+    {
+      "id": "R12",
+      "status": "proved",
+      "checks": [
+        {
+          "command": "D=$(ls -dt /tmp/bd-w6-gate.* | head -1); DB=\"$D/.beads/beads.db\"\nbdx() { /tmp/bd-w6 --no-daemon --no-auto-import --no-auto-flush --db \"$DB\" \"$@\"; }\nbefore=$(sqlite3 \"$DB\" \"SELECT count(*) FROM issues;\")\nbdx create --silent --type epic --parent repro-abc.1 --title 'Epic under a task' --description scratch > /dev/null 2>&1; rc=$?\nafter=$(sqlite3 \"$DB\" \"SELECT count(*) FROM issues;\")\necho \"rc=$rc before=$before after=$after\"\nif [ \"$rc\" -ne 0 ] && [ \"$before\" = \"$after\" ]; then echo \"epic-rejected\"; else echo \"epic-created\"; fi",
+          "exit": 0,
+          "log": "ship_gate/R12.1.log",
+          "matched": true
+        }
+      ]
+    },
+    {
+      "id": "R13",
+      "status": "proved",
+      "checks": [
+        {
+          "command": "D=$(ls -dt /tmp/bd-w6-gate.* | head -1); DB=\"$D/.beads/beads.db\"\nbdx() { /tmp/bd-w6 --no-daemon --no-auto-import --no-auto-flush --db \"$DB\" \"$@\"; }\nH=$(sqlite3 \"$DB\" \"SELECT max(CAST(substr(id, length('repro-abc.')+1) AS INTEGER)) FROM issues WHERE id LIKE 'repro-abc.%' AND id NOT LIKE 'repro-abc.%.%';\")\nsqlite3 \"$DB\" \"UPDATE child_counters SET last_child=1 WHERE parent_id='repro-abc';\"\nNEW=$(bdx create --silent --parent repro-abc --title 'After forced stale floor' --description scratch)\necho \"highest=$H forced_floor=1 next=$NEW\"\nif [ \"$NEW\" = \"repro-abc.$((H+1))\" ]; then echo \"repaired=yes\"; else echo \"repaired=no\"; fi",
+          "exit": 0,
+          "log": "ship_gate/R13.1.log",
+          "matched": true
+        }
+      ]
+    }
+  ],
+  "core": [
+    {
+      "name": "decision",
+      "passed": true,
+      "detail": "the three-test decision at /home/ben/worktrees/beads/w6_bd-parent-echo/work/w6_bd-parent-echo/three_test_decision.json validates and ships"
+    },
+    {
+      "name": "map_total",
+      "passed": true,
+      "detail": "every requirement has a check and every check ran"
+    },
+    {
+      "name": "manifest",
+      "passed": true,
+      "detail": "the item is bead-free (--no-manifest)"
+    },
+    {
+      "name": "revisions",
+      "passed": true,
+      "detail": "every recorded revision is well-formed"
+    }
+  ],
+  "residues": [],
+  "revisions": []
+}

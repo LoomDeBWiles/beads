@@ -1,0 +1,20 @@
+=== 2026-09-17T03:33:47+00:00
+command: cd "$(git rev-parse --show-toplevel)"
+test -f go.mod || { echo "failures=no-module-root"; exit 0; }
+L=$(mktemp /tmp/bd-w6-test.XXXXXX)
+go test ./... -short > "$L" 2>&1; rc=$?
+tail -5 "$L"
+echo "failures=$rc"
+cwd: /home/ben/worktrees/beads/w6_bd-parent-echo
+exit: 0
+duration_s: 0.815
+--- stdout ---
+ok  	github.com/steveyegge/beads/internal/types	(cached)
+?   	github.com/steveyegge/beads/internal/ui	[no test files]
+ok  	github.com/steveyegge/beads/internal/util	(cached)
+ok  	github.com/steveyegge/beads/internal/utils	(cached)
+ok  	github.com/steveyegge/beads/internal/validation	(cached)
+failures=0
+
+--- stderr ---
+

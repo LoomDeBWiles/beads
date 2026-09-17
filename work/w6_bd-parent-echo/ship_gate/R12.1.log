@@ -1,0 +1,17 @@
+=== 2026-09-17T03:33:47+00:00
+command: D=$(ls -dt /tmp/bd-w6-gate.* | head -1); DB="$D/.beads/beads.db"
+bdx() { /tmp/bd-w6 --no-daemon --no-auto-import --no-auto-flush --db "$DB" "$@"; }
+before=$(sqlite3 "$DB" "SELECT count(*) FROM issues;")
+bdx create --silent --type epic --parent repro-abc.1 --title 'Epic under a task' --description scratch > /dev/null 2>&1; rc=$?
+after=$(sqlite3 "$DB" "SELECT count(*) FROM issues;")
+echo "rc=$rc before=$before after=$after"
+if [ "$rc" -ne 0 ] && [ "$before" = "$after" ]; then echo "epic-rejected"; else echo "epic-created"; fi
+cwd: /home/ben/worktrees/beads/w6_bd-parent-echo
+exit: 0
+duration_s: 0.094
+--- stdout ---
+rc=1 before=16 after=16
+epic-rejected
+
+--- stderr ---
+

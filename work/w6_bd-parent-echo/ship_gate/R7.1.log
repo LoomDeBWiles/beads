@@ -1,0 +1,29 @@
+=== 2026-09-17T03:33:46+00:00
+command: set -e
+S=$(mktemp -d /tmp/bd-w6-src.XXXXXX); I=$(mktemp -d /tmp/bd-w6-imp.XXXXXX); X=$(mktemp /tmp/bd-w6-export.XXXXXX)
+cd "$S" && git init -q .
+/tmp/bd-w6 --no-daemon --db "$S/.beads/beads.db" init --quiet --prefix repro --skip-hooks --skip-merge-driver
+bds() { /tmp/bd-w6 --no-daemon --no-auto-import --no-auto-flush --db "$S/.beads/beads.db" "$@"; }
+bds create --silent --id repro-imp --type epic --title 'Import epic' --description scratch
+bds create --silent --id repro-imp.1 --title 'Imported child 1' --description scratch
+bds create --silent --id repro-imp.2 --title 'Imported child 2' --description scratch
+bds export -o "$X"
+cd "$I" && git init -q .
+/tmp/bd-w6 --no-daemon --db "$I/.beads/beads.db" init --quiet --prefix repro --skip-hooks --skip-merge-driver
+bdi() { /tmp/bd-w6 --no-daemon --no-auto-import --no-auto-flush --db "$I/.beads/beads.db" "$@"; }
+bdi import -i "$X"
+sqlite3 "$I/.beads/beads.db" "SELECT 'counter_rows=' || count(*) FROM child_counters;"
+bdi create --silent --parent repro-imp --title 'After import' --description scratch
+cwd: /home/ben/worktrees/beads/w6_bd-parent-echo
+exit: 0
+duration_s: 0.510
+--- stdout ---
+repro-imp
+repro-imp.1
+repro-imp.2
+counter_rows=1
+repro-imp.3
+
+--- stderr ---
+Import complete: 3 created, 0 updated
+
