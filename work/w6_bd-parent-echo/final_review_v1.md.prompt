@@ -1,0 +1,36 @@
+Review work item /home/ben/worktrees/beads/w6_bd-parent-echo/work/w6_bd-parent-echo against the approved plan. Report findings only; the manager decides whether to ship and routes fixes. Never run `git checkout` or fix code.
+
+Write review to: /home/ben/worktrees/beads/w6_bd-parent-echo/work/w6_bd-parent-echo/final_review_v1.md
+
+## Inputs
+1. /home/ben/worktrees/beads/w6_bd-parent-echo/work/w6_bd-parent-echo/plan_v6.md (latest approved plan, the contract).
+2. In the worktree /home/ben/worktrees/beads/w6_bd-parent-echo, `git log --oneline main..HEAD` and `git show` each commit (41c089c68, 571434a8f).
+3. /home/ben/worktrees/beads/w6_bd-parent-echo/work/w6_bd-parent-echo/ship_gate.json, including every recorded gate revision, and the existing E2E logs referenced by the gate: /home/ben/worktrees/beads/w6_bd-parent-echo/work/w6_bd-parent-echo/builds/gate*.log and /home/ben/worktrees/beads/w6_bd-parent-echo/work/w6_bd-parent-echo/builds/build.md.
+
+## Checks
+1. Does shipped behavior deliver the plan's User Intent?
+2. Review existing E2E evidence against the plan's scenario and reviewed revision. Cite the logs and results; report missing, failed, or inapplicable evidence. Do not rerun the E2E scenario, including through other verification commands.
+3. Run the remaining Verification commands and full test suite (`go build ./... && go vet ./... && go test ./... -short` from the worktree root); paste their output.
+4. Check integration across changes: schema fields, call signatures, config keys. In particular verify the plan's named invariants hold in the shipped code: allocation is a pure read; `raiseChildFloor` is the only floor writer and carries the `WHERE EXISTS` guard; all three row writers (`insertIssue`, `insertIssues`, `upsertIssueInTx`) maintain the floor, with batches passing each parent group's MAXIMUM suffix; inserts are strict and the collision error keeps the driver text the importer matches on; the child-create path resurrects a missing parent only through `tryResurrectParentWithConn`, never the exported `TryResurrectParent`.
+5. The build report records three divergences (build.md "Divergences"): the `RenameCounterPrefix` call site is not a transaction so it was implemented as a direct UPDATE; the gate-3 error carries an `insert issue:` prefix from `wrapDBError`; and the importer rename-race test asserts the rename completes rather than both rows surviving. Judge each against the plan's intent and report any that changes shipped behavior the plan promised.
+
+## Output
+
+Use this format:
+
+```markdown
+# Final Review v1: /home/ben/worktrees/beads/w6_bd-parent-echo/work/w6_bd-parent-echo
+
+VERDICT: FINDINGS n=N
+| ID | class | sev | file:line | trigger | defect (one sentence) | evidence | fix (one sentence) |
+|---|---|---|---|---|---|---|---|
+
+## Verification Output
+{verification and full-suite output; E2E log references, recorded results, and evidence gaps}
+```
+
+- List every finding; N is the count. With none, use `FINDINGS n=0` and an empty table.
+- class: `contract` = shipped behavior misses the plan's User Intent; `corruption` = data loss, state corruption outside the item, security, or an irreversible effect; `neither` = everything else.
+- Report only defects with a concrete input or state sequence that reaches them on a shipped path.
+- sev: high = wrong behavior, data corruption, or unmet User Intent; med = correctness risk in a specific case; low = wording, docs, cosmetic.
+- Each fix is the smallest change that closes the defect; exclude guards, tests, or refactors beyond it.

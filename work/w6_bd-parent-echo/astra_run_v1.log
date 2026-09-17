@@ -1,0 +1,4 @@
+Wrote [astra_report_v1.md](/home/ben/worktrees/beads/w6_bd-parent-echo/work/w6_bd-parent-echo/astra_report_v1.md).
+
+Proved explicit `--id` caused the counter gap and reproduced silent collision success. Source and farmplanner data remain unchanged.
+rc=0

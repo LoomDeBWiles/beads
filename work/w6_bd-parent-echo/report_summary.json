@@ -1,0 +1,112 @@
+{
+  "item": "w6_bd-parent-echo",
+  "title": "Child creation that cannot collide or silently succeed",
+  "report_path": "/home/ben/worktrees/beads/w6_bd-parent-echo/work/w6_bd-parent-echo/work_report.md",
+  "context": [
+    "/home/ben/worktrees/beads/w6_bd-parent-echo/work/w6_bd-parent-echo",
+    "/home/ben/projects/beads/work/w6_bd-parent-echo"
+  ],
+  "what_shipped": "bd create --parent used to allocate child IDs from a counter that nothing but itself ever advanced, so a counter left behind by explicit-ID creates handed out numbers that already existed. The insert then swallowed the collision, and the create reported success having written nothing, attaching the parent edge and every dependency to the old issue. Allocation, insertion and the parent edge are now one storage operation inside one transaction: the issues table is the authority on which numbers are taken, the counter is demoted to a floor that only ever rises, and every insert is strict, so a create that writes no row fails with a nonzero exit instead of printing an existing ID.",
+  "how_verified": [
+    {
+      "check": "The incident reproduced: a parent whose counter lags behind its children, then bd create --parent (ship gate 1)",
+      "result": "repro-abc.5, the next free number, where the old binary printed an existing closed issue"
+    },
+    {
+      "check": "The create actually wrote the issue it reported (ship gate 2)",
+      "result": "title reads back as 'New bug'"
+    },
+    {
+      "check": "A duplicate explicit ID fails loudly and writes nothing (ship gates 3, 3a, 4)",
+      "result": "'issue repro-abc.2 already exists: ... UNIQUE constraint failed: issues.id', rc=1, old issue still 'Old child 2' with events=1"
+    },
+    {
+      "check": "The farmplanner shape: a floor forced below its children still allocates above them (ship gate 13)",
+      "result": "highest=19, forced floor=1, next=repro-abc.20, repaired=yes"
+    },
+    {
+      "check": "Eight concurrent creates under one parent (ship gate 8)",
+      "result": "created=8 distinct=8, unique=yes"
+    },
+    {
+      "check": "A number is not reissued after its issue's row is gone outright (ship gate 11)",
+      "result": "deleted repro-abc.18, next was repro-abc.19, reused=no"
+    },
+    {
+      "check": "Whole test suite, short mode, read by exit status (ship gate 9)",
+      "result": "33 packages ok, failures=0"
+    },
+    {
+      "check": "The fleet binary runs the shipped code (ship gate 10)",
+      "result": "commit-match against the merged HEAD"
+    }
+  ],
+  "numbers": [
+    {
+      "label": "Ship gate requirements proved",
+      "value": "14 of 14"
+    },
+    {
+      "label": "Production files changed",
+      "value": "8 (plus 8 test files, 2 docs)"
+    },
+    {
+      "label": "Plan review rounds before the gate",
+      "value": "4, 32 findings, all accepted"
+    },
+    {
+      "label": "Final review findings",
+      "value": "2, both residual"
+    },
+    {
+      "label": "Builder rounds",
+      "value": "2"
+    }
+  ],
+  "deviations": [
+    {
+      "planned": "RenameCounterPrefix would be implemented inside the transaction cmd/bd/rename_prefix.go already calls it from",
+      "actual": "Implemented as a direct UPDATE on the store, mirroring its sibling RenameDependencyPrefix",
+      "why": "The call site issues plain sequential store calls, not a transaction. Verified independently: UpdateIssueID renames issue rows with foreign keys OFF, so the floor rows survive un-cascaded and the later UPDATE re-points them at IDs that exist."
+    },
+    {
+      "planned": "The collision message would read exactly 'issue <id> already exists: UNIQUE constraint failed: issues.id'",
+      "actual": "It carries an 'insert issue:' prefix from the repo's shared wrapDBError",
+      "why": "Both contractual halves still hold: the ID is named for the human, and the driver's text survives for the importer's rename recovery, which matches on it by substring."
+    },
+    {
+      "planned": "The importer rename-race test would assert both rows survive",
+      "actual": "It asserts the rename completes with no silent loss: the import succeeds, the target carries the renamed content, the old ID is gone",
+      "why": "Rename deletes the old ID by design, so a literal 'both rows survive' is unachievable and would contradict rename semantics."
+    },
+    {
+      "planned": "Final review finding F1 would be fixed in builder round 2",
+      "actual": "No code change; the finding was refuted and closed",
+      "why": "IsHierarchicalID is itself a numeric-suffix policy, so both backends already reject a non-numeric explicit child ID with the same message. Applying the prescribed fix would have created the divergence the finding alleged."
+    }
+  ],
+  "key_decisions": [
+    {
+      "decision": "Rejected the final reviewer's proposal to narrow floor seeding (F2) and recorded it as a residual instead",
+      "why": "Dropping the per-row seed would reopen the orphan-first ordering hole an earlier review round closed for single-row writers, and scoping the batch query changes nothing because LIKE does not use the primary-key index. Measured: a 2000-fold table growth costs about 9ms per create against 58ms of process startup."
+    },
+    {
+      "decision": "Took the builder's side against my own accepted finding",
+      "why": "The builder cited the function body; I had accepted the finding after checking the two call sites without opening the shared function they both depend on. Verifying it settled the question in the builder's favour."
+    },
+    {
+      "decision": "Dispatched on the opencode lane despite the usage gate returning state=unknown",
+      "why": "The fleet board meters no opencode lane at all, and the Go route is a flat subscription, so there is no window to exhaust. Recorded rather than treated as a sensor failure."
+    }
+  ],
+  "follow_up": [
+    {
+      "issue": "A JSONL import renaming an issue to a target that already exists with different content aborts with the old row already deleted. The loss predates this change; strict inserts make it loud instead of silent.",
+      "suggestion": "Make the importer's rename one transaction, or extend its recovery branch to restore the old row when the content hashes differ."
+    },
+    {
+      "issue": "The farmplanner database still carries four stray dependency edges and two false created events from the original incident.",
+      "suggestion": "Already handed to that item's manager on 2026-09-09; both affected issues are closed, so nothing is blocked."
+    }
+  ]
+}

@@ -1,0 +1,112 @@
+{
+  "schema": 2,
+  "item_id": "beads__w6__bd-parent-echo",
+  "repo": "beads",
+  "work_id": "w6",
+  "slug": "bd-parent-echo",
+  "dates": {
+    "first": "2026-09-17",
+    "last": "2026-09-17",
+    "source": "commits"
+  },
+  "route": "free",
+  "orchestrator_failed": null,
+  "route_evidence": "found direct builder execution artifacts: builds/build.md",
+  "task_type": "code",
+  "ext_shares": {
+    "infra": 0.0,
+    "prompt_skill": 0.0,
+    "context_docs": 0.0,
+    "config": 0.0,
+    "code": 0.9047619047619048,
+    "docs": 0.09523809523809523
+  },
+  "plan_reviews": [
+    {
+      "round": "v1",
+      "model": "opus-5",
+      "model_confidence": "dispatch",
+      "raised": 10,
+      "accepted": 10,
+      "rejected": 0,
+      "effort": "medium"
+    },
+    {
+      "round": "v2",
+      "model": "opus-5",
+      "model_confidence": "dispatch",
+      "raised": 7,
+      "accepted": 7,
+      "rejected": 0,
+      "effort": "medium"
+    },
+    {
+      "round": "v3",
+      "model": "opus-5",
+      "model_confidence": "dispatch",
+      "raised": 7,
+      "accepted": 7,
+      "rejected": 0,
+      "effort": "medium"
+    }
+  ],
+  "final_reviews": [
+    {
+      "version": "v1",
+      "model": "opus-5",
+      "model_confidence": "transcript",
+      "raised": 2,
+      "accepted": null,
+      "rejected": null,
+      "repaired": true
+    }
+  ],
+  "fix_cycles": 1,
+  "advisor_consults": {
+    "count": 0,
+    "by_trigger": {},
+    "adopted": {}
+  },
+  "builder_dispatches": [
+    {
+      "bead": "build",
+      "run": "r1",
+      "model": "muse-spark-1.3",
+      "effort": null,
+      "model_confidence": "dispatch",
+      "outcome": "completed",
+      "review_verdict": "unknown",
+      "review_artifact": "unknown",
+      "provider": "opencode-go"
+    },
+    {
+      "bead": "build",
+      "run": "r2",
+      "model": "muse-spark-1.3",
+      "effort": null,
+      "model_confidence": "dispatch",
+      "outcome": "completed",
+      "review_verdict": "unknown",
+      "review_artifact": "unknown",
+      "provider": "opencode-go"
+    }
+  ],
+  "bug_beads": null,
+  "run_burn": {
+    "runs": 0,
+    "designed": 0,
+    "retry": 0,
+    "same_class_tail": 0,
+    "reviews_with_outcome": 0,
+    "zero_yield_reviews": 0
+  },
+  "triage_dispositions": null,
+  "failure_causes": [],
+  "parse": {
+    "dispositions": "enriched",
+    "sources": [
+      "manager_log.md"
+    ],
+    "notes": []
+  }
+}

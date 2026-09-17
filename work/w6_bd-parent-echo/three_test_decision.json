@@ -1,0 +1,19 @@
+{
+  "findings": [
+    {
+      "id": "F1",
+      "class": "neither",
+      "tests": {"contract": "intact", "blast_radius": "contained", "trajectory": "clear"},
+      "disposition": "residual",
+      "rationale": "Refuted, not deferred. The finding claimed the SQLite path validates an explicit child ID with IsHierarchicalID rather than the numeric-suffix policy, so that p.arm-ace would be accepted there and rejected by the memory backend. IsHierarchicalID (internal/storage/sqlite/ids.go:44-64) requires every character after the last dot to be a digit and returns (false, \"\") otherwise, so createChildOnConn rejects that ID with the same message MemoryStorage.CreateChildIssue gives; the backends already agree and the grandchild case agrees too. Verified in the function body by the manager after builder r2 contested it. Nothing to fix, no behavior the plan promised is affected, and applying the proposed fix would have created the divergence the finding alleged."
+    },
+    {
+      "id": "F2",
+      "class": "neither",
+      "tests": {"contract": "intact", "blast_radius": "contained", "trajectory": "clear"},
+      "disposition": "residual",
+      "rationale": "Accurate as description, rejected as a fix. insertIssue seeds a floor per row where the plan specified per batch, and maintainFloorsForIDs scans all issue IDs rather than the written IDs' children. Behavior is correct either way because floors only ever rise. Dropping the per-row seed would reopen the orphan-first ordering hole that review round R4 closed for single-row writers (the importer's per-issue create and resurrection both write through insertIssue), and scoping the batch query changes nothing real because the plan records that case-insensitive LIKE does not use the primary-key index. Measured cost: 30 sequential bd create --parent runs average 58ms each on a 1-issue database and 67ms each on a 2001-issue database, so a 2000-fold table growth costs about 9ms per create against 58ms of process startup, which is the cost class the plan measured and accepted."
+    }
+  ],
+  "outcome": "ship"
+}

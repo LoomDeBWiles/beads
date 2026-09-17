@@ -1,0 +1,15 @@
+{
+  "attempt": "attempt-12821fa5a7a546cbb45b0d5cd717bc5d",
+  "child_identity": "/home/ben/worktrees/beads/w6_bd-parent-echo/work/w6_bd-parent-echo/builds/build.r1.opencode-ran.opencode-attempts/attempt-12821fa5a7a546cbb45b0d5cd717bc5d/child.json",
+  "created_ns": 1789614110239400080,
+  "cwd": "/home/ben/worktrees/beads/w6_bd-parent-echo",
+  "effort": "xhigh",
+  "kind": "opencode_wrapper_launch",
+  "model": "muse-spark-1.3-contributor",
+  "provider": "opencode-go",
+  "receipt": "/home/ben/worktrees/beads/w6_bd-parent-echo/work/w6_bd-parent-echo/builds/build.r1.opencode-ran.opencode-attempts/attempt-12821fa5a7a546cbb45b0d5cd717bc5d/receipt.json",
+  "schema": 1,
+  "wrapper_id": "wrapper-d61f666b1e93429da43fdd5c2686ed16",
+  "wrapper_pid": 3258853,
+  "wrapper_pid_start": 2445551654
+}
