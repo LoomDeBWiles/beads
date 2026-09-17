@@ -52,6 +52,7 @@ Storage layer:
 | `cmd/bd/hooks.go` | `bd hooks install` — git hook management |
 | `internal/storage/storage.go` | `Storage` interface — all backend operations |
 | `internal/storage/sqlite/sqlite.go` | SQLite backend entry point |
+| `internal/storage/sqlite/child_issues.go` | Hierarchical child creation: `CreateChildIssue` (allocation + insert + parent edge in one transaction), floor allocation/scan, guarded monotonic floor writes |
 | `internal/storage/sqlite/store.go` | SQLiteStorage struct, constructor |
 | `internal/storage/sqlite/migrations.go` | Schema migration runner (27 migrations); `schema_migrations` ledger skips ones already applied, so each runs once per store |
 | `internal/storage/sqlite/migrations/db.go` | The `DB` interface every migration takes, so the whole pass runs on one connection |

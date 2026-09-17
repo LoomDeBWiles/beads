@@ -114,14 +114,8 @@ func (s *Server) handleCreate(req *Request) Response {
 		}
 	}
 
-	// Check for conflicting flags
-	if createArgs.ID != "" && createArgs.Parent != "" {
-		return Response{
-			Success: false,
-			Error:   "cannot specify both ID and Parent",
-		}
-	}
-
+	// An explicit ID naming a child of the named parent is accepted; a
+	// mismatched parent fails in CreateChildIssue, before any write.
 	// Warn if creating an issue without a description (unless it's a test issue)
 	if createArgs.Description == "" && !strings.Contains(strings.ToLower(createArgs.Title), "test") {
 		// Log warning to daemon logs (stderr goes to daemon logs)
@@ -137,18 +131,9 @@ func (s *Server) handleCreate(req *Request) Response {
 	}
 	ctx := s.reqCtx(req)
 
-	// If parent is specified, generate child ID
+	// The child path allocates, inserts and attaches the parent edge in one
+	// transaction; the plain path only inserts.
 	issueID := createArgs.ID
-	if createArgs.Parent != "" {
-		childID, err := store.GetNextChildID(ctx, createArgs.Parent)
-		if err != nil {
-			return Response{
-				Success: false,
-				Error:   fmt.Sprintf("failed to generate child ID: %v", err),
-			}
-		}
-		issueID = childID
-	}
 
 	var design, acceptance, assignee, externalRef *string
 	if createArgs.Design != "" {
@@ -217,25 +202,17 @@ func (s *Server) handleCreate(req *Request) Response {
 		// If error getting parent or parent has no source_repo, continue with default
 	}
 	
-	if err := store.CreateIssue(ctx, issue, s.reqActor(req)); err != nil {
+	if createArgs.Parent != "" {
+		if err := store.CreateChildIssue(ctx, createArgs.Parent, issue, s.reqActor(req)); err != nil {
+			return Response{
+				Success: false,
+				Error:   fmt.Sprintf("failed to create child issue: %v", err),
+			}
+		}
+	} else if err := store.CreateIssue(ctx, issue, s.reqActor(req)); err != nil {
 		return Response{
 			Success: false,
 			Error:   fmt.Sprintf("failed to create issue: %v", err),
-		}
-	}
-
-	// If parent was specified, add parent-child dependency
-	if createArgs.Parent != "" {
-		dep := &types.Dependency{
-			IssueID:     issue.ID,
-			DependsOnID: createArgs.Parent,
-			Type:        types.DepParentChild,
-		}
-		if err := store.AddDependency(ctx, dep, s.reqActor(req)); err != nil {
-			return Response{
-				Success: false,
-				Error:   fmt.Sprintf("failed to add parent-child dependency %s -> %s: %v", issue.ID, createArgs.Parent, err),
-			}
 		}
 	}
 

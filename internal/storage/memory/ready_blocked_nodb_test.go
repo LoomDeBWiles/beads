@@ -23,20 +23,20 @@ func TestLoadFromIssues_InitializesChildCounters(t *testing.T) {
 		t.Fatalf("LoadFromIssues failed: %v", err)
 	}
 
-	next, err := store.GetNextChildID(ctx, "bd-parent")
-	if err != nil {
-		t.Fatalf("GetNextChildID failed: %v", err)
+	child := &types.Issue{Title: "Child 4", Status: types.StatusOpen, Priority: 1, IssueType: types.TypeTask}
+	if err := store.CreateChildIssue(ctx, "bd-parent", child, "test"); err != nil {
+		t.Fatalf("CreateChildIssue failed: %v", err)
 	}
-	if next != "bd-parent.4" {
-		t.Fatalf("GetNextChildID = %q, want %q", next, "bd-parent.4")
+	if child.ID != "bd-parent.4" {
+		t.Fatalf("CreateChildIssue ID = %q, want %q", child.ID, "bd-parent.4")
 	}
 
-	nextNested, err := store.GetNextChildID(ctx, "bd-parent.1")
-	if err != nil {
-		t.Fatalf("GetNextChildID (nested) failed: %v", err)
+	nested := &types.Issue{Title: "Nested Child 3", Status: types.StatusOpen, Priority: 1, IssueType: types.TypeTask}
+	if err := store.CreateChildIssue(ctx, "bd-parent.1", nested, "test"); err != nil {
+		t.Fatalf("CreateChildIssue (nested) failed: %v", err)
 	}
-	if nextNested != "bd-parent.1.3" {
-		t.Fatalf("GetNextChildID (nested) = %q, want %q", nextNested, "bd-parent.1.3")
+	if nested.ID != "bd-parent.1.3" {
+		t.Fatalf("CreateChildIssue (nested) ID = %q, want %q", nested.ID, "bd-parent.1.3")
 	}
 }
 

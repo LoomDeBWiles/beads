@@ -630,22 +630,62 @@ func TestCreate_WithParentAndIDConflict(t *testing.T) {
 		t.Fatalf("Failed to unmarshal parent: %v", err)
 	}
 
-	// Try to create with both ID and Parent (should fail)
-	conflictArgs := &CreateArgs{
-		ID:        "bd-custom",
+	// Naming an ID together with its parent succeeds when the ID is a child
+	// of that parent.
+	matchArgs := &CreateArgs{
+		ID:        parent.ID + ".7",
 		Parent:    parent.ID,
+		Title:     "Explicit Child",
+		IssueType: "task",
+		Priority:  1,
+	}
+
+	matchResp, err := client.Create(matchArgs)
+	if err != nil {
+		t.Fatalf("Create with matching ID and Parent failed: %v", err)
+	}
+	if !matchResp.Success {
+		t.Fatalf("Expected success when ID names a child of Parent, got: %s", matchResp.Error)
+	}
+	var matchChild types.Issue
+	if err := json.Unmarshal(matchResp.Data, &matchChild); err != nil {
+		t.Fatalf("Failed to unmarshal explicit child: %v", err)
+	}
+	if matchChild.ID != parent.ID+".7" {
+		t.Errorf("Expected child ID %s, got %s", parent.ID+".7", matchChild.ID)
+	}
+
+	// A second parent to mismatch against.
+	otherArgs := &CreateArgs{
+		Title:     "Other Epic",
+		IssueType: "epic",
+		Priority:  1,
+	}
+	otherResp, err := client.Create(otherArgs)
+	if err != nil {
+		t.Fatalf("Create other parent failed: %v", err)
+	}
+	var other types.Issue
+	if err := json.Unmarshal(otherResp.Data, &other); err != nil {
+		t.Fatalf("Failed to unmarshal other parent: %v", err)
+	}
+
+	// Naming an ID whose parent is a different issue fails before any write.
+	mismatchArgs := &CreateArgs{
+		ID:        parent.ID + ".8",
+		Parent:    other.ID,
 		Title:     "Should Fail",
 		IssueType: "task",
 		Priority:  1,
 	}
 
-	resp, err := client.Create(conflictArgs)
+	resp, err := client.Create(mismatchArgs)
 	if err == nil && resp.Success {
-		t.Fatal("Expected error when both ID and Parent are specified")
+		t.Fatal("Expected error when ID is not a child of Parent")
 	}
 
-	if !strings.Contains(resp.Error, "cannot specify both ID and Parent") {
-		t.Errorf("Expected conflict error message, got: %s", resp.Error)
+	if !strings.Contains(resp.Error, "is not a child of") {
+		t.Errorf("Expected parent-mismatch error message, got: %s", resp.Error)
 	}
 }
 

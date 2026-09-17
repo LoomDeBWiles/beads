@@ -4,23 +4,19 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"strings"
 
 	"github.com/steveyegge/beads/internal/types"
 )
 
-// isUniqueConstraintError checks if error is a UNIQUE constraint violation
-// Used to detect and handle duplicate IDs in JSONL imports gracefully
-func isUniqueConstraintError(err error) bool {
-	if err == nil {
-		return false
-	}
-	errMsg := err.Error()
-	return strings.Contains(errMsg, "UNIQUE constraint failed") ||
-		strings.Contains(errMsg, "constraint failed: UNIQUE")
-}
-
-// insertIssue inserts a single issue into the database
+// insertIssue inserts a single issue into the database.
+//
+// The insert is strict: a plain INSERT lets a UNIQUE violation abort here,
+// and a collision returns an error naming the ID instead of reporting success
+// without writing a row. Callers must not swallow that error: the importer's
+// rename recovery recognises it through IsUniqueConstraintError, so the
+// driver's text survives via %w. A successful insert of a hierarchical ID
+// raises its parent's floor, and any ID seeds its own floor from children
+// already present (orphan-first ordering).
 func insertIssue(ctx context.Context, conn *sql.Conn, issue *types.Issue) error {
 	sourceRepo := issue.SourceRepo
 	if sourceRepo == "" {
@@ -41,7 +37,7 @@ func insertIssue(ctx context.Context, conn *sql.Conn, issue *types.Issue) error 
 	}
 
 	_, err := conn.ExecContext(ctx, `
-		INSERT OR IGNORE INTO issues (
+		INSERT INTO issues (
 			id, content_hash, title, description, design, acceptance_criteria, notes,
 			status, priority, issue_type, assignee, estimated_minutes,
 			created_at, updated_at, closed_at, external_ref, source_repo, close_reason,
@@ -58,20 +54,31 @@ func insertIssue(ctx context.Context, conn *sql.Conn, issue *types.Issue) error 
 		issue.Sender, wisp, pinned, isTemplate, issue.ClaimExpiresAt,
 	)
 	if err != nil {
-		// INSERT OR IGNORE should handle duplicates, but driver may still return error
-		// Explicitly ignore UNIQUE constraint errors (expected for duplicate IDs in JSONL)
-		if !isUniqueConstraintError(err) {
-			return fmt.Errorf("failed to insert issue: %w", err)
+		if IsUniqueConstraintError(err) {
+			return fmt.Errorf("issue %s already exists: %w", issue.ID, err)
 		}
-		// Duplicate ID detected and ignored (INSERT OR IGNORE succeeded)
+		return fmt.Errorf("failed to insert issue: %w", err)
+	}
+	if isHierarchical, parent := IsHierarchicalID(issue.ID); isHierarchical {
+		if n, ok := parseChildSuffix(parent, issue.ID); ok {
+			if err := raiseChildFloor(ctx, conn, parent, n); err != nil {
+				return err
+			}
+		}
+	}
+	if err := seedChildFloor(ctx, conn, issue.ID); err != nil {
+		return err
 	}
 	return nil
 }
 
-// insertIssues bulk inserts multiple issues using a prepared statement
+// insertIssues bulk inserts multiple issues using a prepared statement.
+// Like insertIssue it is strict: a collision on any row aborts the batch with
+// an error naming the ID. After the rows land, floors are maintained for the
+// batch: each parent to its group's maximum suffix, plus orphan-first seeding.
 func insertIssues(ctx context.Context, conn *sql.Conn, issues []*types.Issue) error {
 	stmt, err := conn.PrepareContext(ctx, `
-		INSERT OR IGNORE INTO issues (
+		INSERT INTO issues (
 			id, content_hash, title, description, design, acceptance_criteria, notes,
 			status, priority, issue_type, assignee, estimated_minutes,
 			created_at, updated_at, closed_at, external_ref, source_repo, close_reason,
@@ -113,13 +120,18 @@ func insertIssues(ctx context.Context, conn *sql.Conn, issues []*types.Issue) er
 			issue.Sender, wisp, pinned, isTemplate, issue.ClaimExpiresAt,
 		)
 		if err != nil {
-			// INSERT OR IGNORE should handle duplicates, but driver may still return error
-			// Explicitly ignore UNIQUE constraint errors (expected for duplicate IDs in JSONL)
-			if !isUniqueConstraintError(err) {
-				return fmt.Errorf("failed to insert issue %s: %w", issue.ID, err)
+			if IsUniqueConstraintError(err) {
+				return fmt.Errorf("issue %s already exists: %w", issue.ID, err)
 			}
-			// Duplicate ID detected and ignored (INSERT OR IGNORE succeeded)
+			return fmt.Errorf("failed to insert issue %s: %w", issue.ID, err)
 		}
+	}
+	ids := make([]string, 0, len(issues))
+	for _, issue := range issues {
+		ids = append(ids, issue.ID)
+	}
+	if err := maintainFloorsForIDs(ctx, conn, ids); err != nil {
+		return err
 	}
 	return nil
 }

@@ -161,7 +161,11 @@ type Storage interface {
 	SetJSONLFileHash(ctx context.Context, fileHash string) error
 
 	// ID Generation
-	GetNextChildID(ctx context.Context, parentID string) (string, error)
+	//
+	// Child issues are created through CreateChildIssue only: allocation and
+	// insertion share one transaction, so no caller can hold a child number
+	// without inserting its row.
+	CreateChildIssue(ctx context.Context, parentID string, issue *types.Issue, actor string) error
 
 	// Config
 	SetConfig(ctx context.Context, key, value string) error

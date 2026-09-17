@@ -989,11 +989,18 @@ func (s *SQLiteStorage) RenameDependencyPrefix(ctx context.Context, oldPrefix, n
 	return nil
 }
 
-// RenameCounterPrefix is a no-op with hash-based IDs (bd-8e05)
-// Kept for backward compatibility with rename-prefix command
+// RenameCounterPrefix rewrites every child_counters.parent_id carrying the old
+// prefix to the new one. A rename otherwise strands each floor under the old
+// parent ID, and the allocation scan cannot rebuild one whose highest child
+// was purged, which is exactly the number the floor exists to remember.
 func (s *SQLiteStorage) RenameCounterPrefix(ctx context.Context, oldPrefix, newPrefix string) error {
-	// Hash-based IDs don't use counters, so nothing to update
-	return nil
+	pattern := escapeLikeLiteral(oldPrefix) + "-%"
+	_, err := s.db.ExecContext(ctx, `
+		UPDATE child_counters
+		SET parent_id = ? || substr(parent_id, length(?) + 1)
+		WHERE parent_id LIKE ? ESCAPE '\'
+	`, newPrefix, oldPrefix, pattern)
+	return wrapDBError("rename counter prefix", err)
 }
 
 // ResetCounter is a no-op with hash-based IDs (bd-8e05)

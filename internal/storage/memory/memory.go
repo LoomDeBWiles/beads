@@ -8,6 +8,7 @@ import (
 	"database/sql"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -1524,30 +1525,138 @@ func (m *MemoryStorage) ClearDirtyIssuesByID(ctx context.Context, issueIDs []str
 	return nil
 }
 
-// ID Generation
-func (m *MemoryStorage) GetNextChildID(ctx context.Context, parentID string) (string, error) {
+// parseChildSuffixStrict reports the numeric child number taken by id under
+// parentID: all-digit suffix with no further dot, parsing as a non-negative
+// int. Anything else (including numbers wider than the platform int) is not a
+// number this allocator could produce.
+func parseChildSuffixStrict(parentID, id string) (int, bool) {
+	prefix := parentID + "."
+	if !strings.HasPrefix(id, prefix) {
+		return 0, false
+	}
+	suffix := id[len(prefix):]
+	if suffix == "" || strings.Contains(suffix, ".") {
+		return 0, false
+	}
+	for i := 0; i < len(suffix); i++ {
+		if suffix[i] < '0' || suffix[i] > '9' {
+			return 0, false
+		}
+	}
+	n, err := strconv.Atoi(suffix)
+	if err != nil {
+		return 0, false
+	}
+	return n, true
+}
+
+// highestExistingChild returns the highest numeric child number taken under
+// parentID, counting every stored issue regardless of status.
+func (m *MemoryStorage) highestExistingChild(parentID string) int {
+	maxNum := 0
+	found := false
+	for id := range m.issues {
+		n, ok := parseChildSuffixStrict(parentID, id)
+		if !ok {
+			continue
+		}
+		if !found || n > maxNum {
+			maxNum, found = n, true
+		}
+	}
+	if !found {
+		return 0
+	}
+	return maxNum
+}
+
+// CreateChildIssue creates issue as a child of parentID under one lock:
+// allocation, insert, event, parent-child edge and counter raise happen
+// together. bd --no-db runs on this implementation, so this is a production
+// create path. A duplicate ID fails instead of reporting success without
+// writing a row.
+func (m *MemoryStorage) CreateChildIssue(ctx context.Context, parentID string, issue *types.Issue, actor string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	// Validate parent exists
-	if _, exists := m.issues[parentID]; !exists {
-		return "", fmt.Errorf("parent issue %s does not exist", parentID)
+	parent, exists := m.issues[parentID]
+	if !exists {
+		return fmt.Errorf("parent issue %s does not exist", parentID)
 	}
 
-	// Calculate depth (count dots)
 	depth := strings.Count(parentID, ".")
 	if depth >= 3 {
-		return "", fmt.Errorf("maximum hierarchy depth (3) exceeded for parent %s", parentID)
+		return fmt.Errorf("maximum hierarchy depth (3) exceeded for parent %s", parentID)
 	}
 
-	// Get or initialize counter for this parent
-	counter := m.counters[parentID]
-	counter++
-	m.counters[parentID] = counter
+	if err := issue.Validate(); err != nil {
+		return fmt.Errorf("validation failed: %w", err)
+	}
 
-	// Format as parentID.counter
-	childID := fmt.Sprintf("%s.%d", parentID, counter)
-	return childID, nil
+	now := time.Now()
+	issue.CreatedAt = now
+	issue.UpdatedAt = now
+
+	if issue.ID == "" {
+		highest := m.highestExistingChild(parentID)
+		if counter := m.counters[parentID]; counter > highest {
+			highest = counter
+		}
+		if highest == int(^uint(0)>>1) {
+			return fmt.Errorf("child number space exhausted for parent %s", parentID)
+		}
+		issue.ID = fmt.Sprintf("%s.%d", parentID, highest+1)
+	} else {
+		if _, ok := parseChildSuffixStrict(parentID, issue.ID); !ok {
+			return fmt.Errorf("explicit ID %s is not a child of parent %s", issue.ID, parentID)
+		}
+	}
+
+	// Its duplicate check already errors: a create that wrote no row must not
+	// return nil.
+	if _, exists := m.issues[issue.ID]; exists {
+		return fmt.Errorf("issue %s already exists", issue.ID)
+	}
+
+	// Same direction rule as the SQLite path: the edge below would be
+	// rejected there, so fail before writing anything here.
+	if issue.IssueType == types.TypeEpic && parent.IssueType != types.TypeEpic {
+		return fmt.Errorf("invalid parent-child dependency: parent (%s) cannot depend on child (%s). Use: bd dep add %s %s --type parent-child",
+			issue.ID, parentID, parentID, issue.ID)
+	}
+
+	m.issues[issue.ID] = issue
+	m.dirty[issue.ID] = true
+
+	if issue.ExternalRef != nil && *issue.ExternalRef != "" {
+		m.externalRefToID[*issue.ExternalRef] = issue.ID
+	}
+
+	event := &types.Event{
+		IssueID:   issue.ID,
+		EventType: types.EventCreated,
+		Actor:     actor,
+		CreatedAt: now,
+	}
+	m.events[issue.ID] = append(m.events[issue.ID], event)
+
+	dep := &types.Dependency{
+		IssueID:     issue.ID,
+		DependsOnID: parentID,
+		Type:        types.DepParentChild,
+		CreatedAt:   now,
+		CreatedBy:   actor,
+	}
+	m.dependencies[issue.ID] = append(m.dependencies[issue.ID], dep)
+	m.dirty[parentID] = true
+
+	if n, ok := parseChildSuffixStrict(parentID, issue.ID); ok {
+		if n > m.counters[parentID] {
+			m.counters[parentID] = n
+		}
+	}
+
+	return nil
 }
 
 // Config

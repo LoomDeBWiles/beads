@@ -122,13 +122,19 @@ func TestMigrateChildCountersTable(t *testing.T) {
 			t.Fatalf("failed to create parent issue: %v", err)
 		}
 
-		// Generate child ID (this populates child_counters)
-		childID, err := s.GetNextChildID(ctx, "bd-parent")
-		if err != nil {
-			t.Fatalf("failed to get next child ID: %v", err)
+		// Create a child (this populates child_counters via the insert)
+		child := &types.Issue{
+			ID:        "",
+			Title:     "Child",
+			Status:    types.StatusOpen,
+			Priority:  1,
+			IssueType: types.TypeTask,
 		}
-		if childID != "bd-parent.1" {
-			t.Fatalf("expected bd-parent.1, got %s", childID)
+		if err := s.CreateChildIssue(ctx, "bd-parent", child, "test"); err != nil {
+			t.Fatalf("failed to create child issue: %v", err)
+		}
+		if child.ID != "bd-parent.1" {
+			t.Fatalf("expected bd-parent.1, got %s", child.ID)
 		}
 
 		// Verify child_counters has entry for parent

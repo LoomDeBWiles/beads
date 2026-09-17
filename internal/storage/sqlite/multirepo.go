@@ -139,6 +139,7 @@ func (s *SQLiteStorage) importJSONLFile(ctx context.Context, jsonlPath, sourceRe
 
 	count := 0
 	lineNum := 0
+	var hydratedIDs []string
 
 	// Get exclusive connection to ensure PRAGMA applies
 	conn, err := s.db.Conn(ctx)
@@ -188,11 +189,20 @@ func (s *SQLiteStorage) importJSONLFile(ctx context.Context, jsonlPath, sourceRe
 			return 0, fmt.Errorf("failed to import issue %s at line %d: %w", issue.ID, lineNum, err)
 		}
 
+		hydratedIDs = append(hydratedIDs, issue.ID)
 		count++
 	}
 
 	if err := scanner.Err(); err != nil {
 		return 0, fmt.Errorf("failed to read JSONL file: %w", err)
+	}
+
+	// Seed floors for hydrated IDs that already have children (orphan-first
+	// ordering: a child hydrated before its parent raised no floor), inside
+	// the transaction this pass already holds. Parent raises above are
+	// idempotent, so re-running them here is harmless.
+	if err := maintainFloorsForIDs(ctx, tx, hydratedIDs); err != nil {
+		return 0, fmt.Errorf("failed to maintain child floors: %w", err)
 	}
 
 	// Re-enable foreign keys before commit to validate data integrity
@@ -316,6 +326,16 @@ func (s *SQLiteStorage) upsertIssueInTx(ctx context.Context, tx *sql.Tx, issue *
 		)
 		if err != nil {
 			return fmt.Errorf("failed to insert issue: %w", err)
+		}
+		// Hydration writes issue rows outside both insert helpers, so it
+		// maintains the floor itself: a hydrated child whose number is not
+		// recorded would be reissued by the next allocation.
+		if isHierarchical, parent := IsHierarchicalID(issue.ID); isHierarchical {
+			if n, ok := parseChildSuffix(parent, issue.ID); ok {
+				if err := raiseChildFloor(ctx, tx, parent, n); err != nil {
+					return err
+				}
+			}
 		}
 	} else if err != nil {
 		return fmt.Errorf("failed to check existing issue: %w", err)

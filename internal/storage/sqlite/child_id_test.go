@@ -8,7 +8,17 @@ import (
 	"github.com/steveyegge/beads/internal/types"
 )
 
-func TestGetNextChildID(t *testing.T) {
+func newChildIssue(title string) *types.Issue {
+	return &types.Issue{
+		Title:       title,
+		Description: "child issue",
+		Status:      types.StatusOpen,
+		Priority:    1,
+		IssueType:   types.TypeTask,
+	}
+}
+
+func TestCreateChildIssue(t *testing.T) {
 	tmpFile := t.TempDir() + "/test.db"
 	defer os.Remove(tmpFile)
 	store := newTestStore(t, tmpFile)
@@ -28,104 +38,75 @@ func TestGetNextChildID(t *testing.T) {
 		t.Fatalf("failed to create parent: %v", err)
 	}
 
-	// Test: Generate first child ID
-	childID1, err := store.GetNextChildID(ctx, parent.ID)
+	// First child allocates .1 and writes the row
+	child1 := newChildIssue("Child Task 1")
+	if err := store.CreateChildIssue(ctx, parent.ID, child1, "test"); err != nil {
+		t.Fatalf("CreateChildIssue failed: %v", err)
+	}
+	if child1.ID != "bd-a3f8e9.1" {
+		t.Errorf("expected bd-a3f8e9.1, got %s", child1.ID)
+	}
+	if got, err := store.GetIssue(ctx, child1.ID); err != nil || got == nil {
+		t.Fatalf("child row missing after CreateChildIssue: %v", err)
+	}
+
+	// Second child allocates sequentially
+	child2 := newChildIssue("Child Task 2")
+	if err := store.CreateChildIssue(ctx, parent.ID, child2, "test"); err != nil {
+		t.Fatalf("CreateChildIssue failed: %v", err)
+	}
+	if child2.ID != "bd-a3f8e9.2" {
+		t.Errorf("expected bd-a3f8e9.2, got %s", child2.ID)
+	}
+
+	// Nested child (depth 2)
+	nested1 := newChildIssue("Nested Task")
+	if err := store.CreateChildIssue(ctx, child1.ID, nested1, "test"); err != nil {
+		t.Fatalf("CreateChildIssue failed for nested: %v", err)
+	}
+	if nested1.ID != "bd-a3f8e9.1.1" {
+		t.Errorf("expected bd-a3f8e9.1.1, got %s", nested1.ID)
+	}
+
+	// Third level (depth 3, maximum)
+	deep1 := newChildIssue("Deep Task")
+	if err := store.CreateChildIssue(ctx, nested1.ID, deep1, "test"); err != nil {
+		t.Fatalf("CreateChildIssue failed for depth 3: %v", err)
+	}
+	if deep1.ID != "bd-a3f8e9.1.1.1" {
+		t.Errorf("expected bd-a3f8e9.1.1.1, got %s", deep1.ID)
+	}
+
+	// Fourth level must fail and write nothing
+	before, err := store.GetIssue(ctx, "bd-a3f8e9.1.1.1.1")
 	if err != nil {
-		t.Fatalf("GetNextChildID failed: %v", err)
+		t.Fatalf("failed to check for deep child: %v", err)
 	}
-	expectedID1 := "bd-a3f8e9.1"
-	if childID1 != expectedID1 {
-		t.Errorf("expected %s, got %s", expectedID1, childID1)
+	if before != nil {
+		t.Fatalf("deep child already exists before the failing create")
 	}
-
-	// Test: Generate second child ID (sequential)
-	childID2, err := store.GetNextChildID(ctx, parent.ID)
-	if err != nil {
-		t.Fatalf("GetNextChildID failed: %v", err)
-	}
-	expectedID2 := "bd-a3f8e9.2"
-	if childID2 != expectedID2 {
-		t.Errorf("expected %s, got %s", expectedID2, childID2)
-	}
-
-	// Create the first child and test nested hierarchy
-	child1 := &types.Issue{
-		ID:          childID1,
-		Title:       "Child Task 1",
-		Description: "First child",
-		Status:      types.StatusOpen,
-		Priority:    1,
-		IssueType:   types.TypeTask,
-	}
-	if err := store.CreateIssue(ctx, child1, "test"); err != nil {
-		t.Fatalf("failed to create child: %v", err)
-	}
-
-	// Test: Generate nested child (depth 2)
-	nestedID1, err := store.GetNextChildID(ctx, childID1)
-	if err != nil {
-		t.Fatalf("GetNextChildID failed for nested: %v", err)
-	}
-	expectedNested1 := "bd-a3f8e9.1.1"
-	if nestedID1 != expectedNested1 {
-		t.Errorf("expected %s, got %s", expectedNested1, nestedID1)
-	}
-
-	// Create the nested child
-	nested1 := &types.Issue{
-		ID:          nestedID1,
-		Title:       "Nested Task",
-		Description: "Nested child",
-		Status:      types.StatusOpen,
-		Priority:    1,
-		IssueType:   types.TypeTask,
-	}
-	if err := store.CreateIssue(ctx, nested1, "test"); err != nil {
-		t.Fatalf("failed to create nested child: %v", err)
-	}
-
-	// Test: Generate third level (depth 3, maximum)
-	deepID1, err := store.GetNextChildID(ctx, nestedID1)
-	if err != nil {
-		t.Fatalf("GetNextChildID failed for depth 3: %v", err)
-	}
-	expectedDeep1 := "bd-a3f8e9.1.1.1"
-	if deepID1 != expectedDeep1 {
-		t.Errorf("expected %s, got %s", expectedDeep1, deepID1)
-	}
-
-	// Create the deep child
-	deep1 := &types.Issue{
-		ID:          deepID1,
-		Title:       "Deep Task",
-		Description: "Third level",
-		Status:      types.StatusOpen,
-		Priority:    1,
-		IssueType:   types.TypeTask,
-	}
-	if err := store.CreateIssue(ctx, deep1, "test"); err != nil {
-		t.Fatalf("failed to create deep child: %v", err)
-	}
-
-	// Test: Attempt to create fourth level (should fail)
-	_, err = store.GetNextChildID(ctx, deepID1)
+	tooDeep := newChildIssue("Too Deep")
+	err = store.CreateChildIssue(ctx, deep1.ID, tooDeep, "test")
 	if err == nil {
 		t.Errorf("expected error for depth 4, got nil")
 	}
 	if err != nil && err.Error() != "maximum hierarchy depth (3) exceeded for parent bd-a3f8e9.1.1.1" {
 		t.Errorf("unexpected error message: %v", err)
 	}
+	if after, _ := store.GetIssue(ctx, "bd-a3f8e9.1.1.1.1"); after != nil {
+		t.Errorf("failed create left a row behind")
+	}
 }
 
-func TestGetNextChildID_ParentNotExists(t *testing.T) {
+func TestCreateChildIssue_ParentNotExists(t *testing.T) {
 	tmpFile := t.TempDir() + "/test.db"
 	defer os.Remove(tmpFile)
 	store := newTestStore(t, tmpFile)
 	defer store.Close()
 	ctx := context.Background()
 
-	// Test: Attempt to get child ID for non-existent parent
-	_, err := store.GetNextChildID(ctx, "bd-nonexistent")
+	child := newChildIssue("Orphan")
+	err := store.CreateChildIssue(ctx, "bd-nonexistent", child, "test")
 	if err == nil {
 		t.Errorf("expected error for non-existent parent, got nil")
 	}
@@ -206,7 +187,7 @@ func TestCreateIssue_HierarchicalID_ParentNotExists(t *testing.T) {
 	}
 }
 
-func TestGetNextChildID_ResurrectParent(t *testing.T) {
+func TestCreateChildIssue_ResurrectParent(t *testing.T) {
 	tmpDir := t.TempDir()
 	tmpFile := tmpDir + "/test.db"
 	defer os.Remove(tmpFile)
@@ -251,15 +232,14 @@ func TestGetNextChildID_ResurrectParent(t *testing.T) {
 	}
 	jsonlFile.Close()
 
-	// Now attempt to get next child ID - should resurrect parent
-	childID, err := store.GetNextChildID(ctx, parent.ID)
-	if err != nil {
-		t.Fatalf("GetNextChildID should have resurrected parent, but got error: %v", err)
+	// Creating a child now resurrects the parent inside the same transaction
+	child := newChildIssue("Resurrected Child")
+	if err := store.CreateChildIssue(ctx, parent.ID, child, "test"); err != nil {
+		t.Fatalf("CreateChildIssue should have resurrected parent, but got error: %v", err)
 	}
 
-	expectedID := "bd-test123.1"
-	if childID != expectedID {
-		t.Errorf("expected child ID %s, got %s", expectedID, childID)
+	if child.ID != "bd-test123.1" {
+		t.Errorf("expected child ID bd-test123.1, got %s", child.ID)
 	}
 
 	// Verify parent was resurrected as tombstone
@@ -275,8 +255,8 @@ func TestGetNextChildID_ResurrectParent(t *testing.T) {
 	}
 }
 
-// TestGetNextChildID_ResurrectParent_NotInJSONL tests resurrection when parent doesn't exist in JSONL (bd-ar2.7)
-func TestGetNextChildID_ResurrectParent_NotInJSONL(t *testing.T) {
+// TestCreateChildIssue_ResurrectParent_NotInJSONL tests resurrection when parent doesn't exist in JSONL (bd-ar2.7)
+func TestCreateChildIssue_ResurrectParent_NotInJSONL(t *testing.T) {
 	tmpDir := t.TempDir()
 	tmpFile := tmpDir + "/test.db"
 	defer os.Remove(tmpFile)
@@ -290,8 +270,8 @@ func TestGetNextChildID_ResurrectParent_NotInJSONL(t *testing.T) {
 		t.Fatalf("failed to create JSONL file: %v", err)
 	}
 
-	// Attempt to get child ID for non-existent parent not in JSONL
-	_, err := store.GetNextChildID(ctx, "bd-notfound")
+	child := newChildIssue("Orphan")
+	err := store.CreateChildIssue(ctx, "bd-notfound", child, "test")
 	if err == nil {
 		t.Errorf("expected error for parent not in JSONL, got nil")
 	}
@@ -301,8 +281,8 @@ func TestGetNextChildID_ResurrectParent_NotInJSONL(t *testing.T) {
 	}
 }
 
-// TestGetNextChildID_ResurrectParent_NoJSONL tests resurrection when JSONL file doesn't exist (bd-ar2.7)
-func TestGetNextChildID_ResurrectParent_NoJSONL(t *testing.T) {
+// TestCreateChildIssue_ResurrectParent_NoJSONL tests resurrection when JSONL file doesn't exist (bd-ar2.7)
+func TestCreateChildIssue_ResurrectParent_NoJSONL(t *testing.T) {
 	tmpDir := t.TempDir()
 	tmpFile := tmpDir + "/test.db"
 	defer os.Remove(tmpFile)
@@ -311,8 +291,8 @@ func TestGetNextChildID_ResurrectParent_NoJSONL(t *testing.T) {
 	ctx := context.Background()
 
 	// No JSONL file created
-	// Attempt to get child ID for non-existent parent
-	_, err := store.GetNextChildID(ctx, "bd-missing")
+	child := newChildIssue("Orphan")
+	err := store.CreateChildIssue(ctx, "bd-missing", child, "test")
 	if err == nil {
 		t.Errorf("expected error for parent with no JSONL, got nil")
 	}
@@ -322,8 +302,8 @@ func TestGetNextChildID_ResurrectParent_NoJSONL(t *testing.T) {
 	}
 }
 
-// TestGetNextChildID_ResurrectParent_MalformedJSONL tests resurrection with invalid JSON lines (bd-ar2.7)
-func TestGetNextChildID_ResurrectParent_MalformedJSONL(t *testing.T) {
+// TestCreateChildIssue_ResurrectParent_MalformedJSONL tests resurrection with invalid JSON lines (bd-ar2.7)
+func TestCreateChildIssue_ResurrectParent_MalformedJSONL(t *testing.T) {
 	tmpDir := t.TempDir()
 	tmpFile := tmpDir + "/test.db"
 	defer os.Remove(tmpFile)
@@ -342,19 +322,18 @@ this is not json either
 	}
 
 	// Should successfully resurrect despite malformed lines
-	childID, err := store.GetNextChildID(ctx, "bd-test456")
-	if err != nil {
-		t.Fatalf("GetNextChildID should skip malformed lines and resurrect valid parent, got error: %v", err)
+	child := newChildIssue("Resurrected Child")
+	if err := store.CreateChildIssue(ctx, "bd-test456", child, "test"); err != nil {
+		t.Fatalf("CreateChildIssue should skip malformed lines and resurrect valid parent, got error: %v", err)
 	}
 
-	expectedID := "bd-test456.1"
-	if childID != expectedID {
-		t.Errorf("expected child ID %s, got %s", expectedID, childID)
+	if child.ID != "bd-test456.1" {
+		t.Errorf("expected child ID bd-test456.1, got %s", child.ID)
 	}
 }
 
-// TestGetNextChildID_ResurrectParentChain tests resurrection of deeply nested missing parents (bd-ar2.7)
-func TestGetNextChildID_ResurrectParentChain(t *testing.T) {
+// TestCreateChildIssue_ResurrectParentChain tests resurrection of deeply nested missing parents (bd-ar2.7)
+func TestCreateChildIssue_ResurrectParentChain(t *testing.T) {
 	tmpDir := t.TempDir()
 	tmpFile := tmpDir + "/test.db"
 	defer os.Remove(tmpFile)
@@ -386,16 +365,15 @@ func TestGetNextChildID_ResurrectParentChain(t *testing.T) {
 		t.Fatalf("failed to create JSONL file: %v", err)
 	}
 
-	// Try to create child of bd-root.1.2 (which doesn't exist in DB, but its parent bd-root.1 also doesn't exist)
+	// Create a child of bd-root.1.2 (which doesn't exist in DB, but its parent bd-root.1 also doesn't exist)
 	// With TryResurrectParentChain (bd-ar2.4), this should work
-	childID, err := store.GetNextChildID(ctx, "bd-root.1.2")
-	if err != nil {
-		t.Fatalf("GetNextChildID should resurrect entire parent chain, got error: %v", err)
+	child := newChildIssue("Deep Child")
+	if err := store.CreateChildIssue(ctx, "bd-root.1.2", child, "test"); err != nil {
+		t.Fatalf("CreateChildIssue should resurrect entire parent chain, got error: %v", err)
 	}
 
-	expectedID := "bd-root.1.2.1"
-	if childID != expectedID {
-		t.Errorf("expected child ID %s, got %s", expectedID, childID)
+	if child.ID != "bd-root.1.2.1" {
+		t.Errorf("expected child ID bd-root.1.2.1, got %s", child.ID)
 	}
 
 	// Verify both intermediate parents were resurrected

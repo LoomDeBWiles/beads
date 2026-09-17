@@ -148,31 +148,9 @@ var createCmd = &cobra.Command{
 			debug.Logf("DEBUG: Target repo: %s\n", repoPath)
 		}
 
-		// Check for conflicting flags
-		if explicitID != "" && parentID != "" {
-			FatalError("cannot specify both --id and --parent flags")
-		}
-
-		// If parent is specified, generate child ID
-		// In daemon mode, the parent will be sent to the RPC handler
-		// In direct mode, we generate the child ID here
-		if parentID != "" && daemonClient == nil {
-			ctx := rootCtx
-			// Validate parent exists before generating child ID
-			parentIssue, err := store.GetIssue(ctx, parentID)
-			if err != nil {
-				FatalError("failed to check parent issue: %v", err)
-			}
-			if parentIssue == nil {
-				FatalError("parent issue %s not found", parentID)
-			}
-			childID, err := store.GetNextChildID(ctx, parentID)
-			if err != nil {
-				FatalError("%v", err)
-			}
-			explicitID = childID // Set as explicit ID for the rest of the flow
-		}
-
+		// An explicit ID naming a child of the named parent is accepted and
+		// created through the child path; a mismatched parent fails there,
+		// before any write.
 		// Validate explicit ID format if provided
 		if explicitID != "" {
 			requestedPrefix, err := validation.ValidateIDFormat(explicitID)
@@ -304,20 +282,14 @@ var createCmd = &cobra.Command{
 			// If error getting parent or parent has no source_repo, continue with default
 		}
 		
-		if err := store.CreateIssue(ctx, issue, actor); err != nil {
-			FatalError("%v", err)
-		}
-
-		// If parent was specified, add parent-child dependency
+		// Allocation, insert and the parent edge commit in one storage
+		// transaction when a parent is named.
 		if parentID != "" {
-			dep := &types.Dependency{
-				IssueID:     issue.ID,
-				DependsOnID: parentID,
-				Type:        types.DepParentChild,
+			if err := store.CreateChildIssue(ctx, parentID, issue, actor); err != nil {
+				FatalError("%v", err)
 			}
-			if err := store.AddDependency(ctx, dep, actor); err != nil {
-				WarnError("failed to add parent-child dependency %s -> %s: %v", issue.ID, parentID, err)
-			}
+		} else if err := store.CreateIssue(ctx, issue, actor); err != nil {
+			FatalError("%v", err)
 		}
 
 		// Add labels if specified

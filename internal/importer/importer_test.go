@@ -1876,3 +1876,136 @@ func TestRenameOnImportLeavesLocalIDsAlone(t *testing.T) {
 		t.Errorf("Foreign ID other-bad1 should be renamed to bd-bad1 (err=%v)", err)
 	}
 }
+
+// TestImportRenameRace_ConcurrentCloneCompletesRename covers the only path
+// that reaches the rename recovery branch: the target is absent at the lookup
+// and present at the insert because another clone wrote it in between. A
+// test-only trigger on the delete of the old row creates that interleaving
+// deterministically. The import must complete and the renamed issue must
+// survive; with silent inserts the old row would be deleted, nothing written,
+// and the import would still report success.
+func TestImportRenameRace_ConcurrentCloneCompletesRename(t *testing.T) {
+	ctx := context.Background()
+
+	tmpDB := t.TempDir() + "/test.db"
+	store, err := sqlite.New(context.Background(), tmpDB)
+	if err != nil {
+		t.Fatalf("Failed to create store: %v", err)
+	}
+	defer store.Close()
+
+	if err := store.SetConfig(ctx, "issue_prefix", "test"); err != nil {
+		t.Fatalf("Failed to set prefix: %v", err)
+	}
+
+	old := &types.Issue{
+		ID:          "test-old",
+		Title:       "Rename me",
+		Description: "same content",
+		Status:      types.StatusOpen,
+		Priority:    1,
+		IssueType:   types.TypeTask,
+	}
+	if err := store.CreateIssue(ctx, old, "test"); err != nil {
+		t.Fatalf("Failed to create old issue: %v", err)
+	}
+
+	// Same content under the new ID: this is what the importer sees as a rename.
+	incoming := &types.Issue{
+		ID:          "test-new",
+		Title:       "Rename me",
+		Description: "same content",
+		Status:      types.StatusOpen,
+		Priority:    1,
+		IssueType:   types.TypeTask,
+		CreatedAt:   old.CreatedAt,
+		UpdatedAt:   old.UpdatedAt,
+	}
+	incoming.ContentHash = incoming.ComputeContentHash()
+	if incoming.ContentHash != old.ComputeContentHash() {
+		t.Fatal("test setup: incoming content hash must match the old issue")
+	}
+
+	// The concurrent clone lands its rename exactly when this import deletes
+	// the old row. A persistent trigger (not TEMP, so every pooled connection
+	// sees it) writes the target with identical content.
+	db := store.UnderlyingDB()
+	_, err = db.Exec(`CREATE TRIGGER rename_race_recovery
+		AFTER DELETE ON issues FOR EACH ROW WHEN OLD.id = 'test-old'
+		BEGIN
+			INSERT INTO issues (id, content_hash, title, description, status, priority, issue_type, created_at, updated_at)
+			VALUES ('test-new', '` + incoming.ContentHash + `', 'Rename me', 'same content', 'open', 1, 'task', '2025-01-01T00:00:00Z', '2025-01-01T00:00:00Z');
+		END;`)
+	if err != nil {
+		t.Fatalf("Failed to create race trigger: %v", err)
+	}
+	defer func() {
+		_, _ = db.Exec(`DROP TRIGGER IF EXISTS rename_race_recovery`)
+	}()
+
+	result, err := ImportIssues(ctx, tmpDB, store, []*types.Issue{incoming}, Options{})
+	if err != nil {
+		t.Fatalf("Import failed: %v", err)
+	}
+	if result.Updated != 1 {
+		t.Errorf("Expected 1 updated (completed rename), got %+v", result)
+	}
+
+	survivor, err := store.GetIssue(ctx, "test-new")
+	if err != nil || survivor == nil {
+		t.Fatalf("Renamed issue test-new must survive (err=%v)", err)
+	}
+	if survivor.Title != "Rename me" {
+		t.Errorf("Expected title 'Rename me', got '%s'", survivor.Title)
+	}
+	if gone, _ := store.GetIssue(ctx, "test-old"); gone != nil {
+		t.Errorf("Old ID test-old should be gone after the completed rename")
+	}
+}
+
+// TestImportOrphanChildWritesNoCounterRow guards the foreign-key regression
+// the WHERE EXISTS floor guard prevents: importing a child whose parent is
+// absent must succeed under the default orphan mode and leave no counter row.
+func TestImportOrphanChildWritesNoCounterRow(t *testing.T) {
+	ctx := context.Background()
+
+	tmpDB := t.TempDir() + "/test.db"
+	store, err := sqlite.New(context.Background(), tmpDB)
+	if err != nil {
+		t.Fatalf("Failed to create store: %v", err)
+	}
+	defer store.Close()
+
+	if err := store.SetConfig(ctx, "issue_prefix", "test"); err != nil {
+		t.Fatalf("Failed to set prefix: %v", err)
+	}
+
+	orphan := &types.Issue{
+		ID:          "test-ghost.7",
+		Title:       "Ghost child",
+		Description: "parent absent",
+		Status:      types.StatusOpen,
+		Priority:    2,
+		IssueType:   types.TypeTask,
+	}
+
+	result, err := ImportIssues(ctx, tmpDB, store, []*types.Issue{orphan}, Options{})
+	if err != nil {
+		t.Fatalf("Orphan import failed: %v", err)
+	}
+	if result.Created != 1 {
+		t.Errorf("Expected 1 created, got %+v", result)
+	}
+	if got, _ := store.GetIssue(ctx, "test-ghost.7"); got == nil {
+		t.Error("Orphan child test-ghost.7 should be present after import")
+	}
+
+	var counterRows int
+	if err := store.UnderlyingDB().QueryRowContext(ctx,
+		`SELECT count(*) FROM child_counters`).Scan(&counterRows); err != nil {
+		t.Fatalf("Failed to count counter rows: %v", err)
+	}
+	if counterRows != 0 {
+		t.Errorf("Orphan import must write no counter row, found %d", counterRows)
+	}
+}
