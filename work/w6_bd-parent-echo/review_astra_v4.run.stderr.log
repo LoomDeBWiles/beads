@@ -8060,7 +8060,7 @@ description: "Concise plain prose in the user's voice. Use for any prose: papers
 hot-reason: "REVIEW_WRITER.md DRAFT step; the default voice for section writers"
 ---
 
-@~/projects/library/writing/prose/SKILL.md
+@~/projects/library/collections/writing/prose/SKILL.md
 # bd command reference
 
 Use `bd --no-daemon` in worktrees. Examples below describe bd commands; the global rules govern Git operations and process ownership. Use `bd sync --flush-only` to export changes; full `bd sync` is not a worker finishing step.
