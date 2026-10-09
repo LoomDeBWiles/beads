@@ -1,6 +1,0 @@
-ok  	github.com/steveyegge/beads/internal/importer	2.028s
-ok  	github.com/steveyegge/beads/internal/utils	0.006s
-ok  	github.com/steveyegge/beads/cmd/bd	30.920s
-ok  	github.com/steveyegge/beads/cmd/bd/doctor	(cached)
-ok  	github.com/steveyegge/beads/cmd/bd/doctor/fix	(cached)
-ok  	github.com/steveyegge/beads/cmd/bd/setup	(cached)

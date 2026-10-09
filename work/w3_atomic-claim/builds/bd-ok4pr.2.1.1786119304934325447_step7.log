@@ -1,2 +1,0 @@
-$ grep -q 'claim' cmd/bd/main.go
-exit=0

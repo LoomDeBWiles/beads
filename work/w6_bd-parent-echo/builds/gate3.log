@@ -1,1 +1,0 @@
-Error: insert issue: issue repro-abc.2 already exists: sqlite3: constraint failed: UNIQUE constraint failed: issues.id

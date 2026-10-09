@@ -1,3 +1,0 @@
-$ go test ./internal/merge/...
-ok  	github.com/steveyegge/beads/internal/merge	(cached)
-exit=0

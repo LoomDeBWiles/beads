@@ -1,2 +1,0 @@
-$ grep -q 'bd claim' CONTEXT.md
-exit 0

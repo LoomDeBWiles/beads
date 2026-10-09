@@ -1,3 +1,0 @@
-$ test "$(grep -c 'claim_expires_at' internal/importer/importer.go)" -ge 3
-count=3
-exit=0

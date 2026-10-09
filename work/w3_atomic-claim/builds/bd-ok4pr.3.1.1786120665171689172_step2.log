@@ -1,3 +1,0 @@
-$ go test ./cmd/bd/ -run TestClaimRoundTrip
-ok  	github.com/steveyegge/beads/cmd/bd	(cached)
-exit=0

@@ -1,3 +1,0 @@
-$ test -z "$(git ls-files internal/storage/sqlite/testdata)"
-git ls-files output: []
-exit=0

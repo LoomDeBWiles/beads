@@ -1,2 +1,0 @@
-$ grep -q 'deny_reason\|DenyReason' internal/storage/sqlite/claim_test.go
-exit=0

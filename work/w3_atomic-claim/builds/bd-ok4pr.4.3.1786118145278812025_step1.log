@@ -1,3 +1,0 @@
-$ go test ./cmd/bd/doctor/fix/ -run TestMergeDriverWithLockedConfig_E2E -count=2
-ok  	github.com/steveyegge/beads/cmd/bd/doctor/fix	0.028s
-exit=0

@@ -1,3 +1,0 @@
-$ grep -q 'claim_expires_at' internal/storage/sqlite/migrations/027_claim_expires_at.go
-
-exit=0

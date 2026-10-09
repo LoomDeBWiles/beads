@@ -1,4 +1,0 @@
-$ go test ./cmd/bd/ ./internal/rpc/...
-ok  	github.com/steveyegge/beads/cmd/bd	18.158s
-ok  	github.com/steveyegge/beads/internal/rpc	3.927s
-exit=0

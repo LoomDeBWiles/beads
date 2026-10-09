@@ -1,2 +1,0 @@
-$ grep -q 'internal/storage/sqlite/claim.go' CODEMAP.md
-exit 0

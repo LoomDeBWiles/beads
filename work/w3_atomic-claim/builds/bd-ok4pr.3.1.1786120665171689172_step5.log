@@ -1,2 +1,0 @@
-$ grep -q 'equalPtrTime' internal/importer/utils.go
-exit=0

@@ -1,6 +1,0 @@
-ok  	github.com/steveyegge/beads/internal/types	0.004s
-?   	github.com/steveyegge/beads/internal/ui	[no test files]
-ok  	github.com/steveyegge/beads/internal/util	0.001s
-ok  	github.com/steveyegge/beads/internal/utils	0.004s
-ok  	github.com/steveyegge/beads/internal/validation	0.002s
-failures=0
