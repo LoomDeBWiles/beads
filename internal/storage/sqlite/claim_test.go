@@ -11,7 +11,7 @@ import (
 	"github.com/steveyegge/beads/internal/types"
 )
 
-// These tests lock the claim decision ladder from work/w3_atomic-claim/plan_v4.md.
+// These tests lock the claim decision ladder from ~/projects/library/sources/work-beads-w3_atomic-claim/record/plan_v4.md.
 // They assert the specified semantics, not the current implementation's behaviour.
 
 const (
